@@ -11,6 +11,7 @@ import Marketplace from "@/pages/Marketplace";
 import Studio from "@/pages/Studio";
 import CreatorProfile from "@/pages/CreatorProfile";
 import AgentDetail from "@/pages/AgentDetail";
+import PaymentSuccess from "@/pages/PaymentSuccess";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -127,6 +128,7 @@ function App() {
               <Route path="/marketplace" element={<Marketplace />} />
               <Route path="/agent/:id" element={<AgentDetail />} />
               <Route path="/creator/:id" element={<CreatorProfile />} />
+              <Route path="/payment/success" element={<PaymentSuccess />} />
               <Route
                 path="/studio"
                 element={

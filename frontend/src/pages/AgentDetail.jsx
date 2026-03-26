@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useSearchParams, Link } from "react-router-dom";
 import { toast } from "sonner";
+import { useAuth } from "@/App";
 import {
   ArrowLeft, Star, Shield, BadgeCheck, Play, Send, X,
-  Zap, Clock, Users, CheckCircle2, ShoppingCart, Tag, Bot,
+  Zap, Clock, Users, CheckCircle2, ShoppingCart, Tag, Bot, Loader2,
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -113,11 +114,13 @@ function LiveDemoModal({ agent, onClose }) {
 export default function AgentDetail() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
+  const { user, token } = useAuth();
   const [agent, setAgent] = useState(null);
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showDemo, setShowDemo] = useState(searchParams.get("demo") === "true");
   const [activeTab, setActiveTab] = useState("overview");
+  const [checkingOut, setCheckingOut] = useState(null); // "rent" | "buy" | null
 
   useEffect(() => {
     const load = async () => {
@@ -239,18 +242,46 @@ export default function AgentDetail() {
                 </div>
                 <div className="flex gap-2.5">
                   <button
-                    onClick={() => toast.success("Added to cart — Rent plan selected.")}
+                    onClick={async () => {
+                      if (!user) { toast.error("Please log in to continue."); return; }
+                      setCheckingOut("rent");
+                      try {
+                        const res = await fetch(`${API}/api/payments/checkout`, {
+                          method: "POST",
+                          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                          body: JSON.stringify({ agent_id: agent.id, plan: "rent", origin_url: window.location.origin }),
+                        });
+                        if (res.ok) { const d = await res.json(); window.location.href = d.url; }
+                        else { const e = await res.json(); toast.error(e.detail || "Checkout failed."); }
+                      } catch { toast.error("Network error."); }
+                      setCheckingOut(null);
+                    }}
                     data-testid="rent-agent-btn"
-                    className="flex-1 py-3 bg-[#8B5CF6] text-white text-[13px] font-medium rounded-full hover:bg-[#A78BFA] transition-all shadow-[0_0_15px_rgba(139,92,246,0.2)] flex items-center justify-center gap-2"
+                    disabled={checkingOut === "rent"}
+                    className="flex-1 py-3 bg-[#8B5CF6] text-white text-[13px] font-medium rounded-full hover:bg-[#A78BFA] transition-all shadow-[0_0_15px_rgba(139,92,246,0.2)] flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    <Tag size={13} /> Rent
+                    {checkingOut === "rent" ? <Loader2 size={13} className="animate-spin" /> : <Tag size={13} />} Rent
                   </button>
                   <button
-                    onClick={() => toast.success("Added to cart — Buy plan selected.")}
+                    onClick={async () => {
+                      if (!user) { toast.error("Please log in to continue."); return; }
+                      setCheckingOut("buy");
+                      try {
+                        const res = await fetch(`${API}/api/payments/checkout`, {
+                          method: "POST",
+                          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                          body: JSON.stringify({ agent_id: agent.id, plan: "buy", origin_url: window.location.origin }),
+                        });
+                        if (res.ok) { const d = await res.json(); window.location.href = d.url; }
+                        else { const e = await res.json(); toast.error(e.detail || "Checkout failed."); }
+                      } catch { toast.error("Network error."); }
+                      setCheckingOut(null);
+                    }}
                     data-testid="buy-agent-btn"
-                    className="flex-1 py-3 bg-white/[0.06] text-white text-[13px] font-medium rounded-full border border-white/[0.08] hover:bg-white/[0.1] transition-all flex items-center justify-center gap-2"
+                    disabled={checkingOut === "buy"}
+                    className="flex-1 py-3 bg-white/[0.06] text-white text-[13px] font-medium rounded-full border border-white/[0.08] hover:bg-white/[0.1] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    <ShoppingCart size={13} /> Buy
+                    {checkingOut === "buy" ? <Loader2 size={13} className="animate-spin" /> : <ShoppingCart size={13} />} Buy
                   </button>
                 </div>
               </div>
