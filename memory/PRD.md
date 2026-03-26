@@ -1,23 +1,39 @@
 # Nova AI - PRD
 
 ## Architecture
-Frontend: React 19 + Tailwind + Shadcn UI + React Router | Backend: FastAPI (health check) | Auth: Mock (admin@nova.ai)
+- **Frontend**: React 19 + Tailwind + Shadcn UI + React Router
+- **Backend**: FastAPI + MongoDB (Motor async) + JWT (python-jose) + bcrypt
+- **Auth**: Real JWT (24h expiry), stored in localStorage, validated on mount
+- **Database**: MongoDB - users, waitlist, agents, creators, reviews collections
 
-## Routes
-/ (Home), /login, /academy, /marketplace, /agent/:id, /creator/:id, /studio (protected)
+## API Endpoints
+- POST /api/auth/register - Register + return JWT
+- POST /api/auth/login - Login + return JWT
+- GET /api/auth/me - Get current user (protected)
+- POST /api/waitlist - Add email to waitlist (stored in MongoDB)
+- GET /api/waitlist - Admin-only list all waitlist entries
+- GET /api/agents - List agents (search + category filter)
+- GET /api/agents/:id - Agent detail
+- GET /api/agents/:id/reviews - Agent reviews
+- GET /api/creators - List creators
+- GET /api/creators/:id - Creator + their agents
+
+## Seeded Data
+- Admin: admin@nova.ai / admin123
+- 6 agents, 5 creators, 24 reviews
+- Auto-seeds on startup if empty
 
 ## Implemented (Feb 2026)
-- Home: Hero with gradient headline, waitlist CTA
-- Login: Mock auth (admin@nova.ai)
-- Academy: Coming Soon
-- Marketplace: Search, 7 category pills, Supernova creator spotlight, trending section, upgraded agent cards (heart, ratings, trust scores, Live Demo link)
-- Agent Detail: Full page with hero, stats, Rent/Buy checkout, Overview/Reviews tabs, demo video placeholder
-- Live Demo: Sandboxed chat modal with agent-specific mock responses + typing indicators
-- Creator Profile: Stats, bio, agent portfolio
-- Studio: Vibe Mode / Node Mode toggle (chat/canvas/code)
-- Emergent badge removed
-- All features MOCKED (frontend only), 100% test pass rate
+- [x] Full JWT auth (register, login, me, protected routes, localStorage persistence)
+- [x] Waitlist stored in MongoDB
+- [x] All marketplace data from MongoDB (agents, creators, reviews)
+- [x] Search + category filter via API
+- [x] Agent Detail page with real data
+- [x] Creator Profile with real data
+- [x] Live Demo chat simulation
+- [x] Studio with Vibe/Node toggle
+- [x] 100% test pass rate (backend + frontend + integration)
 
 ## Backlog
-P1: Wire waitlist + marketplace to MongoDB, real JWT auth
-P2: Drag-drop nodes, Academy content, actual payment checkout, real demo video embeds
+P1: User registration UI, password reset flow
+P2: Drag-drop nodes, Academy content, actual payment checkout, demo video embeds
