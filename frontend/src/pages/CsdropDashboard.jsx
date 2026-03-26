@@ -6,7 +6,8 @@ import {
   Play, Square, Terminal, Code, Zap, Shield, Clock,
   CheckCircle2, XCircle, Loader2, Plus, Trash2, Copy,
   RefreshCw, ChevronDown, ChevronUp, Send, Layers,
-  Globe, ArrowUpRight, Activity, Bot,
+  Globe, ArrowUpRight, Activity, Bot, Wrench, Heart,
+  AlertTriangle,
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -108,8 +109,100 @@ function RunResult({ result }) {
   );
 }
 
+/* ─── System Health Panel ─── */
+function SystemHealth({ health, onRepair, repairLogs, repairing }) {
+  if (!health) return null;
+  const { status, ready, python_path, repair_running } = health;
+  const isRepairing = repairing || repair_running;
+
+  return (
+    <div className="cs-card overflow-hidden mb-4">
+      <div className="px-5 py-3.5 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.surfaceBorder}` }}>
+        <div className="flex items-center gap-2.5">
+          <Heart size={14} style={{ color: ready ? T.accent : "#f87171" }} />
+          <span className="text-[13px] font-medium" style={{ color: T.text }}>System Health</span>
+          <div
+            data-testid="cs-health-indicator"
+            className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-semibold ${ready ? "" : "animate-pulse"}`}
+            style={{
+              background: ready ? "rgba(6, 182, 212, 0.1)" : "rgba(239, 68, 68, 0.1)",
+              color: ready ? T.accent : "#f87171",
+              border: `1px solid ${ready ? "rgba(6,182,212,0.2)" : "rgba(239,68,68,0.2)"}`,
+            }}
+          >
+            {ready ? "ALL SYSTEMS GO" : "NEEDS REPAIR"}
+          </div>
+        </div>
+        {!ready && !isRepairing && (
+          <button
+            onClick={onRepair}
+            data-testid="cs-repair-btn"
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[12px] font-medium transition-all"
+            style={{
+              background: "rgba(251, 146, 60, 0.1)",
+              color: "#fb923c",
+              border: "1px solid rgba(251, 146, 60, 0.25)",
+            }}
+          >
+            <Wrench size={12} /> Repair Environment
+          </button>
+        )}
+        {isRepairing && (
+          <div className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[12px]" style={{ color: "#fb923c" }}>
+            <Loader2 size={12} className="animate-spin" /> Repairing...
+          </div>
+        )}
+      </div>
+      <div className="p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {Object.entries(status).map(([mod, state]) => (
+            <div
+              key={mod}
+              data-testid={`cs-dep-${mod}`}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-mono"
+              style={{
+                background: state === "OK" ? "rgba(6,182,212,0.05)" : "rgba(239,68,68,0.05)",
+                border: `1px solid ${state === "OK" ? "rgba(6,182,212,0.12)" : "rgba(239,68,68,0.15)"}`,
+              }}
+            >
+              {state === "OK"
+                ? <CheckCircle2 size={11} style={{ color: T.accent }} />
+                : <XCircle size={11} className="text-red-400" />}
+              <span style={{ color: state === "OK" ? T.textMuted : "#f87171" }}>{mod}</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 text-[10px] font-mono" style={{ color: T.textDim }}>
+          Python: {python_path || "detecting..."}
+        </div>
+
+        {/* Repair Logs */}
+        {repairLogs.length > 0 && (
+          <div className="mt-3">
+            <div className="flex items-center gap-2 mb-1.5">
+              <Terminal size={11} style={{ color: T.textDim }} />
+              <span className="text-[10px]" style={{ color: T.textDim }}>Repair Log</span>
+            </div>
+            <div
+              data-testid="cs-repair-logs"
+              className="h-28 rounded-lg p-2.5 overflow-y-auto font-mono text-[10px] leading-relaxed"
+              style={{ background: "rgba(0,0,0,0.4)", border: `1px solid ${T.surfaceBorder}` }}
+            >
+              {repairLogs.map((line, i) => (
+                <div key={i} style={{ color: line.includes("error") || line.includes("Error") ? "#f87171" : line.includes("succeeded") || line.includes("success") || line.includes("Complete") ? T.accent : T.textMuted }}>
+                  {line}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Bot Control Panel ─── */
-function BotPanel({ headers, botRunning, setBotRunning }) {
+function BotPanel({ headers, botRunning, setBotRunning, envReady }) {
   const [promo, setPromo] = useState("https://csdrop.com/r/ABBAS");
   const [batch, setBatch] = useState("10");
   const [logs, setLogs] = useState([]);
@@ -185,6 +278,10 @@ function BotPanel({ headers, botRunning, setBotRunning }) {
           <button onClick={handleStop} data-testid="cs-stop-bot-btn" className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[12px] font-medium transition-all" style={{ background: "rgba(239, 68, 68, 0.1)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.2)" }}>
             <Square size={12} /> Stop
           </button>
+        ) : !envReady ? (
+          <div className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px]" style={{ background: "rgba(239, 68, 68, 0.06)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.15)" }}>
+            <AlertTriangle size={11} /> Env Not Ready
+          </div>
         ) : (
           <button onClick={handleLaunch} disabled={launching} data-testid="cs-launch-bot-btn" className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[12px] font-medium transition-all disabled:opacity-50" style={{ background: T.accentGlow, color: T.accent, border: `1px solid rgba(6, 182, 212, 0.3)` }}>
             {launching ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />} Launch
@@ -275,6 +372,9 @@ RESULT = {
   const [botRunning, setBotRunning] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("execute");
+  const [health, setHealth] = useState(null);
+  const [repairing, setRepairing] = useState(false);
+  const [repairLogs, setRepairLogs] = useState([]);
 
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
@@ -284,6 +384,57 @@ RESULT = {
       navigate("/dashboard", { replace: true });
     }
   }, [user, navigate]);
+
+  const fetchHealth = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/api/csdrop/health`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setHealth(data);
+        if (data.repair_running) setRepairing(true);
+        else setRepairing(false);
+      }
+    } catch {}
+  }, [token]);
+
+  // Poll repair status while repairing
+  useEffect(() => {
+    if (!repairing) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${API}/api/admin/repair-status`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          setRepairLogs(data.logs || []);
+          if (!data.running) {
+            setRepairing(false);
+            fetchHealth();
+          }
+        }
+      } catch {}
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [repairing]);
+
+  const handleRepair = async () => {
+    setRepairing(true);
+    setRepairLogs(["Starting repair..."]);
+    try {
+      const res = await fetch(`${API}/api/admin/repair`, { method: "POST", headers });
+      const data = await res.json();
+      if (data.status === "ok") {
+        toast.success("Repair started in background.");
+      } else if (data.status === "busy") {
+        toast.info("Repair already in progress.");
+      } else {
+        toast.error("Failed to start repair.");
+        setRepairing(false);
+      }
+    } catch {
+      toast.error("Network error starting repair.");
+      setRepairing(false);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -297,7 +448,7 @@ RESULT = {
     setLoading(false);
   }, [token]);
 
-  useEffect(() => { if (token) fetchData(); }, [token, fetchData]);
+  useEffect(() => { if (token) { fetchData(); fetchHealth(); } }, [token, fetchData, fetchHealth]);
 
   const handleExecute = async () => {
     let parsed;
@@ -354,12 +505,16 @@ RESULT = {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-8">
           <Stat label="Agents" value={stats?.agent_count || 0} icon={Code} accent />
           <Stat label="Total Runs" value={stats?.total_runs || 0} icon={Zap} />
           <Stat label="Bot Status" value={botRunning ? "LIVE" : "OFF"} icon={Activity} accent={botRunning} />
           <Stat label="Logs" value={stats?.bot_log_count || 0} icon={Terminal} />
+          <Stat label="Env Health" value={health?.ready ? "OK" : "ISSUE"} icon={Heart} accent={health?.ready} />
         </div>
+
+        {/* System Health */}
+        <SystemHealth health={health} onRepair={handleRepair} repairLogs={repairLogs} repairing={repairing} />
 
         {/* Tabs */}
         <div className="flex items-center gap-1 mb-6 p-1 rounded-full w-fit" style={{ background: T.surface, border: `1px solid ${T.surfaceBorder}` }}>
@@ -443,7 +598,7 @@ RESULT = {
 
         {/* Sovereign Bot Tab */}
         {activeTab === "bot" && (
-          <BotPanel headers={headers} botRunning={botRunning} setBotRunning={setBotRunning} />
+          <BotPanel headers={headers} botRunning={botRunning} setBotRunning={setBotRunning} envReady={health?.ready || false} />
         )}
 
         {/* History Tab */}

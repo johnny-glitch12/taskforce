@@ -20,6 +20,9 @@ from fastapi.responses import StreamingResponse
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
 import subprocess
 import asyncio as aio
+import sys
+import importlib
+from fastapi import BackgroundTasks
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1119,6 +1122,124 @@ CSDROP_BOT_DIR = Path(__file__).parent / "clients" / "csdrop"
 # Global reference to running bot process
 _csdrop_bot_process = None
 _csdrop_bot_logs = []
+_repair_status = {"running": False, "last_result": None, "logs": []}
+
+def _check_module(module_name: str) -> bool:
+    """Check if a Python module is importable."""
+    try:
+        importlib.import_module(module_name)
+        return True
+    except ImportError:
+        return False
+
+def _check_chromium() -> bool:
+    """Check if Playwright Chromium browser is installed."""
+    try:
+        import pathlib
+        # Primary: check ~/.cache/ms-playwright (default location)
+        cache_dir = pathlib.Path.home() / ".cache" / "ms-playwright"
+        if cache_dir.exists() and any(cache_dir.glob("chromium-*")):
+            return True
+        # Fallback: check inside playwright package directory
+        browser_check = subprocess.run(
+            [sys.executable, "-c", "import playwright; import pathlib; browsers = pathlib.Path(playwright.__file__).parent / 'driver' / 'package' / '.local-browsers'; print(any(browsers.glob('chromium-*')) if browsers.exists() else False)"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return "True" in browser_check.stdout
+    except Exception:
+        return False
+
+@api_router.get("/csdrop/health")
+async def csdrop_health_check(user=Depends(security)):
+    """Pre-flight check: verify all bot dependencies are available."""
+    required_modules = {
+        "playwright": "playwright",
+        "playwright_stealth": "playwright_stealth",
+        "RestrictedPython": "RestrictedPython",
+    }
+    status = {}
+    for display_name, import_name in required_modules.items():
+        status[display_name] = "OK" if _check_module(import_name) else "MISSING"
+
+    chromium_ok = _check_chromium()
+    status["chromium"] = "OK" if chromium_ok else "MISSING"
+
+    all_ready = all(v == "OK" for v in status.values())
+    return {
+        "status": status,
+        "ready": all_ready,
+        "python_path": sys.executable,
+        "repair_running": _repair_status["running"],
+    }
+
+@api_router.post("/admin/repair")
+async def repair_environment(background_tasks: BackgroundTasks):
+    """Trigger dependency installation in the background."""
+    global _repair_status
+    if _repair_status["running"]:
+        return {"status": "busy", "message": "Repair already in progress. Check logs."}
+
+    def run_repair():
+        global _repair_status
+        _repair_status = {"running": True, "last_result": None, "logs": []}
+        def _ts():
+            return datetime.now(timezone.utc).strftime('%H:%M:%S')
+
+        _repair_status["logs"].append(f"[{_ts()}] Starting system repair...")
+        logger.info("Environment repair started")
+
+        # Step 1: pip install bot dependencies
+        _repair_status["logs"].append(f"[{_ts()}] Installing Python packages...")
+        req_file = CSDROP_BOT_DIR / "requirements.txt"
+        if req_file.exists():
+            pip_result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-r", str(req_file)],
+                capture_output=True, text=True, timeout=120,
+            )
+            if pip_result.returncode == 0:
+                _repair_status["logs"].append(f"[{_ts()}] Pip install succeeded.")
+            else:
+                _repair_status["logs"].append(f"[{_ts()}] Pip install error: {pip_result.stderr[-300:]}")
+        else:
+            # Fallback: install individually
+            pip_result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "playwright", "playwright-stealth", "RestrictedPython"],
+                capture_output=True, text=True, timeout=120,
+            )
+            if pip_result.returncode == 0:
+                _repair_status["logs"].append(f"[{_ts()}] Pip install succeeded.")
+            else:
+                _repair_status["logs"].append(f"[{_ts()}] Pip install error: {pip_result.stderr[-300:]}")
+
+        # Step 2: Install Chromium
+        _repair_status["logs"].append(f"[{_ts()}] Installing Chromium browser...")
+        chromium_result = subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            capture_output=True, text=True, timeout=300,
+        )
+        if chromium_result.returncode == 0:
+            _repair_status["logs"].append(f"[{_ts()}] Chromium installed successfully.")
+        else:
+            _repair_status["logs"].append(f"[{_ts()}] Chromium install error: {chromium_result.stderr[-300:]}")
+
+        # Final status
+        all_ok = _check_module("playwright") and _check_module("playwright_stealth") and _check_module("RestrictedPython")
+        _repair_status["logs"].append(f"[{_ts()}] Repair complete. All modules OK: {all_ok}")
+        _repair_status["running"] = False
+        _repair_status["last_result"] = "success" if all_ok else "partial"
+        logger.info(f"Environment repair finished. All OK: {all_ok}")
+
+    background_tasks.add_task(run_repair)
+    return {"status": "ok", "message": "Repair started in background. Check /api/admin/repair-status for progress."}
+
+@api_router.get("/admin/repair-status")
+async def repair_status():
+    """Check the status of a running repair job."""
+    return {
+        "running": _repair_status["running"],
+        "last_result": _repair_status["last_result"],
+        "logs": _repair_status["logs"][-50:],
+    }
 
 async def get_csdrop_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Auth guard that only allows the csdrop client."""
@@ -1199,6 +1320,14 @@ async def csdrop_launch_bot(data: CsdropBotLaunch, user=Depends(get_csdrop_user)
     if _csdrop_bot_process and _csdrop_bot_process.returncode is None:
         return {"status": "error", "message": "Bot is already running."}
 
+    # Pre-flight dependency check
+    missing = []
+    for mod in ["playwright", "playwright_stealth", "RestrictedPython"]:
+        if not _check_module(mod):
+            missing.append(mod)
+    if missing:
+        return {"status": "error", "message": f"Missing dependencies: {', '.join(missing)}. Use the Repair button to fix."}
+
     sovereign_path = CSDROP_BOT_DIR / "sovereign.py"
     if not sovereign_path.exists():
         raise HTTPException(status_code=500, detail="Bot script not found.")
@@ -1208,7 +1337,7 @@ async def csdrop_launch_bot(data: CsdropBotLaunch, user=Depends(get_csdrop_user)
 
     try:
         _csdrop_bot_process = subprocess.Popen(
-            ["python3", str(sovereign_path), data.promo, str(data.batch)],
+            [sys.executable, str(sovereign_path), data.promo, str(data.batch)],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             cwd=str(CSDROP_BOT_DIR),
@@ -1509,6 +1638,15 @@ async def startup():
 
     # Run initial evaluation
     await evaluate_supernovas()
+
+    # ─── Startup Health Check ───
+    logger.info("Running environment health check...")
+    for mod_name, import_name in [("playwright", "playwright"), ("playwright_stealth", "playwright_stealth"), ("RestrictedPython", "RestrictedPython")]:
+        if _check_module(import_name):
+            logger.info(f"  [OK] {mod_name}")
+        else:
+            logger.warning(f"  [MISSING] {mod_name} — bot launch will fail. Use /api/admin/repair to fix.")
+    logger.info(f"Python executable: {sys.executable}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
