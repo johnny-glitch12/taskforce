@@ -12,6 +12,7 @@ import Studio from "@/pages/Studio";
 import CreatorProfile from "@/pages/CreatorProfile";
 import AgentDetail from "@/pages/AgentDetail";
 import PaymentSuccess from "@/pages/PaymentSuccess";
+import Dashboard from "@/pages/Dashboard";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -134,6 +135,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <Studio />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
                   </ProtectedRoute>
                 }
               />

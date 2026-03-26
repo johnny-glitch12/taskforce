@@ -3,7 +3,7 @@ import { useAuth } from "@/App";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
 
-const navLinks = [
+const baseNavLinks = [
   { to: "/", label: "Home" },
   { to: "/academy", label: "Academy" },
   { to: "/marketplace", label: "Marketplace" },
@@ -17,6 +17,9 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const isStudio = location.pathname === "/studio";
+  const navLinks = user
+    ? [...baseNavLinks, { to: "/dashboard", label: "Dashboard" }]
+    : baseNavLinks;
 
   return (
     <nav

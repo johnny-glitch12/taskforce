@@ -1,0 +1,96 @@
+{
+  "summary": "Completed comprehensive testing of Nova AI iteration 8 - Dashboard with sandboxed agent execution. Backend: 31/31 tests passed. Frontend: All dashboard features working correctly. Fixed critical security bug where blocked imports were not validated at agent creation time.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "Dashboard stats requires authentication (401)",
+    "Dashboard stats returns agent_count, agent_limit, tier, total_runs, purchased_agents",
+    "Free tier users have agent_limit of 3",
+    "List user agents returns array",
+    "Create agent with valid code succeeds",
+    "Create agent with blocked import (os) is rejected at creation time",
+    "Create agent with blocked import (subprocess) is rejected",
+    "Create agent with blocked pattern (eval) is rejected",
+    "Create agent with blocked pattern (exec) is rejected",
+    "Create agent with blocked pattern (open) is rejected",
+    "Delete agent removes it from list",
+    "Run agent with valid input returns success with result and output",
+    "Agent can use safe imports (json, math, re, datetime, collections, random, hashlib, base64)",
+    "Agent receives INPUT dict with input_data",
+    "Agent receives ENV dict with env_vars",
+    "Agent print() output is captured in output field",
+    "Running disabled agent returns 400",
+    "POST /stop changes agent status to disabled",
+    "POST /start changes agent status to ready",
+    "Webhook trigger executes agent and returns result",
+    "Webhook trigger on disabled agent returns 400",
+    "Webhook trigger on manual-only agent returns 400",
+    "Invalid webhook key returns 404",
+    "GET /executions returns recent runs with trigger, success, duration, result",
+    "Free user can create up to 3 agents, 4th is rejected with 403",
+    "GET /dashboard/purchased returns list of transactions",
+    "Import sys is blocked at creation",
+    "Import socket is blocked at creation",
+    "getattr() pattern is blocked at creation",
+    "__import__ pattern is blocked at creation",
+    "__builtins__ pattern is blocked at creation",
+    "Frontend: Dashboard redirects to login when not authenticated",
+    "Frontend: Dashboard shows stats cards (Agents X/3, Total Runs, Purchased, Tier)",
+    "Frontend: Agent progress bar shows purple fill, turns red at limit",
+    "Frontend: Deploy Agent button opens modal with name, description, code, env vars, trigger fields",
+    "Frontend: Template buttons (Echo Bot, Data Cruncher, JSON Transformer) pre-fill form",
+    "Frontend: Run agent modal shows input textarea and displays result/output/error",
+    "Frontend: Successful execution shows green 'Success' with output and RESULT sections",
+    "Frontend: Toggle agent (disable/enable) changes status indicator",
+    "Frontend: Show/Hide code toggle expands to show agent source code",
+    "Frontend: Webhook URL displayed with copy button, toast on copy",
+    "Frontend: Upgrade banner shown when agent_count >= agent_limit",
+    "Frontend: Deploy Agent button disabled at limit",
+    "Frontend: Purchased tab shows empty state",
+    "Frontend: Dashboard link visible in navbar when logged in",
+    "Frontend: Mobile responsive on 390px viewport",
+    "Frontend: Dashboard link visible in mobile hamburger menu"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_dashboard_sandbox_v8.py",
+    "/app/test_reports/pytest/pytest_results_v8.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/sandbox.py",
+    "/app/backend/tests/test_dashboard_sandbox_v8.py"
+  ],
+  "success_rate": {
+    "backend": "100% (31/31 tests passed)",
+    "frontend": "100% (All UI flows working)"
+  },
+  "test_credentials": {
+    "admin": "admin@nova.ai / admin123",
+    "test_user": "test@example.com / newpassword123"
+  },
+  "seed_data_creation": "Admin user has 2 agents: Echo Bot and Data Cruncher",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All Dashboard + Sandbox features from iteration 8 are working. Fixed critical security bug: sandbox.py validate_code() now checks for blocked imports at creation time (not just runtime). The sandbox uses RestrictedPython v8.1 with _print_ factory for print capture. AGENT_TIER_LIMITS are hardcoded as free:3, pro:999999. Admin user currently has 2 agents deployed.",
+  "bug_fixes_applied": [
+    {
+      "file": "/app/backend/sandbox.py",
+      "issue": "Blocked imports (os, sys, subprocess, etc.) were not validated at agent creation time - only at runtime",
+      "fix": "Added import validation to validate_code() function using regex pattern matching for 'import X' and 'from X' statements",
+      "severity": "CRITICAL - Security vulnerability"
+    }
+  ],
+  "mocked_apis": {
+    "Studio Vibe Mode AI chat": "Uses local generateAssistantResponse function (pattern matcher, not real LLM)",
+    "Stripe": "Uses test key sk_test_emergent (sandbox mode)",
+    "Upgrade to Pro button": "UI only - no actual upgrade flow implemented"
+  }
+}

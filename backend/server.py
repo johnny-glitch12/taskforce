@@ -789,12 +789,322 @@ async def seed_database():
     await db.workflows.create_index("user_id")
     await db.workflows.create_index("id", unique=True)
     await db.password_resets.create_index("token", unique=True)
+    await db.user_agents.create_index("user_id")
+    await db.user_agents.create_index("id", unique=True)
+    await db.user_agents.create_index("webhook_key", unique=True)
+    await db.agent_executions.create_index("agent_id")
+    await db.agent_executions.create_index("user_id")
+    await db.payment_transactions.create_index("session_id")
 
     # Run initial supernova evaluation
     await evaluate_supernovas()
 
     logger.info("Database seeded successfully")
     return {"message": "Database seeded", "agents": len(agents_data), "creators": len(creators_data), "reviews": len(reviews_data)}
+
+# ─── Dashboard & Custom Agent Models ───
+
+AGENT_TIER_LIMITS = {"free": 3, "pro": 999999}
+
+class UserAgentCreate(BaseModel):
+    name: str
+    description: str = ""
+    code: str
+    env_vars: Dict[str, str] = {}
+    trigger_type: str = "manual"  # "manual", "webhook", "both"
+
+class UserAgentUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    code: Optional[str] = None
+    env_vars: Optional[Dict[str, str]] = None
+    trigger_type: Optional[str] = None
+    status: Optional[str] = None
+
+class UserAgentResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    user_id: str
+    name: str
+    description: str
+    code: str
+    env_vars: Dict[str, str]
+    trigger_type: str
+    webhook_key: str
+    status: str
+    last_run: Optional[str] = None
+    last_result: Optional[str] = None
+    run_count: int
+    created_at: str
+    updated_at: str
+
+class AgentRunRequest(BaseModel):
+    input_data: Any = {}
+
+class AgentExecutionResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    agent_id: str
+    trigger: str
+    input_data: Any
+    output: str
+    result: Any
+    logs: str
+    error: Optional[str]
+    success: bool
+    duration_ms: int
+    created_at: str
+
+# ─── Dashboard Endpoints ───
+
+@api_router.get("/dashboard/stats")
+async def get_dashboard_stats(user=Depends(get_current_user)):
+    agent_count = await db.user_agents.count_documents({"user_id": user["id"]})
+    tier = user.get("tier", "free")
+    limit = AGENT_TIER_LIMITS.get(tier, 3)
+    total_runs = await db.agent_executions.count_documents({"user_id": user["id"]})
+
+    # Purchased agents
+    purchased = await db.payment_transactions.count_documents({
+        "user_id": user["id"], "payment_status": "paid"
+    })
+
+    return {
+        "agent_count": agent_count,
+        "agent_limit": limit,
+        "tier": tier,
+        "total_runs": total_runs,
+        "purchased_agents": purchased,
+    }
+
+@api_router.get("/dashboard/purchased")
+async def get_purchased_agents(user=Depends(get_current_user)):
+    txns = await db.payment_transactions.find(
+        {"user_id": user["id"], "payment_status": "paid"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return txns
+
+@api_router.get("/dashboard/agents", response_model=List[UserAgentResponse])
+async def list_user_agents(user=Depends(get_current_user)):
+    agents = await db.user_agents.find(
+        {"user_id": user["id"]}, {"_id": 0}
+    ).sort("updated_at", -1).to_list(100)
+    return agents
+
+@api_router.post("/dashboard/agents", response_model=UserAgentResponse)
+async def create_user_agent(data: UserAgentCreate, user=Depends(get_current_user)):
+    tier = user.get("tier", "free")
+    limit = AGENT_TIER_LIMITS.get(tier, 3)
+    count = await db.user_agents.count_documents({"user_id": user["id"]})
+    if count >= limit:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Agent limit reached ({count}/{limit}). Upgrade to Pro for unlimited agents."
+        )
+
+    # Validate code with sandbox
+    from sandbox import validate_code
+    err = validate_code(data.code)
+    if err:
+        raise HTTPException(status_code=400, detail=f"Code validation failed: {err}")
+
+    agent_id = str(uuid.uuid4())
+    webhook_key = secrets.token_urlsafe(24)
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": agent_id,
+        "user_id": user["id"],
+        "name": data.name,
+        "description": data.description,
+        "code": data.code,
+        "env_vars": data.env_vars,
+        "trigger_type": data.trigger_type,
+        "webhook_key": webhook_key,
+        "status": "ready",
+        "last_run": None,
+        "last_result": None,
+        "run_count": 0,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.user_agents.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.get("/dashboard/agents/{agent_id}", response_model=UserAgentResponse)
+async def get_user_agent(agent_id: str, user=Depends(get_current_user)):
+    agent = await db.user_agents.find_one(
+        {"id": agent_id, "user_id": user["id"]}, {"_id": 0}
+    )
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return agent
+
+@api_router.put("/dashboard/agents/{agent_id}", response_model=UserAgentResponse)
+async def update_user_agent(agent_id: str, data: UserAgentUpdate, user=Depends(get_current_user)):
+    agent = await db.user_agents.find_one({"id": agent_id, "user_id": user["id"]})
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    update_fields = {"updated_at": datetime.now(timezone.utc).isoformat()}
+
+    if data.code is not None:
+        from sandbox import validate_code
+        err = validate_code(data.code)
+        if err:
+            raise HTTPException(status_code=400, detail=f"Code validation failed: {err}")
+        update_fields["code"] = data.code
+
+    for field in ["name", "description", "env_vars", "trigger_type", "status"]:
+        val = getattr(data, field, None)
+        if val is not None:
+            update_fields[field] = val
+
+    await db.user_agents.update_one({"id": agent_id}, {"$set": update_fields})
+    updated = await db.user_agents.find_one({"id": agent_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/dashboard/agents/{agent_id}")
+async def delete_user_agent(agent_id: str, user=Depends(get_current_user)):
+    result = await db.user_agents.delete_one({"id": agent_id, "user_id": user["id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    # Clean up executions
+    await db.agent_executions.delete_many({"agent_id": agent_id})
+    return {"message": "Agent deleted"}
+
+@api_router.post("/dashboard/agents/{agent_id}/run", response_model=AgentExecutionResponse)
+async def run_user_agent(agent_id: str, data: AgentRunRequest, user=Depends(get_current_user)):
+    agent = await db.user_agents.find_one(
+        {"id": agent_id, "user_id": user["id"]}, {"_id": 0}
+    )
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if agent["status"] == "disabled":
+        raise HTTPException(status_code=400, detail="Agent is disabled")
+
+    from sandbox import execute_code
+    result = execute_code(
+        code=agent["code"],
+        env_vars=agent["env_vars"],
+        input_data=data.input_data,
+    )
+
+    exec_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    exec_doc = {
+        "id": exec_id,
+        "agent_id": agent_id,
+        "user_id": user["id"],
+        "trigger": "manual",
+        "input_data": data.input_data,
+        "output": result["output"],
+        "result": result["result"],
+        "logs": result["logs"],
+        "error": result["error"],
+        "success": result["success"],
+        "duration_ms": result["duration_ms"],
+        "created_at": now,
+    }
+    await db.agent_executions.insert_one(exec_doc)
+    exec_doc.pop("_id", None)
+
+    # Update agent stats
+    await db.user_agents.update_one({"id": agent_id}, {"$set": {
+        "last_run": now,
+        "last_result": "success" if result["success"] else "error",
+        "updated_at": now,
+    }, "$inc": {"run_count": 1}})
+
+    return exec_doc
+
+@api_router.get("/dashboard/agents/{agent_id}/executions", response_model=List[AgentExecutionResponse])
+async def get_agent_executions(agent_id: str, user=Depends(get_current_user), limit: int = 20):
+    agent = await db.user_agents.find_one(
+        {"id": agent_id, "user_id": user["id"]}, {"_id": 0}
+    )
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    execs = await db.agent_executions.find(
+        {"agent_id": agent_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(limit)
+    return execs
+
+@api_router.post("/dashboard/agents/{agent_id}/stop")
+async def stop_user_agent(agent_id: str, user=Depends(get_current_user)):
+    result = await db.user_agents.update_one(
+        {"id": agent_id, "user_id": user["id"]},
+        {"$set": {"status": "disabled", "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return {"message": "Agent disabled"}
+
+@api_router.post("/dashboard/agents/{agent_id}/start")
+async def start_user_agent(agent_id: str, user=Depends(get_current_user)):
+    result = await db.user_agents.update_one(
+        {"id": agent_id, "user_id": user["id"]},
+        {"$set": {"status": "ready", "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return {"message": "Agent enabled"}
+
+# ─── Public Webhook Trigger ───
+
+@api_router.post("/webhook/agent/{webhook_key}")
+async def webhook_trigger_agent(webhook_key: str, request: Request):
+    agent = await db.user_agents.find_one({"webhook_key": webhook_key}, {"_id": 0})
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if agent["status"] == "disabled":
+        raise HTTPException(status_code=400, detail="Agent is disabled")
+    if agent["trigger_type"] not in ("webhook", "both"):
+        raise HTTPException(status_code=400, detail="Webhook trigger not enabled for this agent")
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    from sandbox import execute_code
+    result = execute_code(
+        code=agent["code"],
+        env_vars=agent["env_vars"],
+        input_data=body,
+    )
+
+    exec_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    exec_doc = {
+        "id": exec_id,
+        "agent_id": agent["id"],
+        "user_id": agent["user_id"],
+        "trigger": "webhook",
+        "input_data": body,
+        "output": result["output"],
+        "result": result["result"],
+        "logs": result["logs"],
+        "error": result["error"],
+        "success": result["success"],
+        "duration_ms": result["duration_ms"],
+        "created_at": now,
+    }
+    await db.agent_executions.insert_one(exec_doc)
+
+    await db.user_agents.update_one({"id": agent["id"]}, {"$set": {
+        "last_run": now,
+        "last_result": "success" if result["success"] else "error",
+        "updated_at": now,
+    }, "$inc": {"run_count": 1}})
+
+    return {
+        "success": result["success"],
+        "result": result["result"],
+        "output": result["output"],
+        "error": result["error"],
+        "duration_ms": result["duration_ms"],
+    }
 
 # ─── Stripe Payment Endpoints ───
 
