@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/App";
@@ -10,10 +10,9 @@ export default function Login() {
   const { login, isAdmin } = useAuth();
   const navigate = useNavigate();
 
-  if (isAdmin) {
-    navigate("/studio", { replace: true });
-    return null;
-  }
+  useEffect(() => {
+    if (isAdmin) navigate("/studio", { replace: true });
+  }, [isAdmin, navigate]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -25,6 +24,8 @@ export default function Login() {
       toast.error("Currently in private beta. Please join the waitlist.");
     }
   };
+
+  if (isAdmin) return null;
 
   return (
     <div className="min-h-[calc(100vh-60px)] flex items-center justify-center px-6">
