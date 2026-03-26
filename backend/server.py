@@ -1,17 +1,20 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import re
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import uuid
+import secrets
 from datetime import datetime, timezone, timedelta
 from jose import jwt, JWTError
 from passlib.context import CryptContext
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -38,6 +41,9 @@ api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Scheduler
+scheduler = AsyncIOScheduler()
+
 # ─── Models ───
 
 class UserCreate(BaseModel):
@@ -61,6 +67,13 @@ class TokenResponse(BaseModel):
     token: str
     user: UserResponse
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
 class WaitlistCreate(BaseModel):
     email: str
 
@@ -69,6 +82,9 @@ class WaitlistResponse(BaseModel):
     id: str
     email: str
     created_at: str
+
+class WaitlistCountResponse(BaseModel):
+    count: int
 
 class AgentResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -113,6 +129,7 @@ class CreatorResponse(BaseModel):
     memberSince: str = ""
     completionRate: str = ""
     agentPreviews: List[str] = []
+    is_supernova: bool = False
 
 class ReviewResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -122,6 +139,77 @@ class ReviewResponse(BaseModel):
     rating: int
     date: str
     text: str
+
+# Studio models
+class WorkflowNode(BaseModel):
+    id: str
+    type: str = "default"
+    label: str = ""
+    sub: str = ""
+    icon: str = ""
+    x: float = 0
+    y: float = 0
+    data: Dict[str, Any] = {}
+
+class WorkflowEdge(BaseModel):
+    source: str = Field(alias="from", default="")
+    target: str = Field(alias="to", default="")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+class WorkflowCreate(BaseModel):
+    name: str = "Untitled Workflow"
+    mode: str = "vibe"
+    vibe_messages: List[Dict[str, str]] = []
+    nodes: List[Dict[str, Any]] = []
+    edges: List[Dict[str, Any]] = []
+    code_json: str = ""
+
+class WorkflowUpdate(BaseModel):
+    name: Optional[str] = None
+    mode: Optional[str] = None
+    vibe_messages: Optional[List[Dict[str, str]]] = None
+    nodes: Optional[List[Dict[str, Any]]] = None
+    edges: Optional[List[Dict[str, Any]]] = None
+    code_json: Optional[str] = None
+
+class WorkflowResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    user_id: str
+    name: str
+    mode: str
+    vibe_messages: List[Dict[str, str]]
+    nodes: List[Dict[str, Any]]
+    edges: List[Dict[str, Any]]
+    code_json: str
+    trust_score: Optional[int] = None
+    linter_status: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+# Linter models
+class LinterScanRequest(BaseModel):
+    workflow_id: Optional[str] = None
+    nodes: List[Dict[str, Any]]
+    edges: List[Dict[str, Any]]
+
+class LinterFlag(BaseModel):
+    level: str
+    node_id: str = ""
+    message: str
+
+class LinterResult(BaseModel):
+    trust_score: int
+    status: str
+    flags: List[LinterFlag]
+
+# Export model
+class ExportResult(BaseModel):
+    agent_id: int
+    format: str
+    workflow_json: Dict[str, Any]
+    export_url: str
 
 # ─── Auth Helpers ───
 
@@ -205,6 +293,42 @@ async def login(data: UserLogin):
 async def get_me(user=Depends(get_current_user)):
     return UserResponse(id=user["id"], email=user["email"], name=user["name"], role=user["role"], created_at=user["created_at"])
 
+# ─── Password Reset Endpoints ───
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(data: ForgotPasswordRequest):
+    user = await db.users.find_one({"email": data.email}, {"_id": 0})
+    if not user:
+        # Return success even if email not found (prevent enumeration)
+        return {"message": "If that email exists, a reset link has been generated.", "reset_token": None}
+    reset_token = secrets.token_urlsafe(32)
+    expires = datetime.now(timezone.utc) + timedelta(hours=1)
+    await db.password_resets.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "email": data.email,
+        "token": reset_token,
+        "expires_at": expires.isoformat(),
+        "used": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    # In production, send email with reset link. For demo, return the token.
+    logger.info(f"Password reset token generated for {data.email}: {reset_token}")
+    return {"message": "If that email exists, a reset link has been generated.", "reset_token": reset_token}
+
+@api_router.post("/auth/reset-password")
+async def reset_password(data: ResetPasswordRequest):
+    reset_entry = await db.password_resets.find_one({"token": data.token, "used": False}, {"_id": 0})
+    if not reset_entry:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    expires = datetime.fromisoformat(reset_entry["expires_at"])
+    if datetime.now(timezone.utc) > expires:
+        raise HTTPException(status_code=400, detail="Reset token has expired")
+    new_hash = hash_password(data.new_password)
+    await db.users.update_one({"id": reset_entry["user_id"]}, {"$set": {"password_hash": new_hash}})
+    await db.password_resets.update_one({"token": data.token}, {"$set": {"used": True}})
+    return {"message": "Password reset successfully. You can now log in with your new password."}
+
 # ─── Waitlist Endpoints ───
 
 @api_router.post("/waitlist", response_model=WaitlistResponse)
@@ -218,6 +342,11 @@ async def join_waitlist(data: WaitlistCreate):
     await db.waitlist.insert_one(doc)
     logger.info(f"New waitlist signup: {data.email}")
     return WaitlistResponse(id=entry_id, email=data.email, created_at=now)
+
+@api_router.get("/waitlist/count", response_model=WaitlistCountResponse)
+async def get_waitlist_count():
+    count = await db.waitlist.count_documents({})
+    return WaitlistCountResponse(count=count)
 
 @api_router.get("/waitlist", response_model=List[WaitlistResponse])
 async def get_waitlist(user=Depends(get_current_user)):
@@ -237,9 +366,74 @@ async def get_agents(search: str = "", category: str = "all"):
         query["$or"] = [
             {"title": {"$regex": search, "$options": "i"}},
             {"shortTitle": {"$regex": search, "$options": "i"}},
+            {"description": {"$regex": search, "$options": "i"}},
         ]
     agents = await db.agents.find(query, {"_id": 0}).sort("deployCount", -1).to_list(100)
     return agents
+
+@api_router.get("/agents/search")
+async def search_agents(
+    q: str = Query("", description="Search term"),
+    category: str = Query("all"),
+    min_trust: int = Query(0, ge=0, le=100),
+    sort_by: str = Query("trending"),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    match_stage: Dict[str, Any] = {}
+    if q:
+        match_stage["$or"] = [
+            {"title": {"$regex": q, "$options": "i"}},
+            {"shortTitle": {"$regex": q, "$options": "i"}},
+            {"description": {"$regex": q, "$options": "i"}},
+        ]
+    if category and category != "all":
+        match_stage["category"] = category
+    if min_trust > 0:
+        match_stage["trustScore"] = {"$gte": min_trust}
+
+    sort_map = {
+        "trending": ("deployCount", -1),
+        "price_asc": ("price", 1),
+        "price_desc": ("price", -1),
+        "newest": ("id", -1),
+        "rating": ("rating", -1),
+        "trust": ("trustScore", -1),
+    }
+    sort_field, sort_dir = sort_map.get(sort_by, ("deployCount", -1))
+
+    pipeline = [
+        {"$match": match_stage} if match_stage else {"$match": {}},
+        {"$lookup": {
+            "from": "creators",
+            "localField": "creator_id",
+            "foreignField": "id",
+            "as": "creator_info"
+        }},
+        {"$addFields": {
+            "creator_supernova": {
+                "$cond": {
+                    "if": {"$gt": [{"$size": "$creator_info"}, 0]},
+                    "then": {"$arrayElemAt": ["$creator_info.is_supernova", 0]},
+                    "else": False
+                }
+            }
+        }},
+        {"$project": {"_id": 0, "creator_info": 0}},
+        {"$sort": {sort_field: sort_dir}},
+        {"$skip": offset},
+        {"$limit": limit},
+    ]
+
+    agents = await db.agents.aggregate(pipeline).to_list(length=limit)
+    total = await db.agents.count_documents(match_stage if match_stage else {})
+
+    return {
+        "agents": agents,
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+    }
 
 @api_router.get("/agents/{agent_id}", response_model=AgentResponse)
 async def get_agent(agent_id: int):
@@ -252,6 +446,37 @@ async def get_agent(agent_id: int):
 async def get_agent_reviews(agent_id: int):
     reviews = await db.reviews.find({"agent_id": agent_id}, {"_id": 0}).sort("date", -1).to_list(100)
     return reviews
+
+@api_router.post("/agents/{agent_id}/export")
+async def export_agent(agent_id: int, user=Depends(get_current_user)):
+    agent = await db.agents.find_one({"id": agent_id}, {"_id": 0})
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    workflow = {
+        "agent": agent["shortTitle"].lower().replace(" ", "-"),
+        "version": "1.0.0",
+        "metadata": {
+            "name": agent["shortTitle"],
+            "description": agent["description"],
+            "category": agent["category"],
+            "trust_score": agent["trustScore"],
+        },
+        "nodes": [
+            {"id": "trigger_001", "type": "trigger", "config": {"source": "api", "method": "POST"}},
+            {"id": "llm_001", "type": "llm", "config": {"model": "nova-7b", "task": "process", "temperature": 0.3}},
+            {"id": "action_001", "type": "action", "config": {"type": "respond", "format": "json"}},
+        ],
+        "edges": [
+            {"from": "trigger_001", "to": "llm_001"},
+            {"from": "llm_001", "to": "action_001"},
+        ],
+    }
+    return ExportResult(
+        agent_id=agent_id,
+        format="nova_workflow_v1",
+        workflow_json=workflow,
+        export_url=f"/exports/{agent['shortTitle'].lower().replace(' ', '-')}.json"
+    )
 
 # ─── Creator Endpoints ───
 
@@ -268,6 +493,219 @@ async def get_creator(creator_id: str):
     agents = await db.agents.find({"creator_id": creator_id}, {"_id": 0}).to_list(100)
     return {"creator": creator, "agents": agents}
 
+# ─── Studio Workflow Endpoints ───
+
+@api_router.post("/studio/workflows", response_model=WorkflowResponse)
+async def create_workflow(data: WorkflowCreate, user=Depends(get_current_user)):
+    workflow_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": workflow_id,
+        "user_id": user["id"],
+        "name": data.name,
+        "mode": data.mode,
+        "vibe_messages": data.vibe_messages,
+        "nodes": data.nodes,
+        "edges": data.edges,
+        "code_json": data.code_json,
+        "trust_score": None,
+        "linter_status": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.workflows.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.get("/studio/workflows", response_model=List[WorkflowResponse])
+async def list_workflows(user=Depends(get_current_user)):
+    workflows = await db.workflows.find(
+        {"user_id": user["id"]}, {"_id": 0}
+    ).sort("updated_at", -1).to_list(100)
+    return workflows
+
+@api_router.get("/studio/workflows/{workflow_id}", response_model=WorkflowResponse)
+async def get_workflow(workflow_id: str, user=Depends(get_current_user)):
+    wf = await db.workflows.find_one({"id": workflow_id, "user_id": user["id"]}, {"_id": 0})
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    return wf
+
+@api_router.put("/studio/workflows/{workflow_id}", response_model=WorkflowResponse)
+async def update_workflow(workflow_id: str, data: WorkflowUpdate, user=Depends(get_current_user)):
+    wf = await db.workflows.find_one({"id": workflow_id, "user_id": user["id"]})
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    update_fields = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    for field in ["name", "mode", "vibe_messages", "nodes", "edges", "code_json"]:
+        val = getattr(data, field, None)
+        if val is not None:
+            update_fields[field] = val
+    await db.workflows.update_one({"id": workflow_id}, {"$set": update_fields})
+    updated = await db.workflows.find_one({"id": workflow_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/studio/workflows/{workflow_id}")
+async def delete_workflow(workflow_id: str, user=Depends(get_current_user)):
+    result = await db.workflows.delete_one({"id": workflow_id, "user_id": user["id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    return {"message": "Workflow deleted"}
+
+# ─── Compliance Linter Engine ───
+
+BLACKLISTED_DOMAINS = [
+    "evil.com", "malware.net", "phishing.io", "hack3r.org",
+    "darkweb.xyz", "exploit.cc", "trojan.site",
+]
+
+PII_PATTERNS = [
+    r"\bssn\b", r"\bsocial.?security\b", r"\bcredit.?card\b",
+    r"\bpassword\b", r"\bsecret\b", r"\bapi.?key\b",
+    r"\bprivate.?key\b", r"\baccess.?token\b",
+]
+
+PROMPT_INJECTION_PATTERNS = [
+    r"ignore\s+(previous|above|all)\s+instructions",
+    r"you\s+are\s+now\s+",
+    r"reveal\s+(your|the)\s+(system|hidden|secret)",
+    r"output\s+(your|the)\s+(prompt|instructions)",
+    r"disregard\s+(all|any)\s+",
+]
+
+@api_router.post("/linter/scan", response_model=LinterResult)
+async def scan_workflow(data: LinterScanRequest):
+    score = 100
+    flags: List[LinterFlag] = []
+
+    for node in data.nodes:
+        node_id = node.get("id", "unknown")
+        node_data = node.get("data", {})
+        node_type = node.get("type", "")
+
+        # Rule 1: Exposed API keys / secrets in node data
+        data_str = str(node_data).lower()
+        for pattern in PII_PATTERNS:
+            if re.search(pattern, data_str, re.IGNORECASE):
+                score -= 20
+                flags.append(LinterFlag(
+                    level="critical",
+                    node_id=node_id,
+                    message=f"Potential sensitive data detected in node '{node_id}'. Matched pattern: {pattern}"
+                ))
+                break
+
+        # Rule 2: Check for plaintext API keys in config
+        for key, val in node_data.items():
+            if isinstance(val, str) and ("api_key" in key.lower() or "secret" in key.lower() or "token" in key.lower()):
+                if val and not val.startswith("${{"):
+                    score -= 25
+                    flags.append(LinterFlag(
+                        level="critical",
+                        node_id=node_id,
+                        message=f"Raw credential '{key}' exposed in node '{node_id}'. Use environment variable references (${{{{VAR_NAME}}}})."
+                    ))
+
+        # Rule 3: Unverified external URLs
+        url = node_data.get("url", "") or node_data.get("endpoint", "")
+        if url:
+            if url.startswith("http://") and "localhost" not in url:
+                score -= 10
+                flags.append(LinterFlag(
+                    level="warning",
+                    node_id=node_id,
+                    message=f"Unencrypted HTTP endpoint in node '{node_id}'. Use HTTPS for security."
+                ))
+            for domain in BLACKLISTED_DOMAINS:
+                if domain in url:
+                    score -= 30
+                    flags.append(LinterFlag(
+                        level="critical",
+                        node_id=node_id,
+                        message=f"Blacklisted domain '{domain}' detected in node '{node_id}'."
+                    ))
+
+        # Rule 4: Prompt injection analysis for LLM nodes
+        if node_type in ["llm", "prompt", "ai"]:
+            prompt_text = node_data.get("system_prompt", "") or node_data.get("prompt", "") or node_data.get("instructions", "")
+            if prompt_text:
+                for injection_pattern in PROMPT_INJECTION_PATTERNS:
+                    if re.search(injection_pattern, prompt_text, re.IGNORECASE):
+                        score -= 15
+                        flags.append(LinterFlag(
+                            level="warning",
+                            node_id=node_id,
+                            message=f"Potential prompt injection vulnerability in node '{node_id}'. Suspicious instruction pattern detected."
+                        ))
+                        break
+
+        # Rule 5: PII transmission without encryption
+        if node_type in ["http_request", "webhook", "api_call"]:
+            transmits_pii = any(
+                re.search(p, str(node_data), re.IGNORECASE) for p in PII_PATTERNS[:4]
+            )
+            if transmits_pii and not url.startswith("https://"):
+                score -= 20
+                flags.append(LinterFlag(
+                    level="critical",
+                    node_id=node_id,
+                    message=f"Node '{node_id}' transmits potential PII over unencrypted connection."
+                ))
+
+    # Rule 6: Orphan nodes (nodes not connected by any edge)
+    all_node_ids = {n.get("id") for n in data.nodes}
+    connected_nodes = set()
+    for edge in data.edges:
+        connected_nodes.add(edge.get("from", edge.get("source", "")))
+        connected_nodes.add(edge.get("to", edge.get("target", "")))
+    orphans = all_node_ids - connected_nodes
+    if orphans and len(data.nodes) > 1:
+        score -= 5
+        for orphan_id in orphans:
+            flags.append(LinterFlag(
+                level="info",
+                node_id=orphan_id,
+                message=f"Node '{orphan_id}' is not connected to any edge. It will not execute."
+            ))
+
+    score = max(0, min(100, score))
+    status = "certified" if score >= 85 else "flagged" if score >= 50 else "rejected"
+
+    # If linked to a workflow, update its trust score
+    if data.workflow_id:
+        await db.workflows.update_one(
+            {"id": data.workflow_id},
+            {"$set": {"trust_score": score, "linter_status": status}}
+        )
+
+    return LinterResult(trust_score=score, status=status, flags=flags)
+
+# ─── Supernova Engine ───
+
+async def evaluate_supernovas():
+    logger.info("Running Supernova Evaluation Engine...")
+    creators = await db.creators.find({}, {"_id": 0}).to_list(100)
+    for creator in creators:
+        creator_agents = await db.agents.find({"creator_id": creator["id"]}, {"_id": 0}).to_list(100)
+        if not creator_agents:
+            continue
+        total_deploys = sum(a.get("deployCount", 0) for a in creator_agents)
+        avg_rating = sum(a.get("rating", 0) for a in creator_agents) / len(creator_agents)
+        avg_trust = sum(a.get("trustScore", 0) for a in creator_agents) / len(creator_agents)
+        total_reviews = sum(a.get("reviews", 0) for a in creator_agents)
+
+        is_supernova = (
+            total_deploys >= 500
+            and avg_rating >= 4.7
+            and avg_trust >= 90
+            and total_reviews >= 50
+        )
+        await db.creators.update_one(
+            {"id": creator["id"]},
+            {"$set": {"is_supernova": is_supernova}}
+        )
+    logger.info("Supernova evaluation complete.")
+
 # ─── Seed Endpoint ───
 
 @api_router.post("/seed")
@@ -275,7 +713,7 @@ async def seed_database():
     count = await db.agents.count_documents({})
     if count > 0:
         return {"message": "Database already seeded", "agents": count}
-    
+
     # Seed admin user
     admin_exists = await db.users.find_one({"email": "admin@nova.ai"})
     if not admin_exists:
@@ -290,11 +728,11 @@ async def seed_database():
 
     # Seed creators
     creators_data = [
-        {"id": "datawiz", "name": "Sarah Chen", "username": "@DataWiz", "initial": "S", "color": "#8B5CF6", "verified": True, "trustScore": 99, "heroStat": "1.2k+ Agents Deployed", "topCategory": "Top Rated in Data", "bio": "Former data scientist at Stripe. Building the future of automated analytics.", "responseTime": "< 1 hour", "memberSince": "Jan 2025", "completionRate": "99%", "agentPreviews": ["Data Analyst", "ETL Pipeline", "Anomaly Detector"]},
-        {"id": "salesforge", "name": "Marcus Rivera", "username": "@SalesForge", "initial": "M", "color": "#6D28D9", "verified": True, "trustScore": 97, "heroStat": "890+ Agents Deployed", "topCategory": "Top Rated in Sales", "bio": "Ex-VP Sales at HubSpot. Automating the entire outbound pipeline.", "responseTime": "< 2 hours", "memberSince": "Mar 2025", "completionRate": "98%", "agentPreviews": ["Sales Dev Rep", "Lead Qualifier", "Outbound Pro"]},
-        {"id": "cxmaster", "name": "Priya Sharma", "username": "@CXMaster", "initial": "P", "color": "#7C3AED", "verified": True, "trustScore": 98, "heroStat": "1.5k+ Agents Deployed", "topCategory": "#1 in Support", "bio": "Built CX teams at Zendesk and Intercom. Now building agents that scale empathy.", "responseTime": "< 30 min", "memberSince": "Dec 2024", "completionRate": "100%", "agentPreviews": ["Customer Service Pro", "Ticket Triage", "CSAT Analyst"]},
-        {"id": "codepilot", "name": "Alex Dubois", "username": "@CodePilot", "initial": "A", "color": "#A78BFA", "verified": True, "trustScore": 96, "heroStat": "640+ Agents Deployed", "topCategory": "Top Rated in Coding", "bio": "Staff engineer turned agent builder. Making code reviews 10x faster.", "responseTime": "< 3 hours", "memberSince": "Feb 2025", "completionRate": "97%", "agentPreviews": ["Code Reviewer", "CI/CD Agent", "Bug Triager"]},
-        {"id": "financeai", "name": "James Okonkwo", "username": "@FinanceAI", "initial": "J", "color": "#5B21B6", "verified": True, "trustScore": 99, "heroStat": "720+ Agents Deployed", "topCategory": "#1 in Finance", "bio": "CPA + ML engineer. Building enterprise-grade compliance automation.", "responseTime": "< 1 hour", "memberSince": "Nov 2024", "completionRate": "100%", "agentPreviews": ["Finance Auditor", "Expense Tracker", "Risk Scorer"]},
+        {"id": "datawiz", "name": "Sarah Chen", "username": "@DataWiz", "initial": "S", "color": "#8B5CF6", "verified": True, "trustScore": 99, "heroStat": "1.2k+ Agents Deployed", "topCategory": "Top Rated in Data", "bio": "Former data scientist at Stripe. Building the future of automated analytics.", "responseTime": "< 1 hour", "memberSince": "Jan 2025", "completionRate": "99%", "agentPreviews": ["Data Analyst", "ETL Pipeline", "Anomaly Detector"], "is_supernova": False},
+        {"id": "salesforge", "name": "Marcus Rivera", "username": "@SalesForge", "initial": "M", "color": "#6D28D9", "verified": True, "trustScore": 97, "heroStat": "890+ Agents Deployed", "topCategory": "Top Rated in Sales", "bio": "Ex-VP Sales at HubSpot. Automating the entire outbound pipeline.", "responseTime": "< 2 hours", "memberSince": "Mar 2025", "completionRate": "98%", "agentPreviews": ["Sales Dev Rep", "Lead Qualifier", "Outbound Pro"], "is_supernova": False},
+        {"id": "cxmaster", "name": "Priya Sharma", "username": "@CXMaster", "initial": "P", "color": "#7C3AED", "verified": True, "trustScore": 98, "heroStat": "1.5k+ Agents Deployed", "topCategory": "#1 in Support", "bio": "Built CX teams at Zendesk and Intercom. Now building agents that scale empathy.", "responseTime": "< 30 min", "memberSince": "Dec 2024", "completionRate": "100%", "agentPreviews": ["Customer Service Pro", "Ticket Triage", "CSAT Analyst"], "is_supernova": False},
+        {"id": "codepilot", "name": "Alex Dubois", "username": "@CodePilot", "initial": "A", "color": "#A78BFA", "verified": True, "trustScore": 96, "heroStat": "640+ Agents Deployed", "topCategory": "Top Rated in Coding", "bio": "Staff engineer turned agent builder. Making code reviews 10x faster.", "responseTime": "< 3 hours", "memberSince": "Feb 2025", "completionRate": "97%", "agentPreviews": ["Code Reviewer", "CI/CD Agent", "Bug Triager"], "is_supernova": False},
+        {"id": "financeai", "name": "James Okonkwo", "username": "@FinanceAI", "initial": "J", "color": "#5B21B6", "verified": True, "trustScore": 99, "heroStat": "720+ Agents Deployed", "topCategory": "#1 in Finance", "bio": "CPA + ML engineer. Building enterprise-grade compliance automation.", "responseTime": "< 1 hour", "memberSince": "Nov 2024", "completionRate": "100%", "agentPreviews": ["Finance Auditor", "Expense Tracker", "Risk Scorer"], "is_supernova": False},
     ]
     await db.creators.insert_many(creators_data)
 
@@ -309,7 +747,7 @@ async def seed_database():
     ]
     await db.agents.insert_many(agents_data)
 
-    # Seed reviews (for all agents)
+    # Seed reviews
     reviews_data = []
     review_templates = [
         {"user_name": "Emily T.", "rating": 5, "date": "2 weeks ago", "text": "Absolutely game-changing. Set it up in 10 minutes and it resolved 60% of our tickets in the first week."},
@@ -329,14 +767,29 @@ async def seed_database():
             })
     await db.reviews.insert_many(reviews_data)
 
+    # Seed waitlist entries for social proof
+    waitlist_seed = [
+        {"id": str(uuid.uuid4()), "email": "early@adopter.com", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": str(uuid.uuid4()), "email": "beta@tester.io", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": str(uuid.uuid4()), "email": "founder@startup.ai", "created_at": datetime.now(timezone.utc).isoformat()},
+    ]
+    await db.waitlist.insert_many(waitlist_seed)
+
     # Create indexes
     await db.users.create_index("email", unique=True)
     await db.users.create_index("id", unique=True)
     await db.waitlist.create_index("email", unique=True)
     await db.agents.create_index("id", unique=True)
     await db.agents.create_index("category")
+    await db.agents.create_index([("title", "text"), ("shortTitle", "text"), ("description", "text")])
     await db.creators.create_index("id", unique=True)
     await db.reviews.create_index("agent_id")
+    await db.workflows.create_index("user_id")
+    await db.workflows.create_index("id", unique=True)
+    await db.password_resets.create_index("token", unique=True)
+
+    # Run initial supernova evaluation
+    await evaluate_supernovas()
 
     logger.info("Database seeded successfully")
     return {"message": "Database seeded", "agents": len(agents_data), "creators": len(creators_data), "reviews": len(reviews_data)}
@@ -376,6 +829,15 @@ async def startup():
         })
         logger.info("Admin user created")
 
+    # Start Supernova scheduler (runs daily at midnight)
+    scheduler.add_job(evaluate_supernovas, 'interval', hours=24, id='supernova_eval', replace_existing=True)
+    scheduler.start()
+    logger.info("Supernova scheduler started")
+
+    # Run initial evaluation
+    await evaluate_supernovas()
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    scheduler.shutdown(wait=False)
     client.close()

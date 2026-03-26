@@ -11,7 +11,7 @@ const navLinks = [
 ];
 
 export default function Navbar() {
-  const { isAdmin, logout } = useAuth();
+  const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -58,7 +58,7 @@ export default function Navbar() {
 
         {/* Auth Buttons */}
         <div className="hidden md:flex items-center gap-3">
-          {isAdmin ? (
+          {user ? (
             <button
               data-testid="logout-btn"
               onClick={() => {
@@ -120,7 +120,7 @@ export default function Navbar() {
             </Link>
           ))}
           <div className="border-t border-white/[0.06] mt-2 pt-3 flex flex-col gap-2">
-            {isAdmin ? (
+            {user ? (
               <button
                 data-testid="mobile-logout-btn"
                 onClick={() => {

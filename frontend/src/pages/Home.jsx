@@ -1,12 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Users } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
 export default function Home() {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [waitlistCount, setWaitlistCount] = useState(0);
+
+  useEffect(() => {
+    fetch(`${API}/api/waitlist/count`)
+      .then((r) => r.json())
+      .then((d) => setWaitlistCount(d.count))
+      .catch(() => {});
+  }, []);
 
   const handleJoinWaitlist = async (e) => {
     e.preventDefault();
@@ -21,6 +29,7 @@ export default function Home() {
       if (res.ok) {
         toast.success("You're on the list.");
         setEmail("");
+        setWaitlistCount((c) => c + 1);
       } else {
         toast.error("Something went wrong. Try again.");
       }
@@ -98,6 +107,21 @@ export default function Home() {
             <ArrowRight size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
           </button>
         </form>
+
+        {/* Social Proof - Waitlist Counter */}
+        {waitlistCount > 0 && (
+          <div
+            data-testid="waitlist-counter"
+            className="mt-8 inline-flex items-center gap-2.5 text-[13px] text-zinc-500 opacity-0 animate-fade-in-up"
+            style={{ animationDelay: "450ms", animationFillMode: "forwards" }}
+          >
+            <div className="flex items-center gap-1.5 bg-white/[0.04] border border-white/[0.06] px-3.5 py-1.5 rounded-full">
+              <Users size={13} className="text-[#8B5CF6]" />
+              <span className="text-white font-medium">{waitlistCount.toLocaleString()}</span>
+              <span className="text-zinc-500">on the waitlist</span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

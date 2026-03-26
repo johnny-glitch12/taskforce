@@ -23,7 +23,7 @@ export function useAuth() {
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (!user || user.role !== "admin") return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/login" replace />;
   return children;
 }
 
