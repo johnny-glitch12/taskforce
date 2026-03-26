@@ -1,16 +1,16 @@
 /* Nova AI - Custom Styles */
 
 /* Glow effects */
-.glow-blue {
-  box-shadow: 0 0 15px rgba(0, 229, 255, 0.3);
+.glow-purple {
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.25);
 }
 
-.glow-violet {
-  box-shadow: 0 0 15px rgba(185, 0, 255, 0.3);
+.glow-purple-hover {
+  box-shadow: 0 0 20px rgba(167, 139, 250, 0.3);
 }
 
-.glow-blue-strong {
-  box-shadow: 0 0 25px rgba(0, 229, 255, 0.5);
+.glow-purple-strong {
+  box-shadow: 0 0 30px rgba(139, 92, 246, 0.45);
 }
 
 /* Grid background for canvas */
@@ -49,10 +49,10 @@
 
 @keyframes pulse-glow {
   0%, 100% {
-    box-shadow: 0 0 12px rgba(0, 229, 255, 0.2);
+    box-shadow: 0 0 12px rgba(139, 92, 246, 0.2);
   }
   50% {
-    box-shadow: 0 0 24px rgba(0, 229, 255, 0.4);
+    box-shadow: 0 0 28px rgba(139, 92, 246, 0.4);
   }
 }
 
@@ -95,9 +95,24 @@
 }
 
 /* Code syntax highlight mock */
-.syntax-keyword { color: #B900FF; }
-.syntax-string { color: #00E5FF; }
+.syntax-keyword { color: #A78BFA; }
+.syntax-string { color: #8B5CF6; }
 .syntax-comment { color: #52525b; }
-.syntax-property { color: #fafafa; }
-.syntax-number { color: #22d3ee; }
+.syntax-property { color: #e4e4e7; }
+.syntax-number { color: #C084FC; }
 .syntax-bracket { color: #71717a; }
+
+/* Glass effect */
+.glass {
+  background: rgba(24, 24, 27, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Subtle gradient text */
+.text-gradient-purple {
+  background: linear-gradient(135deg, #8B5CF6, #C084FC);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}

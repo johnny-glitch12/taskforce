@@ -104,18 +104,18 @@ function ChatPane() {
   return (
     <div
       data-testid="studio-chat-pane"
-      className="w-full lg:w-1/4 border-r border-zinc-900 bg-zinc-950 flex flex-col h-full"
+      className="w-full lg:w-1/4 border-r border-white/[0.06] bg-zinc-950 flex flex-col h-full"
     >
       {/* Header */}
-      <div className="px-4 py-3 border-b border-zinc-900 flex items-center gap-2">
-        <Bot size={14} className="text-[#00E5FF]" />
-        <span className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-400">
+      <div className="px-4 py-3 border-b border-white/[0.06] flex items-center gap-2">
+        <Bot size={14} className="text-[#8B5CF6]" />
+        <span className="text-[12px] tracking-wide text-zinc-500">
           Vibe Chat
         </span>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {mockMessages.map((msg, i) => (
           <div
             key={i}
@@ -123,10 +123,10 @@ function ChatPane() {
             className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-[85%] px-4 py-3 text-sm leading-relaxed ${
+              className={`max-w-[85%] px-3.5 py-2.5 text-[13px] leading-relaxed rounded-xl ${
                 msg.role === "user"
-                  ? "bg-zinc-800 text-zinc-200 border border-zinc-700"
-                  : "bg-zinc-900 text-zinc-400 border border-zinc-800"
+                  ? "bg-[#8B5CF6]/10 text-zinc-200 border border-[#8B5CF6]/20"
+                  : "bg-white/[0.03] text-zinc-400 border border-white/[0.06]"
               }`}
             >
               {msg.content}
@@ -139,7 +139,7 @@ function ChatPane() {
       <form
         onSubmit={handleSend}
         data-testid="chat-input-form"
-        className="px-4 py-3 border-t border-zinc-900 flex gap-2"
+        className="px-4 py-3 border-t border-white/[0.06] flex gap-2"
       >
         <input
           type="text"
@@ -147,14 +147,14 @@ function ChatPane() {
           onChange={(e) => setInput(e.target.value)}
           placeholder="Describe your agent..."
           data-testid="chat-input"
-          className="flex-1 bg-transparent text-sm text-white placeholder:text-zinc-600 focus:outline-none"
+          className="flex-1 bg-transparent text-[13px] text-white placeholder:text-zinc-600 focus:outline-none"
         />
         <button
           type="submit"
           data-testid="chat-send-btn"
-          className="p-2 text-[#00E5FF] hover:text-[#B900FF] transition-colors"
+          className="p-2 text-[#8B5CF6] hover:text-[#A78BFA] transition-colors"
         >
-          <Send size={16} />
+          <Send size={15} />
         </button>
       </form>
     </div>
@@ -170,9 +170,9 @@ function CanvasPane() {
       className="hidden lg:block w-1/2 bg-zinc-950 relative overflow-hidden canvas-grid"
     >
       {/* Header */}
-      <div className="absolute top-0 left-0 right-0 px-4 py-3 bg-zinc-950/80 backdrop-blur-sm border-b border-zinc-900 flex items-center gap-2 z-20">
-        <Zap size={14} className="text-[#B900FF]" />
-        <span className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-400">
+      <div className="absolute top-0 left-0 right-0 px-4 py-3 bg-zinc-950/80 backdrop-blur-sm border-b border-white/[0.06] flex items-center gap-2 z-20">
+        <Zap size={14} className="text-[#A78BFA]" />
+        <span className="text-[12px] tracking-wide text-zinc-500">
           Visual Canvas
         </span>
       </div>
@@ -192,11 +192,11 @@ function CanvasPane() {
               d={`M ${from.x} ${from.y} C ${midX} ${from.y}, ${midX} ${to.y}, ${to.x} ${to.y}`}
               className={`fill-none animate-line-draw ${
                 isActive
-                  ? "stroke-[#00E5FF] stroke-[2.5px]"
-                  : "stroke-zinc-700 stroke-[1.5px]"
+                  ? "stroke-[#8B5CF6] stroke-[2px]"
+                  : "stroke-zinc-800 stroke-[1.5px]"
               }`}
               style={{
-                filter: isActive ? "drop-shadow(0 0 6px rgba(0,229,255,0.4))" : "none",
+                filter: isActive ? "drop-shadow(0 0 8px rgba(139,92,246,0.4))" : "none",
               }}
             />
           );
@@ -212,33 +212,33 @@ function CanvasPane() {
             key={node.id}
             data-testid={`canvas-node-${node.id}`}
             onClick={() => setActiveNode(node.id)}
-            className={`absolute z-10 min-w-[200px] p-4 cursor-pointer transition-all duration-300 ${
+            className={`absolute z-10 min-w-[200px] p-4 cursor-pointer rounded-xl transition-all duration-300 ${
               isActive
-                ? "bg-zinc-900 border border-[#00E5FF] shadow-[0_0_15px_rgba(0,229,255,0.2)]"
-                : "bg-zinc-900 border border-zinc-800 hover:border-[#B900FF] hover:shadow-[0_0_12px_rgba(185,0,255,0.15)]"
+                ? "bg-white/[0.05] border border-[#8B5CF6]/50 shadow-[0_0_20px_rgba(139,92,246,0.15)]"
+                : "bg-white/[0.03] border border-white/[0.07] hover:border-[#8B5CF6]/30 hover:shadow-[0_0_15px_rgba(139,92,246,0.08)]"
             }`}
             style={{ left: node.x, top: node.y + 48 }}
           >
             <div className="flex items-center gap-3">
               <div
-                className={`w-8 h-8 flex items-center justify-center ${
-                  isActive ? "bg-[#00E5FF]/10" : "bg-zinc-800"
+                className={`w-8 h-8 flex items-center justify-center rounded-lg ${
+                  isActive ? "bg-[#8B5CF6]/15" : "bg-white/[0.04]"
                 }`}
               >
                 <Icon
                   size={14}
-                  className={isActive ? "text-[#00E5FF]" : "text-zinc-400"}
+                  className={isActive ? "text-[#8B5CF6]" : "text-zinc-500"}
                 />
               </div>
               <div>
                 <p
-                  className={`text-xs font-mono uppercase tracking-wider ${
-                    isActive ? "text-[#00E5FF]" : "text-zinc-500"
+                  className={`text-[11px] tracking-wider ${
+                    isActive ? "text-[#A78BFA]" : "text-zinc-600"
                   }`}
                 >
                   {node.label}
                 </p>
-                <p className="text-sm text-white font-medium">{node.sub}</p>
+                <p className="text-[13px] text-white font-medium">{node.sub}</p>
               </div>
             </div>
           </div>
@@ -256,22 +256,22 @@ function CodePane() {
   return (
     <div
       data-testid="studio-code-pane"
-      className="w-full lg:w-1/4 border-l border-zinc-900 bg-zinc-900 flex flex-col h-full"
+      className="w-full lg:w-1/4 border-l border-white/[0.06] bg-zinc-900/50 flex flex-col h-full"
     >
       {/* Header */}
-      <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <FileText size={14} className="text-zinc-400" />
-          <span className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-400">
+          <FileText size={13} className="text-zinc-500" />
+          <span className="text-[12px] tracking-wide text-zinc-500">
             agent.json
           </span>
         </div>
         <button
           onClick={handleDeploy}
           data-testid="deploy-agent-btn"
-          className="flex items-center gap-2 px-4 py-1.5 bg-[#00E5FF] text-black text-xs font-semibold uppercase tracking-wider hover:bg-[#B900FF] hover:text-white transition-all duration-300 shadow-[0_0_10px_rgba(0,229,255,0.2)] hover:shadow-[0_0_15px_rgba(185,0,255,0.4)]"
+          className="flex items-center gap-1.5 px-4 py-1.5 bg-[#8B5CF6] text-white text-[12px] font-medium rounded-full hover:bg-[#A78BFA] transition-all duration-300 shadow-[0_0_15px_rgba(139,92,246,0.2)] hover:shadow-[0_0_25px_rgba(139,92,246,0.35)]"
         >
-          <Rocket size={12} />
+          <Rocket size={11} />
           Deploy
         </button>
       </div>
@@ -324,7 +324,7 @@ function colorize(line) {
       );
     } else {
       parts.push(
-        <span key={key++} className="text-[#00E5FF]">
+        <span key={key++} className="text-[#A78BFA]">
           "{match[1]}"
         </span>
       );
@@ -376,7 +376,7 @@ export default function Studio() {
   return (
     <div
       data-testid="studio-page"
-      className="flex flex-col lg:flex-row h-[calc(100vh-64px)] w-full bg-zinc-950 overflow-hidden"
+      className="flex flex-col lg:flex-row h-[calc(100vh-60px)] w-full bg-zinc-950 overflow-hidden"
     >
       <ChatPane />
       <CanvasPane />

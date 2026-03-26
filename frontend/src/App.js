@@ -49,11 +49,13 @@ function App() {
             position="bottom-right"
             toastOptions={{
               style: {
-                background: '#18181b',
-                border: '1px solid #27272a',
+                background: 'rgba(24, 24, 27, 0.9)',
+                backdropFilter: 'blur(12px)',
+                border: '1px solid rgba(255,255,255,0.08)',
                 color: '#fafafa',
                 fontFamily: "'IBM Plex Sans', sans-serif",
-                borderRadius: '0px',
+                borderRadius: '12px',
+                fontSize: '13px',
               },
             }}
           />

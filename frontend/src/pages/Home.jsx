@@ -2,8 +2,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { ArrowRight } from "lucide-react";
 
-const HERO_BG = "https://static.prod-images.emergentagent.com/jobs/1f4bc532-c54c-43b5-acf6-c5b708fa0240/images/2464b225b435e3ff705aa4795199708e87a8d886d30fb4b1d5631b4e81e925b6.png";
-
 export default function Home() {
   const [email, setEmail] = useState("");
 
@@ -18,27 +16,21 @@ export default function Home() {
   };
 
   return (
-    <div className="relative min-h-[calc(100vh-64px)] flex items-center justify-center overflow-hidden">
-      {/* Background image */}
-      <div className="absolute inset-0 z-0">
-        <img
-          src={HERO_BG}
-          alt=""
-          className="w-full h-full object-cover opacity-20"
-        />
-        <div className="absolute inset-0 bg-zinc-950/70" />
-      </div>
+    <div className="relative min-h-[calc(100vh-60px)] flex items-center justify-center overflow-hidden">
+      {/* Subtle gradient orbs */}
+      <div className="absolute top-[-20%] left-[10%] w-[500px] h-[500px] rounded-full bg-[#8B5CF6]/[0.07] blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[15%] w-[400px] h-[400px] rounded-full bg-[#6D28D9]/[0.05] blur-[100px] pointer-events-none" />
 
       {/* Content */}
-      <div className="relative z-10 max-w-4xl mx-auto px-6 lg:px-8 text-center">
+      <div className="relative z-10 max-w-3xl mx-auto px-6 lg:px-8 text-center">
         {/* Label */}
         <div
-          className="inline-block mb-8 opacity-0 animate-fade-in-up"
+          className="inline-block mb-10 opacity-0 animate-fade-in-up"
           style={{ animationDelay: "0ms", animationFillMode: "forwards" }}
         >
           <span
             data-testid="hero-label"
-            className="text-xs font-mono uppercase tracking-[0.3em] text-zinc-500 border border-zinc-800 px-4 py-2"
+            className="text-[11px] tracking-[0.15em] text-zinc-500 bg-white/[0.04] border border-white/[0.08] px-4 py-1.5 rounded-full"
           >
             Autonomous Agent Infrastructure
           </span>
@@ -47,19 +39,19 @@ export default function Home() {
         {/* Headline */}
         <h1
           data-testid="hero-headline"
-          className="text-5xl md:text-6xl lg:text-[5rem] font-black tracking-tighter leading-none text-white mb-8 opacity-0 animate-fade-in-up"
+          className="text-4xl sm:text-5xl lg:text-[4.25rem] font-bold tracking-[-0.03em] leading-[1.08] text-white mb-7 opacity-0 animate-fade-in-up"
           style={{ fontFamily: "'Outfit', sans-serif", animationDelay: "100ms", animationFillMode: "forwards" }}
         >
           The AI Agent Economy
           <br />
           Is Broken.{" "}
-          <span className="text-[#00E5FF]">We Are Fixing It.</span>
+          <span className="text-gradient-purple">We Are Fixing It.</span>
         </h1>
 
         {/* Sub-headline */}
         <p
           data-testid="hero-subheadline"
-          className="text-base md:text-lg text-zinc-400 mb-16 max-w-xl mx-auto opacity-0 animate-fade-in-up"
+          className="text-base md:text-lg text-zinc-500 mb-14 max-w-md mx-auto leading-relaxed opacity-0 animate-fade-in-up"
           style={{ animationDelay: "200ms", animationFillMode: "forwards" }}
         >
           Learn, build, monetize, and trust autonomous agents.
@@ -70,7 +62,7 @@ export default function Home() {
           id="waitlist"
           onSubmit={handleJoinWaitlist}
           data-testid="waitlist-form"
-          className="max-w-lg mx-auto flex flex-col sm:flex-row items-stretch gap-4 opacity-0 animate-fade-in-up"
+          className="max-w-md mx-auto flex flex-col sm:flex-row items-stretch gap-3 opacity-0 animate-fade-in-up"
           style={{ animationDelay: "300ms", animationFillMode: "forwards" }}
         >
           <input
@@ -79,15 +71,15 @@ export default function Home() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="your@email.com"
             data-testid="waitlist-email-input"
-            className="flex-1 bg-transparent border-b-2 border-zinc-800 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#00E5FF] transition-colors px-0 py-4 text-lg font-light"
+            className="flex-1 bg-white/[0.04] border border-white/[0.08] text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#8B5CF6]/50 transition-all px-5 py-3.5 text-[15px] rounded-full"
           />
           <button
             type="submit"
             data-testid="waitlist-submit-btn"
-            className="group px-8 py-4 bg-[#00E5FF] text-black text-sm font-semibold uppercase tracking-wider hover:bg-[#B900FF] hover:text-white transition-all duration-300 shadow-[0_0_15px_rgba(0,229,255,0.2)] hover:shadow-[0_0_20px_rgba(185,0,255,0.5)] flex items-center justify-center gap-2"
+            className="group px-7 py-3.5 bg-[#8B5CF6] text-white text-[14px] font-medium rounded-full hover:bg-[#A78BFA] transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_35px_rgba(139,92,246,0.45)] flex items-center justify-center gap-2"
           >
             Join Waitlist
-            <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-1" />
+            <ArrowRight size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
           </button>
         </form>
       </div>

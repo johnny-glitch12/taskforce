@@ -2,18 +2,18 @@ export default function Footer() {
   return (
     <footer
       data-testid="footer"
-      className="border-t border-zinc-900 bg-zinc-950 px-6 lg:px-8 py-6"
+      className="border-t border-white/[0.06] bg-zinc-950 px-6 lg:px-8 py-5"
     >
       <div className="max-w-7xl mx-auto flex items-center justify-between">
-        <span className="text-xs font-mono text-zinc-500 tracking-wider">
+        <span className="text-[12px] text-zinc-600 tracking-wide">
           &copy; 2026 Nova AI
         </span>
         <a
           href="mailto:abbasinidhal@gmail.com"
           data-testid="footer-contact-link"
-          className="text-xs font-mono text-zinc-500 tracking-wider hover:text-[#00E5FF] transition-colors duration-200"
+          className="text-[12px] text-zinc-600 tracking-wide hover:text-[#A78BFA] transition-colors duration-200"
         >
-          Contact: abbasinidhal@gmail.com
+          abbasinidhal@gmail.com
         </a>
       </div>
     </footer>
