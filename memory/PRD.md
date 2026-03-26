@@ -75,11 +75,19 @@ Build a modern AI Agent Economy platform "Nova AI" with dark mode aesthetic, Lan
 4. **Frontend Live Satellite Feed Panel**: Rendered in the Sovereign Bot tab. Auto-refreshes image every 5 seconds when bot is running. Shows REC indicator + scanline overlay when active. Shows placeholder with Monitor icon when bot is off.
 5. **Static Files Mount**: FastAPI serves `/static/` directory for the screenshot files.
 
+### Phase 9 - Remote Session Sync / QR Login (Complete - March 26, 2026)
+1. **sovereign.py `--login` Mode**: `login_mode()` function opens Discord login page in headless Chromium, captures QR code screenshots every 2 seconds to `/app/backend/static/qr_sync.jpg`, waits for URL change to `/channels` (successful scan), saves `context.storage_state()` as `discord_session.json`. 2-minute timeout auto-kills.
+2. **Sync Session API** (`POST /api/csdrop/sync-session`): Spawns sovereign.py with `--login` flag. Requires CSDROP auth. Rejects if bot is running or sync already in progress. Pre-flight check for playwright.
+3. **Sync Status API** (`GET /api/csdrop/sync-status`): Returns `{status, qr_available, logs, session_exists, session_last_updated}`. Status values: idle, syncing, success, timeout, finished.
+4. **Sync Stop API** (`POST /api/csdrop/sync-stop`): Kills sync process, cleans up QR file. Requires CSDROP auth.
+5. **QR Image Endpoint** (`GET /api/csdrop/sync-qr`): Serves QR screenshot as JPEG with no-cache headers. No auth (for `<img src>` usage).
+6. **Frontend Sync Modal**: "Sync Session" button in Sovereign Bot tab opens a full-screen modal with: live QR code display (refreshes every 2s), LIVE indicator + countdown timer, sync logs, Cancel/Start/Done buttons, success/timeout state screens with appropriate messaging.
+
 ## Testing Status
-- Iteration 11: 100% backend (15/15), 100% frontend (Live Feed + all CSDROP flows)
-- Iteration 10: 100% backend (12/12), 100% frontend (Environment Manager flows)
-- Iteration 9: 100% backend (26/26), 100% frontend (all CSDROP + main app flows)
-- Test files: /app/test_reports/iteration_1.json through iteration_11.json
+- Iteration 12: 100% backend (19/19), 100% frontend (Session Sync modal + all regression)
+- Iteration 11: 100% backend (15/15), 100% frontend (Live Feed)
+- Iteration 10: 100% backend (12/12), 100% frontend (Environment Manager)
+- Test files: /app/test_reports/iteration_1.json through iteration_12.json
 
 ## Credentials
 - Admin: admin@nova.ai / admin123
