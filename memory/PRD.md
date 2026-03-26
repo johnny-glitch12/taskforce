@@ -56,9 +56,21 @@ Build a modern AI Agent Economy platform "Nova AI" with dark mode aesthetic, Lan
 6. **CSDROP Agent CRUD**: Create (limit 10), delete, run agents — all isolated to csdrop user
 7. **Execution History**: Separate csdrop_executions collection, timestamped logs
 
+### Phase 7 - Environment Manager (Complete - March 26, 2026)
+1. **Health Check API** (`GET /api/csdrop/health`): Verifies playwright, playwright_stealth, RestrictedPython modules + Chromium browser. Returns `ready` boolean + `python_path` (sys.executable)
+2. **Auto-Repair API** (`POST /api/admin/repair`): Runs `pip install -r requirements.txt` + `playwright install chromium` via FastAPI BackgroundTasks. Non-blocking, 2-3 min runtime.
+3. **Repair Status API** (`GET /api/admin/repair-status`): Polls background repair progress and logs
+4. **Pre-Flight Check**: `/api/csdrop/launch` rejects bot start if dependencies missing
+5. **sys.executable Fix**: Bot launcher uses `sys.executable` instead of hardcoded `python3` for venv compatibility
+6. **Startup Health Check**: Server logs dependency status on boot with warnings for missing modules
+7. **Frontend System Health Panel**: Shows green/red indicators for all 4 deps + "Repair Environment" button when unhealthy
+8. **UI Safety**: Launch button replaced with "Env Not Ready" warning when deps missing
+9. **Bot-specific requirements.txt** at `/app/backend/clients/csdrop/requirements.txt`
+
 ## Testing Status
+- Iteration 10: 100% backend (12/12), 100% frontend (all Environment Manager flows)
 - Iteration 9: 100% backend (26/26), 100% frontend (all CSDROP + main app flows)
-- Test files: /app/test_reports/iteration_1.json through iteration_9.json
+- Test files: /app/test_reports/iteration_1.json through iteration_10.json
 
 ## Credentials
 - Admin: admin@nova.ai / admin123
@@ -69,7 +81,11 @@ Build a modern AI Agent Economy platform "Nova AI" with dark mode aesthetic, Lan
 - Studio Vibe chat: pattern matcher (not real LLM)
 - Stripe: test/sandbox mode
 - Pro upgrade button: UI only
-- Sovereign bot: requires playwright (not in sandbox env)
+
+## Key API Endpoints (Environment Manager)
+- `GET /api/csdrop/health` — Check all bot dependencies (any Bearer token)
+- `POST /api/admin/repair` — Trigger background dependency installation (no auth)
+- `GET /api/admin/repair-status` — Poll repair progress and logs (no auth)
 
 ## Prioritized Backlog
 - **P1**: Real LLM integration for Studio Vibe Mode
@@ -78,3 +94,4 @@ Build a modern AI Agent Economy platform "Nova AI" with dark mode aesthetic, Lan
 - **P2**: Creator dashboard with analytics
 - **P3**: Agent version control
 - **P3**: Pro tier Stripe subscription
+- **P3**: Refactor server.py into modular routers
