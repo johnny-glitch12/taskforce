@@ -1,6 +1,21 @@
 import asyncio, random, sqlite3, json, os, time
+from pathlib import Path
 from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
+
+# Screenshot path for live dashboard feed
+SCREENSHOT_DIR = Path(__file__).resolve().parent.parent / "static"
+SCREENSHOT_DIR.mkdir(exist_ok=True)
+SCREENSHOT_PATH = SCREENSHOT_DIR / "live_stream.jpg"
+
+
+async def _capture_feed(page):
+    """Save a screenshot for the Live Satellite Feed on the dashboard."""
+    try:
+        await page.screenshot(path=str(SCREENSHOT_PATH), type="jpeg", quality=50)
+        print("[SYSTEM] Screenshot captured for Dashboard.")
+    except Exception:
+        pass
 
 # ==========================================
 # I. CONFIGURATION (Keep your site/links here)
@@ -95,6 +110,7 @@ class PredatorEngine:
                 await asyncio.sleep(random.randint(5, 8))
                 msgs = await self.page.query_selector_all('li[class*="message_"]')
                 content = await self.page.content()
+                await _capture_feed(self.page)
 
                 # Logic: If total messages > 1 and we haven't dropped our link yet
                 if len(msgs) >= 2 and CONFIG["LINKS"]["SITE"] not in content:
@@ -140,6 +156,7 @@ class PredatorEngine:
                 
                 self.db.commit()
                 await human_lurk(self.page)
+                await _capture_feed(self.page)
                 # Nap inside the batch
                 await asyncio.sleep(random.randint(45, 90))
             except: continue
@@ -158,14 +175,17 @@ async def main():
             context = await browser.new_context(storage_state=CONFIG["SESSION_FILE"])
             page = await context.new_page()
             await stealth_async(page)
+            await _capture_feed(page)  # Initial feed capture
             
             predator = PredatorEngine(page, db)
 
             # 1. First, check for any and all replies (The Hammer)
             await predator.hammer_check()
+            await _capture_feed(page)
             
             # 2. Then, strike 10 new targets (The Hook)
             await predator.hook_strike(batch_size=10)
+            await _capture_feed(page)
             
             # 3. Rest the system
             nap = random.randint(300, 600)

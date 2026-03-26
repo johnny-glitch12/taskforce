@@ -16,7 +16,8 @@ from jose import jwt, JWTError
 from passlib.context import CryptContext
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
 import subprocess
 import asyncio as aio
@@ -1390,6 +1391,33 @@ async def csdrop_get_bot_logs(user=Depends(get_csdrop_user)):
         "logs": _csdrop_bot_logs[-100:],
     }
 
+@api_router.get("/csdrop/live-feed")
+async def csdrop_live_feed_status(user=Depends(get_csdrop_user)):
+    """Check if a live screenshot is available."""
+    feed_path = STATIC_DIR / "live_stream.jpg"
+    available = feed_path.exists()
+    last_modified = None
+    if available:
+        last_modified = datetime.fromtimestamp(feed_path.stat().st_mtime, tz=timezone.utc).isoformat()
+    bot_running = _csdrop_bot_process is not None and _csdrop_bot_process.returncode is None
+    return {
+        "available": available,
+        "bot_running": bot_running,
+        "last_updated": last_modified,
+    }
+
+@api_router.get("/csdrop/live-feed/image")
+async def csdrop_live_feed_image():
+    """Serve the latest bot screenshot. No auth so <img src> works."""
+    feed_path = STATIC_DIR / "live_stream.jpg"
+    if not feed_path.exists():
+        raise HTTPException(status_code=404, detail="No feed available.")
+    return FileResponse(
+        str(feed_path),
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"},
+    )
+
 @api_router.get("/csdrop/agents")
 async def csdrop_list_agents(user=Depends(get_csdrop_user)):
     agents = await db.user_agents.find(
@@ -1588,6 +1616,11 @@ async def root():
 
 # Include router
 app.include_router(api_router)
+
+# Mount static files for live bot screenshots
+STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 app.add_middleware(
     CORSMiddleware,

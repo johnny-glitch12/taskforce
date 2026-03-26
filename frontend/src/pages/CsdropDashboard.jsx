@@ -7,7 +7,7 @@ import {
   CheckCircle2, XCircle, Loader2, Plus, Trash2, Copy,
   RefreshCw, ChevronDown, ChevronUp, Send, Layers,
   Globe, ArrowUpRight, Activity, Bot, Wrench, Heart,
-  AlertTriangle,
+  AlertTriangle, Monitor, Satellite,
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -201,6 +201,91 @@ function SystemHealth({ health, onRepair, repairLogs, repairing }) {
   );
 }
 
+/* ─── Live Satellite Feed ─── */
+function LiveFeed({ botRunning }) {
+  const [feedUrl, setFeedUrl] = useState(null);
+  const [feedAvailable, setFeedAvailable] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const imgRef = useRef(null);
+
+  useEffect(() => {
+    if (!botRunning) {
+      setFeedAvailable(false);
+      return;
+    }
+    // Refresh image every 5 seconds by busting the cache
+    const interval = setInterval(() => {
+      const ts = Date.now();
+      setFeedUrl(`${API}/api/csdrop/live-feed/image?t=${ts}`);
+      setFeedAvailable(true);
+      setLastUpdated(new Date().toLocaleTimeString());
+    }, 5000);
+    // Immediately set a first frame
+    setFeedUrl(`${API}/api/csdrop/live-feed/image?t=${Date.now()}`);
+    setFeedAvailable(true);
+    setLastUpdated(new Date().toLocaleTimeString());
+    return () => clearInterval(interval);
+  }, [botRunning]);
+
+  return (
+    <div
+      data-testid="cs-live-feed"
+      className="rounded-2xl overflow-hidden"
+      style={{
+        background: "rgba(0, 0, 0, 0.5)",
+        border: `1px solid ${botRunning ? "rgba(99, 102, 241, 0.3)" : T.surfaceBorder}`,
+      }}
+    >
+      <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.surfaceBorder}` }}>
+        <div className="flex items-center gap-2">
+          <Satellite size={13} style={{ color: botRunning ? T.indigo : T.textDim }} />
+          <span className="text-[11px] uppercase tracking-widest font-bold" style={{ color: botRunning ? T.indigo : T.textDim }}>
+            Live Satellite Feed
+          </span>
+          {botRunning && (
+            <div className="flex items-center gap-1 ml-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-[9px] font-mono text-red-400">REC</span>
+            </div>
+          )}
+        </div>
+        {lastUpdated && (
+          <span className="text-[9px] font-mono" style={{ color: T.textDim }}>
+            Last frame: {lastUpdated}
+          </span>
+        )}
+      </div>
+      <div className="relative" style={{ minHeight: 200 }}>
+        {feedAvailable && feedUrl ? (
+          <img
+            ref={imgRef}
+            src={feedUrl}
+            alt="Live Bot View"
+            data-testid="cs-live-feed-img"
+            className="w-full object-contain transition-opacity"
+            style={{ opacity: botRunning ? 0.9 : 0.4, maxHeight: 440 }}
+            onError={() => setFeedAvailable(false)}
+            onLoad={() => setFeedAvailable(true)}
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <Monitor size={28} style={{ color: T.textDim }} />
+            <p className="text-[12px]" style={{ color: T.textDim }}>
+              {botRunning ? "Waiting for first frame..." : "Feed activates when the bot is running"}
+            </p>
+          </div>
+        )}
+        {/* Scanline overlay for style */}
+        {botRunning && feedAvailable && (
+          <div className="absolute inset-0 pointer-events-none" style={{
+            background: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(99, 102, 241, 0.03) 2px, rgba(99, 102, 241, 0.03) 4px)",
+          }} />
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Bot Control Panel ─── */
 function BotPanel({ headers, botRunning, setBotRunning, envReady }) {
   const [promo, setPromo] = useState("https://csdrop.com/r/ABBAS");
@@ -320,6 +405,9 @@ function BotPanel({ headers, botRunning, setBotRunning, envReady }) {
             )}
           </div>
         </div>
+
+        {/* Live Satellite Feed */}
+        <LiveFeed botRunning={botRunning} />
       </div>
     </div>
   );
