@@ -1,0 +1,129 @@
+{
+  "theme": "dark",
+  "archetype": "7 (Electric & Neon) / 4 (Swiss & High-Contrast)",
+  "vibe": "Futuristic, minimalist, brutalist, high-end tech product. Heavy use of negative space, pure black background, bright accents.",
+  "colors": {
+    "background": {
+      "primary": "bg-zinc-950",
+      "secondary": "bg-zinc-900",
+      "tertiary": "bg-zinc-800",
+      "glass": "bg-zinc-950/80 backdrop-blur-xl"
+    },
+    "text": {
+      "primary": "text-white",
+      "secondary": "text-zinc-400",
+      "muted": "text-zinc-500",
+      "accent": "text-[#00E5FF]"
+    },
+    "border": {
+      "default": "border-zinc-800",
+      "focus": "border-[#00E5FF]",
+      "hover": "border-[#B900FF]"
+    },
+    "accents": {
+      "electric_blue": "#00E5FF",
+      "neon_violet": "#B900FF"
+    },
+    "shadows": {
+      "glow_blue": "shadow-[0_0_15px_rgba(0,229,255,0.3)]",
+      "glow_violet": "shadow-[0_0_15px_rgba(185,0,255,0.3)]"
+    }
+  },
+  "typography": {
+    "fonts": {
+      "heading": "font-outfit, sans-serif",
+      "body": "font-ibm-plex-sans, sans-serif",
+      "mono": "font-jetbrains-mono, monospace"
+    },
+    "scale": {
+      "h1": "text-5xl md:text-6xl lg:text-[5rem] font-black tracking-tighter leading-none",
+      "h2": "text-3xl md:text-4xl font-bold tracking-tight",
+      "h3": "text-xl md:text-2xl font-semibold",
+      "body": "text-base leading-relaxed text-zinc-400",
+      "small": "text-sm text-zinc-500",
+      "label": "text-xs font-mono uppercase tracking-[0.2em]"
+    }
+  },
+  "spacing_and_layout": {
+    "general": "Generous spacing. p-8 to p-24 for sections. Rely on optical alignment.",
+    "border_radius": "Brutalist clean feel: rounded-none or rounded-sm max.",
+    "grid": "Bento grids with gap-8 or gap-4 for the IDE split panes."
+  },
+  "components": {
+    "button": {
+      "primary": "bg-[#00E5FF] text-black font-semibold uppercase tracking-wider hover:bg-[#B900FF] hover:text-white transition-all duration-300 rounded-none shadow-[0_0_15px_rgba(0,229,255,0.2)] hover:shadow-[0_0_20px_rgba(185,0,255,0.5)]",
+      "ghost": "text-zinc-400 hover:text-white transition-colors duration-200 uppercase text-sm tracking-wider font-mono",
+      "disabled": "opacity-50 cursor-not-allowed bg-zinc-800 text-zinc-500 border border-zinc-700 hover:shadow-none hover:bg-zinc-800 hover:text-zinc-500"
+    },
+    "card": {
+      "default": "bg-zinc-900 border border-zinc-800 rounded-none p-6 transition-all duration-300 hover:border-[#B900FF] hover:shadow-[0_0_20px_rgba(185,0,255,0.1)] group",
+      "glass": "bg-zinc-950/60 backdrop-blur-xl border border-white/10"
+    },
+    "input": {
+      "default": "bg-transparent border-b-2 border-zinc-800 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#00E5FF] transition-colors rounded-none px-0 py-4 text-xl md:text-2xl font-light"
+    },
+    "navigation": "Sticky top-0 z-50 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-900. Links: text-sm font-mono uppercase tracking-widest text-zinc-400 hover:text-white transition-colors",
+    "ide_split_pane": {
+      "wrapper": "flex h-[calc(100vh-64px)] w-full bg-zinc-950 overflow-hidden",
+      "chat_pane": "w-1/4 border-r border-zinc-900 bg-zinc-950 flex flex-col",
+      "canvas_pane": "w-1/2 bg-zinc-950 relative overflow-hidden bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:24px_24px]",
+      "code_pane": "w-1/4 border-l border-zinc-900 bg-zinc-900 flex flex-col"
+    },
+    "canvas_nodes": {
+      "default": "bg-zinc-900 border border-zinc-800 p-4 rounded-sm min-w-[200px] absolute shadow-lg",
+      "active": "bg-zinc-900 border border-[#00E5FF] shadow-[0_0_15px_rgba(0,229,255,0.2)] z-10",
+      "connection_line": "stroke-zinc-700 stroke-2 fill-none",
+      "connection_line_active": "stroke-[#00E5FF] stroke-[3px] fill-none shadow-[0_0_10px_rgba(0,229,255,0.5)]"
+    }
+  },
+  "media": {
+    "logo": {
+      "url": "https://customer-assets.emergentagent.com/job_1f4bc532-c54c-43b5-acf6-c5b708fa0240/artifacts/cgt08cfq_5c02db2b-7f75-40a2-85d0-f16bbaecf95b.png",
+      "description": "Nova AI Brand Logo"
+    },
+    "hero_background": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/1f4bc532-c54c-43b5-acf6-c5b708fa0240/images/2464b225b435e3ff705aa4795199708e87a8d886d30fb4b1d5631b4e81e925b6.png",
+      "description": "Abstract 3D network visualization with electric blue and neon violet glowing nodes"
+    },
+    "agent_cards": [
+      {
+        "url": "https://images.unsplash.com/photo-1744324480866-1794a1bf193c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwzfHxmdXR1cmlzdGljJTIwYWklMjBicmFpbiUyMGRhcmt8ZW58MHx8fHwxNzc0NDg1NjE4fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Agent 1 Visual"
+      },
+      {
+        "url": "https://images.pexels.com/photos/5181148/pexels-photo-5181148.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Agent 2 Visual"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1697899001862-59699946ea29?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2ODh8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMDNkJTIwZ2VvbWV0cmljJTIwc2hhcGUlMjBkYXJrJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3NzQ0ODU2MTR8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Agent 3 Visual"
+      }
+    ]
+  },
+  "specific_routes": {
+    "Home": {
+      "instructions": "Extremely minimalist hero section. Black background with the generated 3D network visual set to low opacity (bg-black/60 overlay) covering the viewport. Massive headline 'The AI Agent Economy Is Broken. We Are Fixing It.' left-aligned or centered, but brutalist. Simple waitlist input, bottom-border underline style."
+    },
+    "Login": {
+      "instructions": "Center screen. Clean card, no rounded corners. Mock auth for 'admin@nova.ai'. Use simple forms."
+    },
+    "Academy": {
+      "instructions": "Coming soon page. Massive typography, stark white on black."
+    },
+    "Marketplace": {
+      "instructions": "Grid of 3 agent cards. High-end visuals, use the agent card media URLs. Buttons disabled (opacity-50) for Rent/Buy."
+    },
+    "Studio": {
+      "instructions": "Admin only split pane IDE. Chat left, canvas middle (dotted bg), code right. Active nodes must glow with electric blue (#00E5FF). Hover states neon violet (#B900FF)."
+    }
+  },
+  "instructions_to_main_agent": [
+    "Load Google Fonts: Outfit (Heading), IBM Plex Sans (Body), JetBrains Mono (Mono) via index.html or font loaders.",
+    "Use Phosphor Icons or Lucide-React for interface icons.",
+    "Ensure the layout strictly uses bg-zinc-950 and bg-zinc-900. No #ffffff backgrounds.",
+    "Do NOT use Shadcn's default rounded corners. Override to rounded-none or rounded-sm for brutalist tech vibe.",
+    "For the Studio node canvas, mock the interface with absolutely positioned cards. Draw inline SVG lines connecting them. Active paths should be stroke-[#00E5FF].",
+    "Footer must be minimal: just '© 2026 Nova AI' and mailto:abbasinidhal@gmail.com on opposite sides. No social icons.",
+    "Add 'data-testid' to all interactive elements for robust testing."
+  ]
+}
