@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Search, Heart, Star, Shield, ChevronRight, TrendingUp,
-  Sparkles, BadgeCheck, ArrowRight, SlidersHorizontal,
+  Sparkles, BadgeCheck, ArrowRight, Play,
   Headphones, BarChart3, Code2, Palette, DollarSign, MessageSquare,
 } from "lucide-react";
 
@@ -150,7 +150,7 @@ function AgentCard({ agent, index }) {
   return (
     <div
       data-testid={`agent-card-${agent.id}`}
-      className="bg-white/[0.03] border border-white/[0.07] rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#8B5CF6]/25 hover:shadow-[0_0_30px_rgba(139,92,246,0.07)] group cursor-pointer opacity-0 animate-fade-in-up"
+      className="bg-white/[0.03] border border-white/[0.07] rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#8B5CF6]/25 hover:shadow-[0_0_30px_rgba(139,92,246,0.07)] group opacity-0 animate-fade-in-up"
       style={{ animationDelay: `${index * 60}ms`, animationFillMode: "forwards" }}
     >
       {/* Image / Gradient */}
@@ -160,13 +160,11 @@ function AgentCard({ agent, index }) {
         ) : (
           <div className={`w-full h-full bg-gradient-to-br ${gradients[agent.id % 3]} opacity-60`} />
         )}
-        {/* Trending tag */}
         {agent.trendingLabel && (
           <span className="absolute top-3 left-3 text-[10px] bg-[#8B5CF6]/80 backdrop-blur-sm text-white px-2.5 py-1 rounded-full font-medium flex items-center gap-1">
             <TrendingUp size={10} /> {agent.trendingLabel}
           </span>
         )}
-        {/* Save heart */}
         <button
           onClick={(e) => { e.stopPropagation(); setSaved(!saved); }}
           data-testid={`agent-save-${agent.id}`}
@@ -194,9 +192,11 @@ function AgentCard({ agent, index }) {
 
       {/* Content */}
       <div className="px-4 pb-4">
-        <h3 className="text-[14px] font-medium text-white leading-snug mb-2.5 line-clamp-2" style={{ fontFamily: "'Outfit', sans-serif" }}>
-          {agent.title}
-        </h3>
+        <Link to={`/agent/${agent.id}`} data-testid={`agent-title-link-${agent.id}`}>
+          <h3 className="text-[14px] font-medium text-white leading-snug mb-2.5 line-clamp-2 hover:text-[#A78BFA] transition-colors cursor-pointer" style={{ fontFamily: "'Outfit', sans-serif" }}>
+            {agent.title}
+          </h3>
+        </Link>
 
         {/* Social proof */}
         <div className="flex items-center gap-3 mb-3">
@@ -210,9 +210,15 @@ function AgentCard({ agent, index }) {
           </span>
         </div>
 
-        {/* Price */}
+        {/* Actions */}
         <div className="pt-3 border-t border-white/[0.05] flex items-center justify-between">
-          <span className="text-[13px] text-zinc-400">Starting at</span>
+          <Link
+            to={`/agent/${agent.id}?demo=true`}
+            data-testid={`agent-live-demo-${agent.id}`}
+            className="flex items-center gap-1.5 text-[12px] text-[#8B5CF6] hover:text-[#A78BFA] transition-colors font-medium"
+          >
+            <Play size={11} /> Live Demo
+          </Link>
           <span className="text-[15px] font-semibold text-white">${agent.price}<span className="text-[12px] text-zinc-500 font-normal">/mo</span></span>
         </div>
       </div>

@@ -10,6 +10,7 @@ import Academy from "@/pages/Academy";
 import Marketplace from "@/pages/Marketplace";
 import Studio from "@/pages/Studio";
 import CreatorProfile from "@/pages/CreatorProfile";
+import AgentDetail from "@/pages/AgentDetail";
 
 export const AuthContext = createContext(null);
 
@@ -66,6 +67,7 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/academy" element={<Academy />} />
               <Route path="/marketplace" element={<Marketplace />} />
+              <Route path="/agent/:id" element={<AgentDetail />} />
               <Route path="/creator/:id" element={<CreatorProfile />} />
               <Route
                 path="/studio"
