@@ -39,6 +39,7 @@ export default function Home() {
         {/* Headline */}
         <h1
           data-testid="hero-headline"
+          aria-label="The AI Agent Economy Is Broken. We Are Fixing It."
           className="text-4xl sm:text-5xl lg:text-[4.25rem] font-bold tracking-[-0.03em] leading-[1.08] text-white mb-7 opacity-0 animate-fade-in-up"
           style={{ fontFamily: "'Outfit', sans-serif", animationDelay: "100ms", animationFillMode: "forwards" }}
         >

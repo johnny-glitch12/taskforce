@@ -1,38 +1,33 @@
 # Nova AI - Product Requirements Document
 
 ## Original Problem Statement
-Build a modern, simplistic, highly responsive web application for startup "Nova AI" with strict dark mode aesthetic.
+Build a modern, simplistic, highly responsive web application for startup "Nova AI" - dark mode, purple accent aesthetic. Full marketplace, creator profiles, studio IDE with Vibe/Node toggle.
 
 ## Architecture
 - **Frontend**: React 19 + Tailwind CSS + Shadcn UI + React Router
 - **Backend**: FastAPI (minimal, health check only)
 - **Auth**: Frontend-only mock (React Context, admin@nova.ai)
 
-## Design System (v2 — Modernized)
-- **Primary accent**: #8B5CF6 (violet-500)
-- **Hover accent**: #A78BFA (violet-400)
-- **Backgrounds**: zinc-950, white/[0.03] glass panels
-- **Buttons**: Pill-shaped (rounded-full), glow shadows
-- **Cards**: rounded-2xl, glass-morphism (backdrop-blur)
-- **Borders**: white/[0.06] - white/[0.08] subtle
-- **Fonts**: Outfit (headings), IBM Plex Sans (body), JetBrains Mono (code)
-- **Logo**: Text-only "nova.ai" with purple dot
-
 ## What's Been Implemented (Feb 2026)
-- [x] Modernized navbar (text-only logo, pill nav, glass bg)
-- [x] Home: Hero with gradient-purple headline, glass input, pill CTA button
-- [x] Login: Glass card, rounded inputs, pill sign-in button
-- [x] Academy: Coming Soon with gradient text
-- [x] Marketplace: 3 glass agent cards with rounded corners
-- [x] Studio: Split-pane IDE with purple-glowing nodes + SVG connections
-- [x] Minimal footer
-- [x] Toast notifications (sonner, glass style)
-- [x] Full responsive design
-- [x] 100% test pass rate (iteration 2)
+### Phase 1 - MVP
+- [x] Persistent navbar, Home hero, Login, Academy, Footer
 
-## Prioritized Backlog
-### P1 - Wire up waitlist to MongoDB
-### P1 - Real JWT authentication
-### P2 - Studio drag-and-drop nodes
-### P2 - Academy course content
-### P2 - Marketplace purchase flow
+### Phase 2 - Design Modernization
+- [x] Purple palette (#8B5CF6/#A78BFA), pill buttons, glass-morphism
+
+### Phase 3 - Marketplace & Studio Overhaul
+- [x] Marketplace: Omni-search bar, 7 category pills, filter by category/search
+- [x] "Meet the Supernovas" - 5 creator cards (horizontal scroll) with Supernova badge, trust scores, agent previews
+- [x] "Most Deployed This Week" - Trending agent cards sorted by deploy count
+- [x] Upgraded Agent Cards: heart save, creator avatar, star ratings, trust score, trending tags, pricing
+- [x] Creator Profile Page (/creator/:id): stats (deploys, completion rate, response time), bio, agent portfolio
+- [x] Studio Vibe Mode / Node Mode toggle
+  - Vibe Mode: expanded chat + code preview
+  - Node Mode: chat sidebar + visual canvas with SVG nodes + code preview
+- [x] All animations and transitions smooth
+- [x] 95% test pass rate (iteration 3)
+
+## Backlog
+### P1 - Wire waitlist to MongoDB, real JWT auth
+### P2 - Drag-and-drop nodes, Academy content, actual purchase flow
+### P2 - Agent detail page (demo video, reviews, full description)

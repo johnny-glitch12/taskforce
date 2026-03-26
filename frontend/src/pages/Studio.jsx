@@ -162,7 +162,7 @@ function CanvasPane({ expanded }) {
     <div
       data-testid="studio-canvas-pane"
       className={`hidden lg:block bg-zinc-950 relative overflow-hidden canvas-grid transition-all duration-500 ease-in-out ${
-        expanded ? "w-3/4" : "w-0 opacity-0 pointer-events-none"
+        expanded ? "w-3/4 opacity-100" : "w-0 opacity-0 pointer-events-none overflow-hidden"
       }`}
     >
       {/* Header */}
@@ -316,18 +316,9 @@ export default function Studio() {
 
       {/* Main Panes */}
       <div className="flex-1 flex flex-row overflow-hidden">
-        {mode === "vibe" ? (
-          <>
-            <ChatPane expanded={true} />
-            <CodePane />
-          </>
-        ) : (
-          <>
-            <ChatPane expanded={false} />
-            <CanvasPane expanded={true} />
-            <CodePane />
-          </>
-        )}
+        <ChatPane expanded={mode === "vibe"} />
+        <CanvasPane expanded={mode === "node"} />
+        <CodePane />
       </div>
     </div>
   );
