@@ -1,4 +1,4 @@
-import { useState, createContext, useContext } from "react";
+import { useState, useEffect, createContext, useContext, useCallback } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
@@ -12,6 +12,8 @@ import Studio from "@/pages/Studio";
 import CreatorProfile from "@/pages/CreatorProfile";
 import AgentDetail from "@/pages/AgentDetail";
 
+const API = process.env.REACT_APP_BACKEND_URL;
+
 export const AuthContext = createContext(null);
 
 export function useAuth() {
@@ -19,31 +21,87 @@ export function useAuth() {
 }
 
 function ProtectedRoute({ children }) {
-  const { isAdmin } = useAuth();
-  if (!isAdmin) return <Navigate to="/login" replace />;
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user || user.role !== "admin") return <Navigate to="/login" replace />;
   return children;
 }
 
 function App() {
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [userEmail, setUserEmail] = useState("");
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(() => localStorage.getItem("nova_token"));
+  const [loading, setLoading] = useState(true);
 
-  const login = (email) => {
-    if (email === "admin@nova.ai") {
-      setIsAdmin(true);
-      setUserEmail(email);
-      return true;
+  const validateToken = useCallback(async () => {
+    const stored = localStorage.getItem("nova_token");
+    if (!stored) { setLoading(false); return; }
+    try {
+      const res = await fetch(`${API}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${stored}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data);
+        setToken(stored);
+      } else {
+        localStorage.removeItem("nova_token");
+        setToken(null);
+        setUser(null);
+      }
+    } catch {
+      localStorage.removeItem("nova_token");
+      setToken(null);
+      setUser(null);
     }
-    return false;
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { validateToken(); }, [validateToken]);
+
+  const login = async (email, password) => {
+    const res = await fetch(`${API}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || "Login failed");
+    }
+    const data = await res.json();
+    localStorage.setItem("nova_token", data.token);
+    setToken(data.token);
+    setUser(data.user);
+    return data.user;
+  };
+
+  const register = async (email, password, name) => {
+    const res = await fetch(`${API}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, name }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || "Registration failed");
+    }
+    const data = await res.json();
+    localStorage.setItem("nova_token", data.token);
+    setToken(data.token);
+    setUser(data.user);
+    return data.user;
   };
 
   const logout = () => {
-    setIsAdmin(false);
-    setUserEmail("");
+    localStorage.removeItem("nova_token");
+    setToken(null);
+    setUser(null);
   };
 
+  const isAdmin = user?.role === "admin";
+
   return (
-    <AuthContext.Provider value={{ isAdmin, userEmail, login, logout }}>
+    <AuthContext.Provider value={{ user, token, isAdmin, loading, login, register, logout }}>
       <BrowserRouter>
         <div className="min-h-screen bg-zinc-950 flex flex-col">
           <Navbar />

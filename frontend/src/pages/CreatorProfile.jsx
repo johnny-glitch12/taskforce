@@ -1,49 +1,35 @@
+import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { BadgeCheck, Shield, Star, ArrowLeft, ExternalLink, Clock, MessageSquare } from "lucide-react";
 
-/* ─── Same creator data as Marketplace (shared in a real app) ─── */
-const creators = [
-  { id: "datawiz", name: "Sarah Chen", username: "@DataWiz", initial: "S", color: "#8B5CF6", verified: true, trustScore: 99, heroStat: "1.2k+ Agents Deployed", topCategory: "Top Rated in Data", bio: "Former data scientist at Stripe. Building the future of automated analytics.", responseTime: "< 1 hour", memberSince: "Jan 2025", completionRate: "99%", agents: [
-    { id: 3, title: "Data Analyst", rating: 4.9, reviews: 201, price: 99, deploys: 1034 },
-    { id: 7, title: "ETL Pipeline Agent", rating: 4.8, reviews: 87, price: 79, deploys: 456 },
-    { id: 8, title: "Anomaly Detector", rating: 4.7, reviews: 54, price: 69, deploys: 312 },
-  ]},
-  { id: "salesforge", name: "Marcus Rivera", username: "@SalesForge", initial: "M", color: "#6D28D9", verified: true, trustScore: 97, heroStat: "890+ Agents Deployed", topCategory: "Top Rated in Sales", bio: "Ex-VP Sales at HubSpot. Automating the entire outbound pipeline.", responseTime: "< 2 hours", memberSince: "Mar 2025", completionRate: "98%", agents: [
-    { id: 2, title: "Sales Dev Rep", rating: 4.8, reviews: 89, price: 79, deploys: 612 },
-    { id: 6, title: "Lead Qualifier", rating: 4.8, reviews: 112, price: 69, deploys: 445 },
-    { id: 9, title: "Outbound Pro", rating: 4.6, reviews: 43, price: 59, deploys: 234 },
-  ]},
-  { id: "cxmaster", name: "Priya Sharma", username: "@CXMaster", initial: "P", color: "#7C3AED", verified: true, trustScore: 98, heroStat: "1.5k+ Agents Deployed", topCategory: "#1 in Support", bio: "Built CX teams at Zendesk and Intercom. Now building agents that scale empathy.", responseTime: "< 30 min", memberSince: "Dec 2024", completionRate: "100%", agents: [
-    { id: 1, title: "Customer Service Pro", rating: 4.9, reviews: 124, price: 49, deploys: 847 },
-    { id: 10, title: "Ticket Triage Agent", rating: 4.8, reviews: 78, price: 39, deploys: 523 },
-    { id: 11, title: "CSAT Analyst", rating: 4.7, reviews: 56, price: 59, deploys: 289 },
-  ]},
-  { id: "codepilot", name: "Alex Dubois", username: "@CodePilot", initial: "A", color: "#A78BFA", verified: true, trustScore: 96, heroStat: "640+ Agents Deployed", topCategory: "Top Rated in Coding", bio: "Staff engineer turned agent builder. Making code reviews 10x faster.", responseTime: "< 3 hours", memberSince: "Feb 2025", completionRate: "97%", agents: [
-    { id: 4, title: "Code Reviewer", rating: 4.7, reviews: 67, price: 59, deploys: 389 },
-    { id: 12, title: "CI/CD Agent", rating: 4.6, reviews: 34, price: 49, deploys: 198 },
-    { id: 13, title: "Bug Triager", rating: 4.5, reviews: 23, price: 39, deploys: 142 },
-  ]},
-  { id: "financeai", name: "James Okonkwo", username: "@FinanceAI", initial: "J", color: "#5B21B6", verified: true, trustScore: 99, heroStat: "720+ Agents Deployed", topCategory: "#1 in Finance", bio: "CPA + ML engineer. Building enterprise-grade compliance automation.", responseTime: "< 1 hour", memberSince: "Nov 2024", completionRate: "100%", agents: [
-    { id: 5, title: "Finance Auditor", rating: 4.9, reviews: 156, price: 129, deploys: 523 },
-    { id: 14, title: "Expense Tracker", rating: 4.8, reviews: 89, price: 49, deploys: 367 },
-    { id: 15, title: "Risk Scorer", rating: 4.7, reviews: 45, price: 99, deploys: 234 },
-  ]},
-];
+const API = process.env.REACT_APP_BACKEND_URL;
 
 export default function CreatorProfile() {
   const { id } = useParams();
-  const creator = creators.find((c) => c.id === id);
+  const [creator, setCreator] = useState(null);
+  const [agents, setAgents] = useState([]);
+  const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    fetch(`${API}/api/creators/${id}`)
+      .then(r => r.json())
+      .then(data => {
+        setCreator(data.creator);
+        setAgents(data.agents || []);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  if (loading) {
+    return <div className="min-h-[calc(100vh-60px)] flex items-center justify-center"><p className="text-zinc-500">Loading...</p></div>;
+  }
   if (!creator) {
-    return (
-      <div className="min-h-[calc(100vh-60px)] flex items-center justify-center">
-        <p className="text-zinc-500">Creator not found.</p>
-      </div>
-    );
+    return <div className="min-h-[calc(100vh-60px)] flex items-center justify-center"><p className="text-zinc-500">Creator not found.</p></div>;
   }
 
-  const totalDeploys = creator.agents.reduce((sum, a) => sum + a.deploys, 0);
-  const avgRating = (creator.agents.reduce((sum, a) => sum + a.rating, 0) / creator.agents.length).toFixed(1);
+  const totalDeploys = agents.reduce((sum, a) => sum + (a.deployCount || 0), 0);
+  const avgRating = agents.length > 0 ? (agents.reduce((sum, a) => sum + a.rating, 0) / agents.length).toFixed(1) : "N/A";
 
   return (
     <div data-testid="creator-profile-page" className="min-h-[calc(100vh-60px)] px-6 lg:px-8 py-12 relative">
@@ -99,7 +85,7 @@ export default function CreatorProfile() {
               <p className="text-[12px] text-zinc-500">Response Time</p>
             </div>
             <div>
-              <p className="text-[22px] font-bold text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>{creator.agents.length}</p>
+              <p className="text-[22px] font-bold text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>{agents.length}</p>
               <p className="text-[12px] text-zinc-500">Active Agents</p>
             </div>
           </div>
@@ -110,14 +96,15 @@ export default function CreatorProfile() {
           Agent Portfolio
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {creator.agents.map((agent) => (
-            <div
+          {agents.map((agent) => (
+            <Link
+              to={`/agent/${agent.id}`}
               key={agent.id}
               data-testid={`portfolio-agent-${agent.id}`}
               className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-5 transition-all duration-300 hover:border-[#8B5CF6]/25 hover:shadow-[0_0_25px_rgba(139,92,246,0.06)]"
             >
               <h3 className="text-[15px] font-medium text-white mb-2" style={{ fontFamily: "'Outfit', sans-serif" }}>
-                {agent.title}
+                {agent.shortTitle || agent.title}
               </h3>
               <div className="flex items-center gap-3 mb-3">
                 <span className="flex items-center gap-1 text-[12px]">
@@ -125,13 +112,13 @@ export default function CreatorProfile() {
                   <span className="text-white">{agent.rating}</span>
                   <span className="text-zinc-600">({agent.reviews})</span>
                 </span>
-                <span className="text-[12px] text-zinc-600">{agent.deploys} deploys</span>
+                <span className="text-[12px] text-zinc-600">{agent.deployCount} deploys</span>
               </div>
               <div className="flex items-center justify-between pt-3 border-t border-white/[0.05]">
                 <span className="text-[14px] font-semibold text-white">${agent.price}<span className="text-[11px] text-zinc-500 font-normal">/mo</span></span>
                 <span className="text-[12px] text-[#8B5CF6] flex items-center gap-1">View <ExternalLink size={10} /></span>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </div>

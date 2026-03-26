@@ -7,6 +7,7 @@ import { Lock } from "lucide-react";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const { login, isAdmin } = useAuth();
   const navigate = useNavigate();
 
@@ -14,15 +15,17 @@ export default function Login() {
     if (isAdmin) navigate("/studio", { replace: true });
   }, [isAdmin, navigate]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const success = login(email);
-    if (success) {
-      toast.success("Welcome to Nova Studio.");
+    setSubmitting(true);
+    try {
+      const user = await login(email, password);
+      toast.success(`Welcome${user.name ? ', ' + user.name : ''}.`);
       navigate("/studio");
-    } else {
-      toast.error("Currently in private beta. Please join the waitlist.");
+    } catch (err) {
+      toast.error(err.message || "Login failed. Check your credentials.");
     }
+    setSubmitting(false);
   };
 
   if (isAdmin) return null;
@@ -98,14 +101,15 @@ export default function Login() {
           <button
             type="submit"
             data-testid="login-submit-btn"
-            className="mt-2 w-full py-3.5 bg-[#8B5CF6] text-white text-[14px] font-medium rounded-full hover:bg-[#A78BFA] transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_35px_rgba(139,92,246,0.4)]"
+            className="mt-2 w-full py-3.5 bg-[#8B5CF6] text-white text-[14px] font-medium rounded-full hover:bg-[#A78BFA] transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_35px_rgba(139,92,246,0.4)] disabled:opacity-50"
+            disabled={submitting}
           >
-            Sign in
+            {submitting ? "Signing in..." : "Sign in"}
           </button>
         </form>
 
         <p className="mt-6 text-[12px] text-zinc-600 text-center">
-          Demo: use admin@nova.ai to access Studio
+          Demo: admin@nova.ai / admin123
         </p>
       </div>
     </div>

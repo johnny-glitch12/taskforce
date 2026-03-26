@@ -6,30 +6,7 @@ import {
   Zap, Clock, Users, CheckCircle2, ShoppingCart, Tag, Bot,
 } from "lucide-react";
 
-/* ─── Shared data (in real app, fetched from API) ─── */
-const creators = [
-  { id: "datawiz", name: "Sarah Chen", username: "@DataWiz", initial: "S", color: "#8B5CF6", verified: true, trustScore: 99 },
-  { id: "salesforge", name: "Marcus Rivera", username: "@SalesForge", initial: "M", color: "#6D28D9", verified: true, trustScore: 97 },
-  { id: "cxmaster", name: "Priya Sharma", username: "@CXMaster", initial: "P", color: "#7C3AED", verified: true, trustScore: 98 },
-  { id: "codepilot", name: "Alex Dubois", username: "@CodePilot", initial: "A", color: "#A78BFA", verified: true, trustScore: 96 },
-  { id: "financeai", name: "James Okonkwo", username: "@FinanceAI", initial: "J", color: "#5B21B6", verified: true, trustScore: 99 },
-];
-
-const allAgents = [
-  { id: 1, title: "I will deploy a Customer Service Pro agent trained on your docs", shortTitle: "Customer Service Pro", description: "Handles tickets, resolves issues, escalates edge cases with empathy.", longDescription: "This AI agent integrates with your existing helpdesk (Zendesk, Intercom, Freshdesk) and learns from your documentation, FAQs, and past ticket resolutions. It handles L1 support autonomously — answering questions, processing refunds, updating accounts — and intelligently escalates complex issues to human agents with full context.", image: "https://images.unsplash.com/photo-1744324480866-1794a1bf193c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwzfHxmdXR1cmlzdGljJTIwYWklMjBicmFpbiUyMGRhcmt8ZW58MHx8fHwxNzc0NDg1NjE4fDA&ixlib=rb-4.1.0&q=85", creator: creators[2], rating: 4.9, reviews: 124, trustScore: 98, price: 49, buyPrice: 499, category: "support", deployCount: 847, setupTime: "< 15 min", features: ["Multi-language support", "Sentiment detection", "Auto-escalation", "Custom training on your docs", "Zendesk/Intercom integration"], demoGreeting: "Hi! I'm the Customer Service Pro agent. Ask me anything about handling refunds, tracking orders, or resolving support tickets." },
-  { id: 2, title: "I will build an AI Sales Dev Rep that books meetings on autopilot", shortTitle: "Sales Dev Rep", description: "Qualifies leads, personalizes outreach, and books meetings automatically.", longDescription: "Your AI-powered SDR that never sleeps. This agent monitors your inbound leads, researches prospects using public data, crafts hyper-personalized outreach sequences, and handles the back-and-forth to book qualified meetings directly on your calendar. It integrates with HubSpot, Salesforce, and Outreach.", image: "https://images.pexels.com/photos/5181148/pexels-photo-5181148.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940", creator: creators[1], rating: 4.8, reviews: 89, trustScore: 96, price: 79, buyPrice: 799, category: "sales", deployCount: 612, setupTime: "< 30 min", features: ["LinkedIn prospect research", "Email personalization", "Meeting scheduling", "CRM auto-sync", "A/B sequence testing"], demoGreeting: "Hey! I'm your Sales Dev Rep agent. I can help you qualify leads, write outreach emails, and book meetings. Try me!" },
-  { id: 3, title: "I will create a Data Analyst agent for automated reporting", shortTitle: "Data Analyst", description: "Turns raw datasets into insights with anomaly detection and trend analysis.", longDescription: "Upload your data or connect your database, and this agent generates automated reports, detects anomalies in real-time, identifies trends, and delivers actionable recommendations. Supports SQL databases, Google Sheets, and CSV uploads. Delivers reports via Slack, email, or dashboard.", image: "https://images.unsplash.com/photo-1697899001862-59699946ea29?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2ODh8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMDNkJTIwZ2VvbWV0cmljJTIwc2hhcGUlMjBkYXJrJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3NzQ0ODU2MTR8MA&ixlib=rb-4.1.0&q=85", creator: creators[0], rating: 4.9, reviews: 201, trustScore: 99, price: 99, buyPrice: 999, category: "data", deployCount: 1034, setupTime: "< 20 min", features: ["SQL database connection", "Anomaly detection", "Trend forecasting", "Slack/email reports", "Natural language queries"], demoGreeting: "Hello! I'm the Data Analyst agent. Ask me to analyze trends, detect anomalies, or generate reports from your data." },
-  { id: 4, title: "I will deploy an AI Code Reviewer for your pull requests", shortTitle: "Code Reviewer", description: "Reviews PRs, catches bugs, suggests improvements, enforces standards.", longDescription: "Plugs into your GitHub/GitLab workflow and reviews every pull request automatically. It catches bugs, security vulnerabilities, performance issues, and style violations. Provides actionable inline comments and learns your team's coding standards over time.", image: null, creator: creators[3], rating: 4.7, reviews: 67, trustScore: 95, price: 59, buyPrice: 599, category: "coding", deployCount: 389, setupTime: "< 10 min", features: ["GitHub/GitLab integration", "Security scanning", "Performance analysis", "Style enforcement", "Inline PR comments"], demoGreeting: "Hi! I'm the Code Reviewer agent. Paste a code snippet and I'll review it for bugs, security issues, and best practices." },
-  { id: 5, title: "I will build a Finance Auditor agent for compliance checks", shortTitle: "Finance Auditor", description: "Automates audit trails, flags anomalies, ensures regulatory compliance.", longDescription: "Enterprise-grade compliance automation. This agent continuously monitors financial transactions, flags suspicious patterns, generates audit trails, and ensures SOX/GAAP compliance. Integrates with QuickBooks, Xero, and NetSuite.", image: null, creator: creators[4], rating: 4.9, reviews: 156, trustScore: 99, price: 129, buyPrice: 1299, category: "finance", deployCount: 523, setupTime: "< 45 min", features: ["SOX/GAAP compliance", "Anomaly flagging", "Audit trail generation", "QuickBooks integration", "Real-time monitoring"], demoGreeting: "Hello! I'm the Finance Auditor agent. Ask me about compliance checks, audit procedures, or transaction monitoring." },
-  { id: 6, title: "I will create a Lead Qualifier agent that scores and routes leads", shortTitle: "Lead Qualifier", description: "Scores inbound leads by intent, routes hot leads to reps instantly.", longDescription: "This agent scores every inbound lead in real-time based on firmographic data, behavioral signals, and intent indicators. Hot leads are instantly routed to available reps via Slack/email, while nurture candidates enter automated sequences.", image: null, creator: creators[1], rating: 4.8, reviews: 112, trustScore: 97, price: 69, buyPrice: 699, category: "sales", deployCount: 445, setupTime: "< 25 min", features: ["Real-time lead scoring", "Intent signal detection", "Slack/email routing", "CRM enrichment", "Nurture automation"], demoGreeting: "Hey! I'm the Lead Qualifier agent. Tell me about a lead and I'll score and qualify them for you." },
-];
-
-const mockReviews = [
-  { id: 1, user: "Emily T.", rating: 5, date: "2 weeks ago", text: "Absolutely game-changing. Set it up in 10 minutes and it resolved 60% of our tickets in the first week. The sentiment detection is eerily accurate." },
-  { id: 2, user: "David K.", rating: 5, date: "1 month ago", text: "We replaced 3 part-time support contractors with this agent. ROI was immediate. The escalation logic is perfect." },
-  { id: 3, user: "Sarah M.", rating: 4, date: "1 month ago", text: "Great agent overall. The custom training took a bit of tweaking but once dialed in, it's incredibly consistent." },
-  { id: 4, user: "James R.", rating: 5, date: "3 weeks ago", text: "Best investment we've made this quarter. Our CSAT scores went up 15 points within a month of deployment." },
-];
+const API = process.env.REACT_APP_BACKEND_URL;
 
 /* ─── Demo Chat Simulation ─── */
 const demoResponses = {
@@ -136,16 +113,32 @@ function LiveDemoModal({ agent, onClose }) {
 export default function AgentDetail() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const agent = allAgents.find((a) => a.id === Number(id));
+  const [agent, setAgent] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showDemo, setShowDemo] = useState(searchParams.get("demo") === "true");
   const [activeTab, setActiveTab] = useState("overview");
 
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [agentRes, reviewsRes] = await Promise.all([
+          fetch(`${API}/api/agents/${id}`),
+          fetch(`${API}/api/agents/${id}/reviews`),
+        ]);
+        if (agentRes.ok) setAgent(await agentRes.json());
+        if (reviewsRes.ok) setReviews(await reviewsRes.json());
+      } catch { /* ignore */ }
+      setLoading(false);
+    };
+    load();
+  }, [id]);
+
+  if (loading) {
+    return <div className="min-h-[calc(100vh-60px)] flex items-center justify-center"><p className="text-zinc-500">Loading...</p></div>;
+  }
   if (!agent) {
-    return (
-      <div className="min-h-[calc(100vh-60px)] flex items-center justify-center">
-        <p className="text-zinc-500">Agent not found.</p>
-      </div>
-    );
+    return <div className="min-h-[calc(100vh-60px)] flex items-center justify-center"><p className="text-zinc-500">Agent not found.</p></div>;
   }
 
   const gradients = ["from-violet-950/60 to-zinc-950", "from-purple-950/60 to-zinc-950", "from-indigo-950/60 to-zinc-950"];
@@ -192,12 +185,12 @@ export default function AgentDetail() {
           <div className="lg:col-span-2">
             <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-6 sticky top-24">
               {/* Creator */}
-              <Link to={`/creator/${agent.creator.id}`} className="flex items-center gap-2.5 mb-4 group">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-[12px] text-white font-medium" style={{ background: agent.creator.color }}>
-                  {agent.creator.initial}
+              <Link to={`/creator/${agent.creator_id}`} className="flex items-center gap-2.5 mb-4 group">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-[12px] text-white font-medium" style={{ background: agent.creator_color }}>
+                  {agent.creator_initial}
                 </div>
-                <span className="text-[13px] text-zinc-400 group-hover:text-[#A78BFA] transition-colors">{agent.creator.username}</span>
-                {agent.creator.verified && <BadgeCheck size={13} className="text-[#8B5CF6]" />}
+                <span className="text-[13px] text-zinc-400 group-hover:text-[#A78BFA] transition-colors">{agent.creator_username}</span>
+                {agent.creator_verified && <BadgeCheck size={13} className="text-[#8B5CF6]" />}
               </Link>
 
               <h1 data-testid="agent-detail-title" className="text-xl font-bold text-white mb-3 leading-tight" style={{ fontFamily: "'Outfit', sans-serif" }}>
@@ -320,12 +313,12 @@ export default function AgentDetail() {
               </div>
             </div>
             <div className="space-y-4">
-              {mockReviews.map((r) => (
+              {reviews.map((r) => (
                 <div key={r.id} data-testid={`review-${r.id}`} className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-5">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center text-[11px] text-zinc-400 font-medium">{r.user[0]}</div>
-                      <span className="text-[13px] text-white font-medium">{r.user}</span>
+                      <div className="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center text-[11px] text-zinc-400 font-medium">{r.user_name[0]}</div>
+                      <span className="text-[13px] text-white font-medium">{r.user_name}</span>
                     </div>
                     <span className="text-[12px] text-zinc-600">{r.date}</span>
                   </div>

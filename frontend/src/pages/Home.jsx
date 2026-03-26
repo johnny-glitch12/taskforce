@@ -2,17 +2,32 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { ArrowRight } from "lucide-react";
 
+const API = process.env.REACT_APP_BACKEND_URL;
+
 export default function Home() {
   const [email, setEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleJoinWaitlist = (e) => {
+  const handleJoinWaitlist = async (e) => {
     e.preventDefault();
-    if (!email.trim()) {
-      toast.error("Please enter your email.");
-      return;
+    if (!email.trim()) { toast.error("Please enter your email."); return; }
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API}/api/waitlist`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (res.ok) {
+        toast.success("You're on the list.");
+        setEmail("");
+      } else {
+        toast.error("Something went wrong. Try again.");
+      }
+    } catch {
+      toast.error("Network error. Try again.");
     }
-    toast.success("You're on the list.");
-    setEmail("");
+    setSubmitting(false);
   };
 
   return (

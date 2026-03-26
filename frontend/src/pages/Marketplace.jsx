@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
   Search, Heart, Star, Shield, ChevronRight, TrendingUp,
   Sparkles, BadgeCheck, ArrowRight, Play,
   Headphones, BarChart3, Code2, Palette, DollarSign, MessageSquare,
 } from "lucide-react";
+
+const API = process.env.REACT_APP_BACKEND_URL;
 
 /* ─── Data ─── */
 const categories = [
@@ -15,23 +17,6 @@ const categories = [
   { id: "coding", label: "Coding", icon: Code2 },
   { id: "creative", label: "Creative", icon: Palette },
   { id: "finance", label: "Finance", icon: DollarSign },
-];
-
-const creators = [
-  { id: "datawiz", name: "Sarah Chen", username: "@DataWiz", initial: "S", color: "#8B5CF6", verified: true, trustScore: 99, heroStat: "1.2k+ Agents Deployed", topCategory: "Top Rated in Data", agentPreviews: ["Data Analyst", "ETL Pipeline", "Anomaly Detector"] },
-  { id: "salesforge", name: "Marcus Rivera", username: "@SalesForge", initial: "M", color: "#6D28D9", verified: true, trustScore: 97, heroStat: "890+ Agents Deployed", topCategory: "Top Rated in Sales", agentPreviews: ["Sales Dev Rep", "Lead Qualifier", "Outbound Pro"] },
-  { id: "cxmaster", name: "Priya Sharma", username: "@CXMaster", initial: "P", color: "#7C3AED", verified: true, trustScore: 98, heroStat: "1.5k+ Agents Deployed", topCategory: "#1 in Support", agentPreviews: ["Customer Service Pro", "Ticket Triage", "CSAT Analyst"] },
-  { id: "codepilot", name: "Alex Dubois", username: "@CodePilot", initial: "A", color: "#A78BFA", verified: true, trustScore: 96, heroStat: "640+ Agents Deployed", topCategory: "Top Rated in Coding", agentPreviews: ["Code Reviewer", "CI/CD Agent", "Bug Triager"] },
-  { id: "financeai", name: "James Okonkwo", username: "@FinanceAI", initial: "J", color: "#5B21B6", verified: true, trustScore: 99, heroStat: "720+ Agents Deployed", topCategory: "#1 in Finance", agentPreviews: ["Finance Auditor", "Expense Tracker", "Risk Scorer"] },
-];
-
-const agents = [
-  { id: 1, title: "I will deploy a Customer Service Pro agent trained on your docs", shortTitle: "Customer Service Pro", description: "Handles tickets, resolves issues, escalates edge cases with empathy.", image: "https://images.unsplash.com/photo-1744324480866-1794a1bf193c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwzfHxmdXR1cmlzdGljJTIwYWklMjBicmFpbiUyMGRhcmt8ZW58MHx8fHwxNzc0NDg1NjE4fDA&ixlib=rb-4.1.0&q=85", creator: creators[2], rating: 4.9, reviews: 124, trustScore: 98, price: 49, category: "support", trending: true, trendingLabel: "#1 in Support", deployCount: 847 },
-  { id: 2, title: "I will build an AI Sales Dev Rep that books meetings on autopilot", shortTitle: "Sales Dev Rep", description: "Qualifies leads, personalizes outreach, and books meetings automatically.", image: "https://images.pexels.com/photos/5181148/pexels-photo-5181148.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940", creator: creators[1], rating: 4.8, reviews: 89, trustScore: 96, price: 79, category: "sales", trending: true, trendingLabel: "#1 in Sales", deployCount: 612 },
-  { id: 3, title: "I will create a Data Analyst agent for automated reporting", shortTitle: "Data Analyst", description: "Turns raw datasets into insights with anomaly detection and trend analysis.", image: "https://images.unsplash.com/photo-1697899001862-59699946ea29?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2ODh8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMDNkJTIwZ2VvbWV0cmljJTIwc2hhcGUlMjBkYXJrJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3NzQ0ODU2MTR8MA&ixlib=rb-4.1.0&q=85", creator: creators[0], rating: 4.9, reviews: 201, trustScore: 99, price: 99, category: "data", trending: true, trendingLabel: "Trending", deployCount: 1034 },
-  { id: 4, title: "I will deploy an AI Code Reviewer for your pull requests", shortTitle: "Code Reviewer", description: "Reviews PRs, catches bugs, suggests improvements, enforces standards.", image: null, creator: creators[3], rating: 4.7, reviews: 67, trustScore: 95, price: 59, category: "coding", trending: false, trendingLabel: null, deployCount: 389 },
-  { id: 5, title: "I will build a Finance Auditor agent for compliance checks", shortTitle: "Finance Auditor", description: "Automates audit trails, flags anomalies, ensures regulatory compliance.", image: null, creator: creators[4], rating: 4.9, reviews: 156, trustScore: 99, price: 129, category: "finance", trending: true, trendingLabel: "#1 in Finance", deployCount: 523 },
-  { id: 6, title: "I will create a Lead Qualifier agent that scores and routes leads", shortTitle: "Lead Qualifier", description: "Scores inbound leads by intent, routes hot leads to reps instantly.", image: null, creator: creators[1], rating: 4.8, reviews: 112, trustScore: 97, price: 69, category: "sales", trending: false, trendingLabel: null, deployCount: 445 },
 ];
 
 /* ─── Components ─── */
@@ -91,6 +76,11 @@ function CategoryPills({ activeCategory, setActiveCategory }) {
 }
 
 function CreatorSpotlight() {
+  const [creators, setCreators] = useState([]);
+  useEffect(() => {
+    fetch(`${API}/api/creators`).then(r => r.json()).then(setCreators).catch(() => {});
+  }, []);
+  if (!creators.length) return null;
   return (
     <section className="mb-14" data-testid="creator-spotlight">
       <div className="flex items-center justify-between mb-5">
@@ -146,6 +136,13 @@ function AgentCard({ agent, index }) {
     "from-purple-950/80 to-zinc-950",
     "from-indigo-950/80 to-zinc-950",
   ];
+  const creator = {
+    id: agent.creator_id,
+    initial: agent.creator_initial,
+    color: agent.creator_color,
+    username: agent.creator_username,
+    verified: agent.creator_verified,
+  };
 
   return (
     <div
@@ -177,16 +174,16 @@ function AgentCard({ agent, index }) {
       {/* Creator row */}
       <div className="px-4 pt-4 pb-0">
         <Link
-          to={`/creator/${agent.creator.id}`}
+          to={`/creator/${creator.id}`}
           onClick={(e) => e.stopPropagation()}
           data-testid={`agent-creator-link-${agent.id}`}
           className="flex items-center gap-2 mb-2.5 group/creator"
         >
-          <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-white font-medium" style={{ background: agent.creator.color }}>
-            {agent.creator.initial}
+          <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-white font-medium" style={{ background: creator.color }}>
+            {creator.initial}
           </div>
-          <span className="text-[12px] text-zinc-500 group-hover/creator:text-[#A78BFA] transition-colors">{agent.creator.username}</span>
-          {agent.creator.verified && <BadgeCheck size={11} className="text-[#8B5CF6]" />}
+          <span className="text-[12px] text-zinc-500 group-hover/creator:text-[#A78BFA] transition-colors">{creator.username}</span>
+          {creator.verified && <BadgeCheck size={11} className="text-[#8B5CF6]" />}
         </Link>
       </div>
 
@@ -230,12 +227,25 @@ function AgentCard({ agent, index }) {
 export default function Marketplace() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
+  const [agents, setAgents] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = agents.filter((a) => {
-    const matchCat = activeCategory === "all" || a.category === activeCategory;
-    const matchSearch = a.title.toLowerCase().includes(searchQuery.toLowerCase()) || a.shortTitle.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchCat && matchSearch;
-  });
+  const fetchAgents = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (activeCategory !== "all") params.set("category", activeCategory);
+      if (searchQuery) params.set("search", searchQuery);
+      const res = await fetch(`${API}/api/agents?${params}`);
+      if (res.ok) setAgents(await res.json());
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, [activeCategory, searchQuery]);
+
+  useEffect(() => {
+    const timer = setTimeout(fetchAgents, searchQuery ? 300 : 0);
+    return () => clearTimeout(timer);
+  }, [fetchAgents, searchQuery]);
 
   const trending = agents.filter((a) => a.trending).sort((a, b) => b.deployCount - a.deployCount);
 
@@ -267,11 +277,13 @@ export default function Marketplace() {
             <h2 className="text-lg font-semibold text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>
               {activeCategory === "all" ? "All Agents" : categories.find(c => c.id === activeCategory)?.label}
             </h2>
-            <span className="text-[13px] text-zinc-600">{filtered.length} agents</span>
+            <span className="text-[13px] text-zinc-600">{agents.length} agents</span>
           </div>
-          {filtered.length > 0 ? (
+          {loading ? (
+            <div className="text-center py-20 text-zinc-600 text-[14px]">Loading agents...</div>
+          ) : agents.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filtered.map((agent, i) => (
+              {agents.map((agent, i) => (
                 <AgentCard key={agent.id} agent={agent} index={i} />
               ))}
             </div>
