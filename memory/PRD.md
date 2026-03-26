@@ -68,10 +68,18 @@ Build a modern AI Agent Economy platform "Nova AI" with dark mode aesthetic, Lan
 9. **Bot-specific requirements.txt** at `/app/backend/clients/csdrop/requirements.txt` (includes setuptools<82 pin)
 10. **sovereign.py Stealth Fix**: Changed `from playwright_stealth import Stealth` → `stealth_async` (function-based API matches installed library version)
 
+### Phase 8 - Live Satellite Feed (Complete - March 26, 2026)
+1. **Bot Screenshot Capture**: `sovereign.py` saves JPEG screenshots to `/app/backend/static/live_stream.jpg` at 5+ key action points (after stealth init, after each scan, after each strike, after lurking)
+2. **Image Endpoint** (`GET /api/csdrop/live-feed/image`): Serves the latest screenshot as JPEG with no-cache headers. No auth required (for `<img src>` usage). Returns 404 if no screenshot exists.
+3. **Feed Status Endpoint** (`GET /api/csdrop/live-feed`): Returns `{available, bot_running, last_updated}`. Requires CSDROP auth.
+4. **Frontend Live Satellite Feed Panel**: Rendered in the Sovereign Bot tab. Auto-refreshes image every 5 seconds when bot is running. Shows REC indicator + scanline overlay when active. Shows placeholder with Monitor icon when bot is off.
+5. **Static Files Mount**: FastAPI serves `/static/` directory for the screenshot files.
+
 ## Testing Status
-- Iteration 10: 100% backend (12/12), 100% frontend (all Environment Manager flows)
+- Iteration 11: 100% backend (15/15), 100% frontend (Live Feed + all CSDROP flows)
+- Iteration 10: 100% backend (12/12), 100% frontend (Environment Manager flows)
 - Iteration 9: 100% backend (26/26), 100% frontend (all CSDROP + main app flows)
-- Test files: /app/test_reports/iteration_1.json through iteration_10.json
+- Test files: /app/test_reports/iteration_1.json through iteration_11.json
 
 ## Credentials
 - Admin: admin@nova.ai / admin123
@@ -83,10 +91,12 @@ Build a modern AI Agent Economy platform "Nova AI" with dark mode aesthetic, Lan
 - Stripe: test/sandbox mode
 - Pro upgrade button: UI only
 
-## Key API Endpoints (Environment Manager)
+## Key API Endpoints (Environment Manager + Live Feed)
 - `GET /api/csdrop/health` — Check all bot dependencies (any Bearer token)
 - `POST /api/admin/repair` — Trigger background dependency installation (no auth)
 - `GET /api/admin/repair-status` — Poll repair progress and logs (no auth)
+- `GET /api/csdrop/live-feed` — Feed status: available, bot_running, last_updated (csdrop auth)
+- `GET /api/csdrop/live-feed/image` — Raw JPEG screenshot, no-cache headers (no auth)
 
 ## Prioritized Backlog
 - **P1**: Real LLM integration for Studio Vibe Mode
