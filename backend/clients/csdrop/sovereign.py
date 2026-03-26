@@ -1,6 +1,6 @@
 import asyncio, random, sqlite3, json, os, time
 from playwright.async_api import async_playwright
-from playwright_stealth import Stealth
+from playwright_stealth import stealth_async
 
 # ==========================================
 # I. CONFIGURATION (Keep your site/links here)
@@ -157,7 +157,7 @@ async def main():
             browser = await p.chromium.launch(headless=False, proxy={"server": CONFIG["PROXY"]})
             context = await browser.new_context(storage_state=CONFIG["SESSION_FILE"])
             page = await context.new_page()
-            await Stealth().apply_stealth_async(page)
+            await stealth_async(page)
             
             predator = PredatorEngine(page, db)
 

@@ -62,10 +62,11 @@ Build a modern AI Agent Economy platform "Nova AI" with dark mode aesthetic, Lan
 3. **Repair Status API** (`GET /api/admin/repair-status`): Polls background repair progress and logs
 4. **Pre-Flight Check**: `/api/csdrop/launch` rejects bot start if dependencies missing
 5. **sys.executable Fix**: Bot launcher uses `sys.executable` instead of hardcoded `python3` for venv compatibility
-6. **Startup Health Check**: Server logs dependency status on boot with warnings for missing modules
+6. **Startup Auto-Repair**: On server boot, checks all deps + chromium. If anything is missing, auto-triggers repair in a background thread — dashboard is green before any client logs in.
 7. **Frontend System Health Panel**: Shows green/red indicators for all 4 deps + "Repair Environment" button when unhealthy
 8. **UI Safety**: Launch button replaced with "Env Not Ready" warning when deps missing
-9. **Bot-specific requirements.txt** at `/app/backend/clients/csdrop/requirements.txt`
+9. **Bot-specific requirements.txt** at `/app/backend/clients/csdrop/requirements.txt` (includes setuptools<82 pin)
+10. **sovereign.py Stealth Fix**: Changed `from playwright_stealth import Stealth` → `stealth_async` (function-based API matches installed library version)
 
 ## Testing Status
 - Iteration 10: 100% backend (12/12), 100% frontend (all Environment Manager flows)

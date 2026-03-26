@@ -1639,14 +1639,62 @@ async def startup():
     # Run initial evaluation
     await evaluate_supernovas()
 
-    # ─── Startup Health Check ───
+    # ─── Startup Health Check + Auto-Repair ───
     logger.info("Running environment health check...")
+    missing_modules = []
     for mod_name, import_name in [("playwright", "playwright"), ("playwright_stealth", "playwright_stealth"), ("RestrictedPython", "RestrictedPython")]:
         if _check_module(import_name):
             logger.info(f"  [OK] {mod_name}")
         else:
-            logger.warning(f"  [MISSING] {mod_name} — bot launch will fail. Use /api/admin/repair to fix.")
+            logger.warning(f"  [MISSING] {mod_name}")
+            missing_modules.append(mod_name)
+
+    chromium_ok = _check_chromium()
+    if chromium_ok:
+        logger.info("  [OK] chromium")
+    else:
+        logger.warning("  [MISSING] chromium")
+        missing_modules.append("chromium")
+
     logger.info(f"Python executable: {sys.executable}")
+
+    if missing_modules:
+        logger.info(f"Auto-repair triggered for: {', '.join(missing_modules)}")
+
+        def _startup_repair():
+            global _repair_status
+            _repair_status = {"running": True, "last_result": None, "logs": []}
+            def _ts():
+                return datetime.now(timezone.utc).strftime('%H:%M:%S')
+
+            _repair_status["logs"].append(f"[{_ts()}] Auto-repair on startup...")
+            logger.info("Startup auto-repair: installing dependencies...")
+
+            req_file = CSDROP_BOT_DIR / "requirements.txt"
+            if req_file.exists():
+                pip_result = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "-r", str(req_file)],
+                    capture_output=True, text=True, timeout=120,
+                )
+                _repair_status["logs"].append(f"[{_ts()}] Pip: {'OK' if pip_result.returncode == 0 else 'FAIL'}")
+
+            if not chromium_ok:
+                chromium_result = subprocess.run(
+                    [sys.executable, "-m", "playwright", "install", "chromium"],
+                    capture_output=True, text=True, timeout=300,
+                )
+                _repair_status["logs"].append(f"[{_ts()}] Chromium: {'OK' if chromium_result.returncode == 0 else 'FAIL'}")
+
+            all_ok = all(_check_module(m) for m in ["playwright", "playwright_stealth", "RestrictedPython"])
+            _repair_status["logs"].append(f"[{_ts()}] Auto-repair complete. All OK: {all_ok}")
+            _repair_status["running"] = False
+            _repair_status["last_result"] = "success" if all_ok else "partial"
+            logger.info(f"Startup auto-repair finished. All OK: {all_ok}")
+
+        import threading
+        threading.Thread(target=_startup_repair, daemon=True).start()
+    else:
+        logger.info("All dependencies OK. No repair needed.")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
