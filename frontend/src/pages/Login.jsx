@@ -15,7 +15,10 @@ export default function Login() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user) navigate("/studio", { replace: true });
+    if (user) {
+      if (user.client_id === "csdrop") navigate("/dashboard/csdrop", { replace: true });
+      else navigate("/studio", { replace: true });
+    }
   }, [user, navigate]);
 
   const API = process.env.REACT_APP_BACKEND_URL;
@@ -26,7 +29,8 @@ export default function Login() {
     try {
       const u = await login(email, password);
       toast.success(`Welcome back${u.name ? ", " + u.name : ""}.`);
-      navigate("/studio");
+      if (u.client_id === "csdrop") navigate("/dashboard/csdrop");
+      else navigate("/studio");
     } catch (err) {
       toast.error(err.message || "Login failed.");
     }

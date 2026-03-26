@@ -16,7 +16,10 @@ from jose import jwt, JWTError
 from passlib.context import CryptContext
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import Request
+from fastapi.responses import StreamingResponse
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
+import subprocess
+import asyncio as aio
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -63,6 +66,8 @@ class UserResponse(BaseModel):
     email: str
     name: str
     role: str
+    client_id: Optional[str] = None
+    tier: str = "free"
     created_at: str
 
 class TokenResponse(BaseModel):
@@ -288,12 +293,12 @@ async def login(data: UserLogin):
     token = create_token(user["id"], user["email"], user["role"])
     return TokenResponse(
         token=token,
-        user=UserResponse(id=user["id"], email=user["email"], name=user["name"], role=user["role"], created_at=user["created_at"])
+        user=UserResponse(id=user["id"], email=user["email"], name=user["name"], role=user["role"], client_id=user.get("client_id"), tier=user.get("tier", "free"), created_at=user["created_at"])
     )
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(user=Depends(get_current_user)):
-    return UserResponse(id=user["id"], email=user["email"], name=user["name"], role=user["role"], created_at=user["created_at"])
+    return UserResponse(id=user["id"], email=user["email"], name=user["name"], role=user["role"], client_id=user.get("client_id"), tier=user.get("tier", "free"), created_at=user["created_at"])
 
 # ─── Password Reset Endpoints ───
 
@@ -1106,6 +1111,219 @@ async def webhook_trigger_agent(webhook_key: str, request: Request):
         "duration_ms": result["duration_ms"],
     }
 
+# ─── CSDROP Client Portal ───
+
+CSDROP_CLIENT_ID = "csdrop"
+CSDROP_BOT_DIR = Path(__file__).parent / "clients" / "csdrop"
+
+# Global reference to running bot process
+_csdrop_bot_process = None
+_csdrop_bot_logs = []
+
+async def get_csdrop_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Auth guard that only allows the csdrop client."""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = decode_token(credentials.credentials)
+        user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0})
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        if user.get("client_id") != CSDROP_CLIENT_ID:
+            raise HTTPException(status_code=403, detail="Access denied. This portal is restricted.")
+        return user
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+class CsdropCodeRun(BaseModel):
+    code: str
+    input_data: Any = {}
+
+class CsdropBotLaunch(BaseModel):
+    promo: str = "https://csdrop.com/r/ABBAS"
+    batch: int = 10
+
+@api_router.get("/csdrop/dashboard")
+async def csdrop_dashboard(user=Depends(get_csdrop_user)):
+    agent_count = await db.user_agents.count_documents({"user_id": user["id"]})
+    total_runs = await db.agent_executions.count_documents({"user_id": user["id"]})
+    csdrop_execs = await db.csdrop_executions.count_documents({"user_id": user["id"]})
+    bot_running = _csdrop_bot_process is not None and _csdrop_bot_process.returncode is None
+    return {
+        "client": "csdrop",
+        "user_name": user.get("name", "CSDROP"),
+        "agent_count": agent_count,
+        "total_runs": total_runs + csdrop_execs,
+        "bot_running": bot_running,
+        "bot_log_count": len(_csdrop_bot_logs),
+    }
+
+@api_router.post("/csdrop/execute")
+async def csdrop_execute_code(data: CsdropCodeRun, user=Depends(get_csdrop_user)):
+    from sandbox import execute_code
+    result = execute_code(
+        code=data.code,
+        env_vars={},
+        input_data=data.input_data,
+    )
+    exec_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    exec_doc = {
+        "id": exec_id,
+        "user_id": user["id"],
+        "client_id": CSDROP_CLIENT_ID,
+        "code": data.code[:5000],
+        "input_data": data.input_data,
+        "output": result["output"],
+        "result": result["result"],
+        "logs": result["logs"],
+        "error": result["error"],
+        "success": result["success"],
+        "duration_ms": result["duration_ms"],
+        "created_at": now,
+    }
+    await db.csdrop_executions.insert_one(exec_doc)
+    exec_doc.pop("_id", None)
+    return exec_doc
+
+@api_router.get("/csdrop/executions")
+async def csdrop_get_executions(user=Depends(get_csdrop_user), limit: int = 30):
+    execs = await db.csdrop_executions.find(
+        {"user_id": user["id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(limit)
+    return execs
+
+@api_router.post("/csdrop/launch")
+async def csdrop_launch_bot(data: CsdropBotLaunch, user=Depends(get_csdrop_user)):
+    global _csdrop_bot_process, _csdrop_bot_logs
+    if _csdrop_bot_process and _csdrop_bot_process.returncode is None:
+        return {"status": "error", "message": "Bot is already running."}
+
+    sovereign_path = CSDROP_BOT_DIR / "sovereign.py"
+    if not sovereign_path.exists():
+        raise HTTPException(status_code=500, detail="Bot script not found.")
+
+    _csdrop_bot_logs = [f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] Launching Sovereign bot..."]
+    _csdrop_bot_logs.append(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] Promo: {data.promo} | Batch: {data.batch}")
+
+    try:
+        _csdrop_bot_process = subprocess.Popen(
+            ["python3", str(sovereign_path), data.promo, str(data.batch)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            cwd=str(CSDROP_BOT_DIR),
+            text=True,
+            bufsize=1,
+        )
+        # Read output in background
+        async def _read_output():
+            global _csdrop_bot_logs
+            loop = aio.get_event_loop()
+            while _csdrop_bot_process and _csdrop_bot_process.poll() is None:
+                line = await loop.run_in_executor(None, _csdrop_bot_process.stdout.readline)
+                if line:
+                    ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
+                    _csdrop_bot_logs.append(f"[{ts}] {line.rstrip()}")
+                    if len(_csdrop_bot_logs) > 500:
+                        _csdrop_bot_logs = _csdrop_bot_logs[-300:]
+                else:
+                    break
+            ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
+            _csdrop_bot_logs.append(f"[{ts}] Bot process ended.")
+
+        aio.create_task(_read_output())
+        logger.info(f"CSDROP bot launched by {user['email']}")
+        return {"status": "ok", "message": "Sovereign bot launched."}
+    except Exception as e:
+        logger.error(f"Failed to launch CSDROP bot: {e}")
+        return {"status": "error", "message": f"Launch failed: {str(e)}"}
+
+@api_router.post("/csdrop/stop")
+async def csdrop_stop_bot(user=Depends(get_csdrop_user)):
+    global _csdrop_bot_process, _csdrop_bot_logs
+    if not _csdrop_bot_process or _csdrop_bot_process.returncode is not None:
+        return {"status": "error", "message": "No bot is currently running."}
+    try:
+        _csdrop_bot_process.kill()
+        _csdrop_bot_process = None
+        ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
+        _csdrop_bot_logs.append(f"[{ts}] Bot terminated by user.")
+        logger.info(f"CSDROP bot stopped by {user['email']}")
+        return {"status": "ok", "message": "Bot terminated."}
+    except Exception as e:
+        return {"status": "error", "message": f"Stop failed: {str(e)}"}
+
+@api_router.get("/csdrop/bot-logs")
+async def csdrop_get_bot_logs(user=Depends(get_csdrop_user)):
+    bot_running = _csdrop_bot_process is not None and _csdrop_bot_process.returncode is None
+    return {
+        "running": bot_running,
+        "logs": _csdrop_bot_logs[-100:],
+    }
+
+@api_router.get("/csdrop/agents")
+async def csdrop_list_agents(user=Depends(get_csdrop_user)):
+    agents = await db.user_agents.find(
+        {"user_id": user["id"]}, {"_id": 0}
+    ).sort("updated_at", -1).to_list(50)
+    return agents
+
+@api_router.post("/csdrop/agents")
+async def csdrop_create_agent(data: UserAgentCreate, user=Depends(get_csdrop_user)):
+    count = await db.user_agents.count_documents({"user_id": user["id"]})
+    if count >= 10:
+        raise HTTPException(status_code=403, detail="Agent limit reached (10).")
+    from sandbox import validate_code
+    err = validate_code(data.code)
+    if err:
+        raise HTTPException(status_code=400, detail=f"Code validation failed: {err}")
+    agent_id = str(uuid.uuid4())
+    webhook_key = secrets.token_urlsafe(24)
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": agent_id, "user_id": user["id"],
+        "name": data.name, "description": data.description,
+        "code": data.code, "env_vars": data.env_vars,
+        "trigger_type": data.trigger_type, "webhook_key": webhook_key,
+        "status": "ready", "last_run": None, "last_result": None,
+        "run_count": 0, "created_at": now, "updated_at": now,
+    }
+    await db.user_agents.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.delete("/csdrop/agents/{agent_id}")
+async def csdrop_delete_agent(agent_id: str, user=Depends(get_csdrop_user)):
+    result = await db.user_agents.delete_one({"id": agent_id, "user_id": user["id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return {"message": "Agent deleted"}
+
+@api_router.post("/csdrop/agents/{agent_id}/run")
+async def csdrop_run_agent(agent_id: str, data: AgentRunRequest, user=Depends(get_csdrop_user)):
+    agent = await db.user_agents.find_one({"id": agent_id, "user_id": user["id"]}, {"_id": 0})
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    from sandbox import execute_code
+    result = execute_code(code=agent["code"], env_vars=agent["env_vars"], input_data=data.input_data)
+    exec_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    exec_doc = {
+        "id": exec_id, "agent_id": agent_id, "user_id": user["id"],
+        "trigger": "manual", "input_data": data.input_data,
+        "output": result["output"], "result": result["result"],
+        "logs": result["logs"], "error": result["error"],
+        "success": result["success"], "duration_ms": result["duration_ms"],
+        "created_at": now,
+    }
+    await db.agent_executions.insert_one(exec_doc)
+    exec_doc.pop("_id", None)
+    await db.user_agents.update_one({"id": agent_id}, {"$set": {
+        "last_run": now, "last_result": "success" if result["success"] else "error",
+        "updated_at": now,
+    }, "$inc": {"run_count": 1}})
+    return exec_doc
+
 # ─── Stripe Payment Endpoints ───
 
 AGENT_PACKAGES = {}  # populated dynamically from DB
@@ -1267,6 +1485,22 @@ async def startup():
             "name": "Nova Admin", "role": "admin", "created_at": now,
         })
         logger.info("Admin user created")
+
+    # Seed CSDROP client user
+    csdrop_user = await db.users.find_one({"client_id": "csdrop"})
+    if not csdrop_user:
+        csdrop_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        await db.users.insert_one({
+            "id": csdrop_id, "email": "admin@csdrop.com",
+            "password_hash": hash_password("nova_csdrop_2026"),
+            "name": "CSDROP", "role": "client", "client_id": "csdrop",
+            "tier": "pro", "created_at": now,
+        })
+        logger.info("CSDROP client user created")
+
+    # Ensure csdrop_executions collection index
+    await db.csdrop_executions.create_index("user_id")
 
     # Start Supernova scheduler (runs daily at midnight)
     scheduler.add_job(evaluate_supernovas, 'interval', hours=24, id='supernova_eval', replace_existing=True)

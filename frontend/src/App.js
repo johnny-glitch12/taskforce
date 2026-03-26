@@ -13,6 +13,7 @@ import CreatorProfile from "@/pages/CreatorProfile";
 import AgentDetail from "@/pages/AgentDetail";
 import PaymentSuccess from "@/pages/PaymentSuccess";
 import Dashboard from "@/pages/Dashboard";
+import CsdropDashboard from "@/pages/CsdropDashboard";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -143,6 +144,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard/csdrop"
+                element={
+                  <ProtectedRoute>
+                    <CsdropDashboard />
                   </ProtectedRoute>
                 }
               />
