@@ -1,4 +1,4 @@
-import asyncio, random, sqlite3, json, os, time
+import asyncio, random, sqlite3, json, os, time, sys
 from pathlib import Path
 from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
@@ -7,6 +7,10 @@ from playwright_stealth import stealth_async
 SCREENSHOT_DIR = Path(__file__).resolve().parent.parent / "static"
 SCREENSHOT_DIR.mkdir(exist_ok=True)
 SCREENSHOT_PATH = SCREENSHOT_DIR / "live_stream.jpg"
+QR_SCREENSHOT_PATH = SCREENSHOT_DIR / "qr_sync.jpg"
+SESSION_FILE = Path(__file__).resolve().parent / "discord_session.json"
+
+LOGIN_TIMEOUT = 120  # 2 minutes
 
 
 async def _capture_feed(page):
@@ -16,6 +20,78 @@ async def _capture_feed(page):
         print("[SYSTEM] Screenshot captured for Dashboard.")
     except Exception:
         pass
+
+
+# ==========================================
+# V. LOGIN / SESSION SYNC MODE
+# ==========================================
+async def login_mode():
+    """
+    Opens Discord login page, captures QR screenshots every 2s,
+    waits for a successful scan, saves the session, and exits.
+    """
+    print("[LOGIN] Session Sync Mode activated.")
+    print(f"[LOGIN] Timeout: {LOGIN_TIMEOUT}s. Scan the QR code from your Discord mobile app.")
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context()
+        page = await context.new_page()
+        await stealth_async(page)
+
+        try:
+            await page.goto("https://discord.com/login", wait_until="domcontentloaded", timeout=30000)
+            print("[LOGIN] Discord login page loaded.")
+            await asyncio.sleep(2)
+        except Exception as e:
+            print(f"[LOGIN] Failed to load Discord login: {e}")
+            await browser.close()
+            return False
+
+        start_time = time.time()
+        success = False
+
+        while (time.time() - start_time) < LOGIN_TIMEOUT:
+            # Capture QR code screenshot
+            try:
+                await page.screenshot(path=str(QR_SCREENSHOT_PATH), type="jpeg", quality=70)
+                elapsed = int(time.time() - start_time)
+                remaining = LOGIN_TIMEOUT - elapsed
+                print(f"[LOGIN] QR captured. Waiting for scan... ({remaining}s remaining)")
+            except Exception:
+                pass
+
+            # Check if URL changed to channels (successful login)
+            current_url = page.url
+            if "/channels" in current_url:
+                print("[LOGIN] SUCCESS! Discord login detected.")
+                success = True
+                break
+
+            await asyncio.sleep(2)
+
+        if success:
+            # Save the authenticated session
+            try:
+                await context.storage_state(path=str(SESSION_FILE))
+                print(f"[LOGIN] Session saved to {SESSION_FILE}")
+                # Final screenshot showing logged-in state
+                await page.screenshot(path=str(QR_SCREENSHOT_PATH), type="jpeg", quality=70)
+            except Exception as e:
+                print(f"[LOGIN] Failed to save session: {e}")
+                success = False
+        else:
+            print("[LOGIN] TIMEOUT. No scan detected within 2 minutes.")
+            # Clean up the QR screenshot
+            try:
+                QR_SCREENSHOT_PATH.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+        await browser.close()
+        status = "success" if success else "timeout"
+        print(f"[LOGIN] Exit status: {status}")
+        return success
 
 # ==========================================
 # I. CONFIGURATION (Keep your site/links here)
@@ -199,4 +275,7 @@ async def main():
             await asyncio.sleep(900)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    if "--login" in sys.argv:
+        asyncio.run(login_mode())
+    else:
+        asyncio.run(main())

@@ -7,7 +7,7 @@ import {
   CheckCircle2, XCircle, Loader2, Plus, Trash2, Copy,
   RefreshCw, ChevronDown, ChevronUp, Send, Layers,
   Globe, ArrowUpRight, Activity, Bot, Wrench, Heart,
-  AlertTriangle, Monitor, Satellite,
+  AlertTriangle, Monitor, Satellite, QrCode, X, Key,
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -286,8 +286,233 @@ function LiveFeed({ botRunning }) {
   );
 }
 
+/* ─── QR Session Sync Modal ─── */
+function SyncSessionModal({ open, onClose, headers }) {
+  const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("idle"); // idle, syncing, success, timeout
+  const [qrUrl, setQrUrl] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [countdown, setCountdown] = useState(120);
+  const pollRef = useRef(null);
+  const countdownRef = useRef(null);
+  const logsEndRef = useRef(null);
+
+  const startSync = async () => {
+    setSyncing(true);
+    setSyncStatus("syncing");
+    setLogs(["Starting session sync..."]);
+    setCountdown(120);
+    try {
+      const res = await fetch(`${API}/api/csdrop/sync-session`, { method: "POST", headers });
+      const data = await res.json();
+      if (data.status === "ok") {
+        toast.success("Scan the QR code with Discord mobile app.");
+      } else {
+        toast.error(data.message);
+        setSyncing(false);
+        setSyncStatus("idle");
+      }
+    } catch {
+      toast.error("Failed to start sync.");
+      setSyncing(false);
+      setSyncStatus("idle");
+    }
+  };
+
+  const stopSync = async () => {
+    try {
+      await fetch(`${API}/api/csdrop/sync-stop`, { method: "POST", headers });
+      toast.info("Sync cancelled.");
+    } catch {}
+    setSyncing(false);
+    setSyncStatus("idle");
+    setQrUrl(null);
+  };
+
+  // Poll sync status + QR image
+  useEffect(() => {
+    if (!syncing || !open) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`${API}/api/csdrop/sync-status`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          setLogs(data.logs || []);
+          if (data.qr_available) {
+            setQrUrl(`${API}/api/csdrop/sync-qr?t=${Date.now()}`);
+          }
+          if (data.status === "success") {
+            setSyncing(false);
+            setSyncStatus("success");
+            toast.success("Session Secured! Discord login successful.");
+            clearInterval(pollRef.current);
+          } else if (data.status === "timeout") {
+            setSyncing(false);
+            setSyncStatus("timeout");
+            toast.error("Timed out. No scan detected.");
+            clearInterval(pollRef.current);
+          } else if (data.status !== "syncing") {
+            setSyncing(false);
+            clearInterval(pollRef.current);
+          }
+        }
+      } catch {}
+    }, 2000);
+    return () => clearInterval(pollRef.current);
+  }, [syncing, open]);
+
+  // Countdown timer
+  useEffect(() => {
+    if (!syncing) return;
+    countdownRef.current = setInterval(() => {
+      setCountdown((c) => {
+        if (c <= 1) { clearInterval(countdownRef.current); return 0; }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(countdownRef.current);
+  }, [syncing]);
+
+  // Auto-scroll logs
+  useEffect(() => {
+    if (logsEndRef.current) logsEndRef.current.scrollTop = logsEndRef.current.scrollHeight;
+  }, [logs]);
+
+  // Clean up on close
+  const handleClose = () => {
+    if (syncing) stopSync();
+    setSyncStatus("idle");
+    setQrUrl(null);
+    setLogs([]);
+    onClose();
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }}>
+      <div
+        data-testid="cs-sync-modal"
+        className="relative w-full max-w-md mx-4 rounded-2xl overflow-hidden"
+        style={{ background: T.bg, border: `1px solid ${T.surfaceBorder}` }}
+      >
+        {/* Header */}
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.surfaceBorder}` }}>
+          <div className="flex items-center gap-2.5">
+            <QrCode size={16} style={{ color: T.indigo }} />
+            <span className="text-[14px] font-semibold" style={{ color: T.text }}>Discord Session Sync</span>
+          </div>
+          <button onClick={handleClose} className="p-1.5 rounded-lg transition-colors" style={{ color: T.textDim }}>
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-5 space-y-4">
+          {/* QR Code Display */}
+          <div className="rounded-xl overflow-hidden" style={{ background: "rgba(0,0,0,0.4)", border: `1px solid ${syncing ? "rgba(99,102,241,0.3)" : T.surfaceBorder}` }}>
+            {syncing && qrUrl ? (
+              <div className="relative">
+                <img
+                  src={qrUrl}
+                  alt="Discord QR Code"
+                  data-testid="cs-qr-image"
+                  className="w-full object-contain"
+                  style={{ maxHeight: 340 }}
+                  onError={(e) => { e.target.style.display = "none"; }}
+                />
+                {/* Scanline overlay */}
+                <div className="absolute inset-0 pointer-events-none" style={{
+                  background: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(99,102,241,0.04) 3px, rgba(99,102,241,0.04) 6px)",
+                }} />
+                {/* REC + Countdown */}
+                <div className="absolute top-3 left-3 flex items-center gap-2">
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: "rgba(0,0,0,0.6)" }}>
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    <span className="text-[9px] font-mono text-red-400">LIVE</span>
+                  </div>
+                </div>
+                <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-[10px] font-mono" style={{ background: "rgba(0,0,0,0.6)", color: countdown < 30 ? "#f87171" : T.textMuted }}>
+                  {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}
+                </div>
+              </div>
+            ) : syncStatus === "success" ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: "rgba(6,182,212,0.15)", border: "1px solid rgba(6,182,212,0.3)" }}>
+                  <CheckCircle2 size={28} style={{ color: T.accent }} />
+                </div>
+                <p className="text-[14px] font-semibold" style={{ color: T.accent }}>Session Secured</p>
+                <p className="text-[11px]" style={{ color: T.textDim }}>Discord session saved. The bot is ready to go.</p>
+              </div>
+            ) : syncStatus === "timeout" ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)" }}>
+                  <Clock size={28} className="text-red-400" />
+                </div>
+                <p className="text-[14px] font-semibold text-red-400">Timed Out</p>
+                <p className="text-[11px]" style={{ color: T.textDim }}>No scan detected within 2 minutes. Try again.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <QrCode size={36} style={{ color: T.textDim }} />
+                <p className="text-[12px] text-center" style={{ color: T.textDim }}>
+                  Click "Start Sync" to generate a Discord QR code.<br />
+                  Scan it with your Discord mobile app to link the session.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Sync Logs */}
+          {logs.length > 0 && (
+            <div ref={logsEndRef} className="h-20 rounded-lg p-2.5 overflow-y-auto font-mono text-[10px] leading-relaxed" style={{ background: "rgba(0,0,0,0.4)", border: `1px solid ${T.surfaceBorder}` }}>
+              {logs.map((line, i) => (
+                <div key={i} style={{ color: line.includes("SUCCESS") ? T.accent : line.includes("TIMEOUT") || line.includes("Failed") ? "#f87171" : T.textMuted }}>
+                  {line}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex items-center gap-3">
+            {syncStatus === "idle" || syncStatus === "timeout" ? (
+              <button
+                onClick={startSync}
+                data-testid="cs-start-sync-btn"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-[13px] font-semibold transition-all"
+                style={{ background: `linear-gradient(135deg, ${T.indigo}, ${T.accent})`, color: "#0a0a1a" }}
+              >
+                <QrCode size={14} /> Start Sync
+              </button>
+            ) : syncing ? (
+              <button
+                onClick={stopSync}
+                data-testid="cs-cancel-sync-btn"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-[13px] font-medium transition-all"
+                style={{ background: "rgba(239,68,68,0.1)", color: "#f87171", border: "1px solid rgba(239,68,68,0.2)" }}
+              >
+                <Square size={12} /> Cancel Sync
+              </button>
+            ) : (
+              <button
+                onClick={handleClose}
+                data-testid="cs-close-sync-btn"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-[13px] font-medium transition-all"
+                style={{ background: T.accentGlow, color: T.accent, border: `1px solid rgba(6,182,212,0.3)` }}
+              >
+                <CheckCircle2 size={12} /> Done
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Bot Control Panel ─── */
-function BotPanel({ headers, botRunning, setBotRunning, envReady }) {
+function BotPanel({ headers, botRunning, setBotRunning, envReady, onOpenSync }) {
   const [promo, setPromo] = useState("https://csdrop.com/r/ABBAS");
   const [batch, setBatch] = useState("10");
   const [logs, setLogs] = useState([]);
@@ -359,7 +584,11 @@ function BotPanel({ headers, botRunning, setBotRunning, envReady }) {
           <span className="text-[13px] font-medium" style={{ color: T.text }}>Sovereign Bot</span>
           <div className={`w-2 h-2 rounded-full ${botRunning ? "bg-emerald-400 animate-pulse" : ""}`} style={{ background: botRunning ? undefined : T.textDim }} />
         </div>
-        {botRunning ? (
+        <div className="flex items-center gap-2">
+          <button onClick={onOpenSync} data-testid="cs-sync-session-btn" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all" style={{ background: "rgba(99,102,241,0.08)", color: T.indigo, border: "1px solid rgba(99,102,241,0.2)" }}>
+            <Key size={11} /> Sync Session
+          </button>
+          {botRunning ? (
           <button onClick={handleStop} data-testid="cs-stop-bot-btn" className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[12px] font-medium transition-all" style={{ background: "rgba(239, 68, 68, 0.1)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.2)" }}>
             <Square size={12} /> Stop
           </button>
@@ -372,6 +601,7 @@ function BotPanel({ headers, botRunning, setBotRunning, envReady }) {
             {launching ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />} Launch
           </button>
         )}
+        </div>
       </div>
 
       <div className="p-4 space-y-3">
@@ -463,6 +693,7 @@ RESULT = {
   const [health, setHealth] = useState(null);
   const [repairing, setRepairing] = useState(false);
   const [repairLogs, setRepairLogs] = useState([]);
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
 
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
@@ -686,8 +917,11 @@ RESULT = {
 
         {/* Sovereign Bot Tab */}
         {activeTab === "bot" && (
-          <BotPanel headers={headers} botRunning={botRunning} setBotRunning={setBotRunning} envReady={health?.ready || false} />
+          <BotPanel headers={headers} botRunning={botRunning} setBotRunning={setBotRunning} envReady={health?.ready || false} onOpenSync={() => setSyncModalOpen(true)} />
         )}
+
+        {/* Session Sync Modal */}
+        <SyncSessionModal open={syncModalOpen} onClose={() => setSyncModalOpen(false)} headers={headers} />
 
         {/* History Tab */}
         {activeTab === "history" && (

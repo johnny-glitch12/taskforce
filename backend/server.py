@@ -1418,6 +1418,141 @@ async def csdrop_live_feed_image():
         headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"},
     )
 
+# ─── Session Sync (QR Login) ───
+_sync_process = None
+_sync_logs = []
+
+@api_router.post("/csdrop/sync-session")
+async def csdrop_sync_session(user=Depends(get_csdrop_user)):
+    """Start the sovereign.py in --login mode for QR code session sync."""
+    global _sync_process, _sync_logs
+
+    # Don't allow if bot is already running
+    if _csdrop_bot_process and _csdrop_bot_process.returncode is None:
+        return {"status": "error", "message": "Stop the bot first before syncing a new session."}
+
+    # Don't allow if sync already in progress
+    if _sync_process and _sync_process.returncode is None:
+        return {"status": "error", "message": "Session sync already in progress."}
+
+    # Pre-flight check
+    if not _check_module("playwright"):
+        return {"status": "error", "message": "Playwright not installed. Run Repair first."}
+
+    sovereign_path = CSDROP_BOT_DIR / "sovereign.py"
+    if not sovereign_path.exists():
+        raise HTTPException(status_code=500, detail="Bot script not found.")
+
+    # Clean old QR screenshot
+    qr_path = STATIC_DIR / "qr_sync.jpg"
+    if qr_path.exists():
+        qr_path.unlink()
+
+    _sync_logs = [f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] Starting session sync..."]
+
+    try:
+        _sync_process = subprocess.Popen(
+            [sys.executable, str(sovereign_path), "--login"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            cwd=str(CSDROP_BOT_DIR),
+            text=True,
+            bufsize=1,
+        )
+
+        async def _read_sync_output():
+            global _sync_logs
+            loop = aio.get_event_loop()
+            while _sync_process and _sync_process.poll() is None:
+                line = await loop.run_in_executor(None, _sync_process.stdout.readline)
+                if line:
+                    ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
+                    _sync_logs.append(f"[{ts}] {line.rstrip()}")
+                    if len(_sync_logs) > 200:
+                        _sync_logs = _sync_logs[-100:]
+                else:
+                    break
+            ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
+            exit_code = _sync_process.returncode if _sync_process else -1
+            if exit_code == 0:
+                _sync_logs.append(f"[{ts}] Session sync completed successfully.")
+            else:
+                _sync_logs.append(f"[{ts}] Session sync ended (exit code: {exit_code}).")
+
+        aio.create_task(_read_sync_output())
+        logger.info(f"Session sync started by {user['email']}")
+        return {"status": "ok", "message": "Session sync started. Scan the QR code."}
+    except Exception as e:
+        logger.error(f"Failed to start session sync: {e}")
+        return {"status": "error", "message": f"Sync failed: {str(e)}"}
+
+@api_router.get("/csdrop/sync-status")
+async def csdrop_sync_status(user=Depends(get_csdrop_user)):
+    """Check the status of the session sync process."""
+    running = _sync_process is not None and _sync_process.returncode is None
+    qr_path = STATIC_DIR / "qr_sync.jpg"
+    qr_available = qr_path.exists()
+
+    # Determine outcome
+    status = "idle"
+    if running:
+        status = "syncing"
+    elif _sync_process is not None:
+        # Process finished — check logs for success
+        has_success = any("SUCCESS" in log for log in _sync_logs)
+        has_timeout = any("TIMEOUT" in log for log in _sync_logs)
+        if has_success:
+            status = "success"
+        elif has_timeout:
+            status = "timeout"
+        else:
+            status = "finished"
+
+    session_path = CSDROP_BOT_DIR / "discord_session.json"
+    session_exists = session_path.exists()
+    session_age = None
+    if session_exists:
+        session_age = datetime.fromtimestamp(session_path.stat().st_mtime, tz=timezone.utc).isoformat()
+
+    return {
+        "status": status,
+        "qr_available": qr_available,
+        "logs": _sync_logs[-30:],
+        "session_exists": session_exists,
+        "session_last_updated": session_age,
+    }
+
+@api_router.post("/csdrop/sync-stop")
+async def csdrop_sync_stop(user=Depends(get_csdrop_user)):
+    """Cancel an in-progress session sync."""
+    global _sync_process, _sync_logs
+    if not _sync_process or _sync_process.returncode is not None:
+        return {"status": "error", "message": "No sync in progress."}
+    try:
+        _sync_process.kill()
+        _sync_process = None
+        ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
+        _sync_logs.append(f"[{ts}] Sync cancelled by user.")
+        # Clean up QR
+        qr_path = STATIC_DIR / "qr_sync.jpg"
+        if qr_path.exists():
+            qr_path.unlink()
+        return {"status": "ok", "message": "Sync cancelled."}
+    except Exception as e:
+        return {"status": "error", "message": f"Stop failed: {str(e)}"}
+
+@api_router.get("/csdrop/sync-qr")
+async def csdrop_sync_qr_image():
+    """Serve the QR code screenshot. No auth so <img src> works."""
+    qr_path = STATIC_DIR / "qr_sync.jpg"
+    if not qr_path.exists():
+        raise HTTPException(status_code=404, detail="No QR code available.")
+    return FileResponse(
+        str(qr_path),
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"},
+    )
+
 @api_router.get("/csdrop/agents")
 async def csdrop_list_agents(user=Depends(get_csdrop_user)):
     agents = await db.user_agents.find(
