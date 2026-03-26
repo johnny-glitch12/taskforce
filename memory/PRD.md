@@ -1,33 +1,23 @@
-# Nova AI - Product Requirements Document
-
-## Original Problem Statement
-Build a modern, simplistic, highly responsive web application for startup "Nova AI" - dark mode, purple accent aesthetic. Full marketplace, creator profiles, studio IDE with Vibe/Node toggle.
+# Nova AI - PRD
 
 ## Architecture
-- **Frontend**: React 19 + Tailwind CSS + Shadcn UI + React Router
-- **Backend**: FastAPI (minimal, health check only)
-- **Auth**: Frontend-only mock (React Context, admin@nova.ai)
+Frontend: React 19 + Tailwind + Shadcn UI + React Router | Backend: FastAPI (health check) | Auth: Mock (admin@nova.ai)
 
-## What's Been Implemented (Feb 2026)
-### Phase 1 - MVP
-- [x] Persistent navbar, Home hero, Login, Academy, Footer
+## Routes
+/ (Home), /login, /academy, /marketplace, /agent/:id, /creator/:id, /studio (protected)
 
-### Phase 2 - Design Modernization
-- [x] Purple palette (#8B5CF6/#A78BFA), pill buttons, glass-morphism
-
-### Phase 3 - Marketplace & Studio Overhaul
-- [x] Marketplace: Omni-search bar, 7 category pills, filter by category/search
-- [x] "Meet the Supernovas" - 5 creator cards (horizontal scroll) with Supernova badge, trust scores, agent previews
-- [x] "Most Deployed This Week" - Trending agent cards sorted by deploy count
-- [x] Upgraded Agent Cards: heart save, creator avatar, star ratings, trust score, trending tags, pricing
-- [x] Creator Profile Page (/creator/:id): stats (deploys, completion rate, response time), bio, agent portfolio
-- [x] Studio Vibe Mode / Node Mode toggle
-  - Vibe Mode: expanded chat + code preview
-  - Node Mode: chat sidebar + visual canvas with SVG nodes + code preview
-- [x] All animations and transitions smooth
-- [x] 95% test pass rate (iteration 3)
+## Implemented (Feb 2026)
+- Home: Hero with gradient headline, waitlist CTA
+- Login: Mock auth (admin@nova.ai)
+- Academy: Coming Soon
+- Marketplace: Search, 7 category pills, Supernova creator spotlight, trending section, upgraded agent cards (heart, ratings, trust scores, Live Demo link)
+- Agent Detail: Full page with hero, stats, Rent/Buy checkout, Overview/Reviews tabs, demo video placeholder
+- Live Demo: Sandboxed chat modal with agent-specific mock responses + typing indicators
+- Creator Profile: Stats, bio, agent portfolio
+- Studio: Vibe Mode / Node Mode toggle (chat/canvas/code)
+- Emergent badge removed
+- All features MOCKED (frontend only), 100% test pass rate
 
 ## Backlog
-### P1 - Wire waitlist to MongoDB, real JWT auth
-### P2 - Drag-and-drop nodes, Academy content, actual purchase flow
-### P2 - Agent detail page (demo video, reviews, full description)
+P1: Wire waitlist + marketplace to MongoDB, real JWT auth
+P2: Drag-drop nodes, Academy content, actual payment checkout, real demo video embeds
