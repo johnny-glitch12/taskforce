@@ -1119,6 +1119,9 @@ async def webhook_trigger_agent(webhook_key: str, request: Request):
 
 CSDROP_CLIENT_ID = "csdrop"
 CSDROP_BOT_DIR = Path(__file__).parent / "clients" / "csdrop"
+CSDROP_LOG_DIR = CSDROP_BOT_DIR / "logs"
+CSDROP_LOG_DIR.mkdir(exist_ok=True)
+CSDROP_LOG_FILE = CSDROP_LOG_DIR / "current_run.log"
 
 # Global reference to running bot process
 _csdrop_bot_process = None
@@ -1336,6 +1339,11 @@ async def csdrop_launch_bot(data: CsdropBotLaunch, user=Depends(get_csdrop_user)
     _csdrop_bot_logs = [f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] Launching Sovereign bot..."]
     _csdrop_bot_logs.append(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] Promo: {data.promo} | Batch: {data.batch}")
 
+    # Initialize log file
+    with open(CSDROP_LOG_FILE, "w") as f:
+        for line in _csdrop_bot_logs:
+            f.write(line + "\n")
+
     try:
         _csdrop_bot_process = subprocess.Popen(
             [sys.executable, str(sovereign_path), data.promo, str(data.batch)],
@@ -1345,7 +1353,7 @@ async def csdrop_launch_bot(data: CsdropBotLaunch, user=Depends(get_csdrop_user)
             text=True,
             bufsize=1,
         )
-        # Read output in background
+        # Read output in background — write to both memory and file
         async def _read_output():
             global _csdrop_bot_logs
             loop = aio.get_event_loop()
@@ -1353,13 +1361,26 @@ async def csdrop_launch_bot(data: CsdropBotLaunch, user=Depends(get_csdrop_user)
                 line = await loop.run_in_executor(None, _csdrop_bot_process.stdout.readline)
                 if line:
                     ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
-                    _csdrop_bot_logs.append(f"[{ts}] {line.rstrip()}")
+                    entry = f"[{ts}] {line.rstrip()}"
+                    _csdrop_bot_logs.append(entry)
                     if len(_csdrop_bot_logs) > 500:
                         _csdrop_bot_logs = _csdrop_bot_logs[-300:]
+                    # Append to log file
+                    try:
+                        with open(CSDROP_LOG_FILE, "a") as f:
+                            f.write(entry + "\n")
+                    except Exception:
+                        pass
                 else:
                     break
             ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
-            _csdrop_bot_logs.append(f"[{ts}] Bot process ended.")
+            entry = f"[{ts}] Bot process ended."
+            _csdrop_bot_logs.append(entry)
+            try:
+                with open(CSDROP_LOG_FILE, "a") as f:
+                    f.write(entry + "\n")
+            except Exception:
+                pass
 
         aio.create_task(_read_output())
         logger.info(f"CSDROP bot launched by {user['email']}")
@@ -1390,6 +1411,20 @@ async def csdrop_get_bot_logs(user=Depends(get_csdrop_user)):
         "running": bot_running,
         "logs": _csdrop_bot_logs[-100:],
     }
+
+@api_router.get("/csdrop/logs")
+async def csdrop_get_log_file(user=Depends(get_csdrop_user), lines: int = 50):
+    """Read the last N lines from the persistent log file."""
+    bot_running = _csdrop_bot_process is not None and _csdrop_bot_process.returncode is None
+    if not CSDROP_LOG_FILE.exists():
+        return {"running": bot_running, "logs": [], "source": "file", "file": str(CSDROP_LOG_FILE)}
+    try:
+        with open(CSDROP_LOG_FILE, "r") as f:
+            all_lines = f.readlines()
+        tail = [line.rstrip() for line in all_lines[-lines:]]
+        return {"running": bot_running, "logs": tail, "source": "file", "total_lines": len(all_lines)}
+    except Exception as e:
+        return {"running": bot_running, "logs": [f"Error reading log: {str(e)}"], "source": "error"}
 
 @api_router.get("/csdrop/live-feed")
 async def csdrop_live_feed_status(user=Depends(get_csdrop_user)):

@@ -541,19 +541,19 @@ function BotPanel({ headers, botRunning, setBotRunning, envReady, onOpenSync }) 
 
   const pollLogs = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/api/csdrop/bot-logs`, { headers });
+      const res = await fetch(`${API}/api/csdrop/logs?lines=80`, { headers });
       if (res.ok) {
         const data = await res.json();
         setLogs(data.logs || []);
         setBotRunning(data.running);
-        if (!data.running) clearInterval(pollRef.current);
+        if (!data.running && logs.length > 0) clearInterval(pollRef.current);
       }
     } catch {}
   }, [headers, setBotRunning]);
 
   useEffect(() => {
     if (botRunning) {
-      pollRef.current = setInterval(pollLogs, 2000);
+      pollRef.current = setInterval(pollLogs, 1500);
       return () => clearInterval(pollRef.current);
     }
   }, [botRunning, pollLogs]);
@@ -635,22 +635,80 @@ function BotPanel({ headers, botRunning, setBotRunning, envReady, onOpenSync }) 
           </div>
         </div>
 
-        {/* Bot Logs */}
+        {/* Bot Logs — Real-Time Terminal */}
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <Terminal size={12} style={{ color: T.textDim }} />
-            <span className="text-[11px]" style={{ color: T.textDim }}>Live Logs</span>
+            <Terminal size={12} style={{ color: T.accent }} />
+            <span className="text-[11px] font-semibold tracking-wide" style={{ color: T.accent }}>LIVE TERMINAL</span>
+            {botRunning && (
+              <div className="flex items-center gap-1 ml-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[9px] font-mono text-emerald-400">STREAMING</span>
+              </div>
+            )}
             <button onClick={pollLogs} className="ml-auto p-1 transition-colors" style={{ color: T.textDim }}><RefreshCw size={11} /></button>
           </div>
-          <div ref={logsRef} data-testid="cs-bot-logs" className="h-40 rounded-xl p-3 overflow-y-auto font-mono text-[11px] leading-relaxed" style={{ background: "rgba(0, 0, 0, 0.4)", border: `1px solid ${T.surfaceBorder}` }}>
+          <div
+            ref={logsRef}
+            data-testid="cs-bot-logs"
+            className="h-56 rounded-xl p-3.5 overflow-y-auto font-mono text-[11px] leading-[1.7]"
+            style={{
+              background: "#0a0a0f",
+              border: `1px solid ${botRunning ? "rgba(6,182,212,0.2)" : T.surfaceBorder}`,
+              boxShadow: botRunning ? "inset 0 0 30px rgba(6,182,212,0.03)" : "none",
+            }}
+          >
             {logs.length === 0 ? (
-              <span style={{ color: T.textDim }}>No logs yet. Launch the bot to see output.</span>
+              <div className="flex items-center gap-2 h-full justify-center" style={{ color: T.textDim }}>
+                <Terminal size={14} />
+                <span>No logs yet. Launch the bot to see output.</span>
+              </div>
             ) : (
-              logs.map((line, i) => (
-                <div key={i} style={{ color: line.includes("Error") || line.includes("error") ? "#f87171" : line.includes("Success") || line.includes("success") ? T.accent : T.textMuted }}>
-                  {line}
-                </div>
-              ))
+              logs.map((line, i) => {
+                const lower = line.toLowerCase();
+                let color = "#8b9dc3"; // default: muted blue-grey
+                let bg = "transparent";
+                let fontWeight = "normal";
+
+                // Error / Fatal / Critical — red
+                if (lower.includes("error") || lower.includes("fatal") || lower.includes("critical") || lower.includes("banned") || lower.includes("failed") || lower.includes("timeout")) {
+                  color = "#f87171"; bg = "rgba(239,68,68,0.06)";
+                }
+                // Success / Sent / Saved — green
+                else if (lower.includes("sent") || lower.includes("success") || lower.includes("saved") || lower.includes("secured") || lower.includes("complete")) {
+                  color = "#34d399"; bg = "rgba(52,211,153,0.06)";
+                }
+                // Bot phase headers — cyan bold
+                else if (lower.includes("phase") || lower.includes("cycle") || lower.includes("initialized") || lower.includes("===")) {
+                  color = T.accent; fontWeight = "bold";
+                }
+                // Debug / Boot — dim
+                else if (lower.includes("[debug]") || lower.includes("[boot]")) {
+                  color = "#6b7280";
+                }
+                // Hook / Strike / Hammer — indigo
+                else if (lower.includes("hook") || lower.includes("strike") || lower.includes("hammer") || lower.includes("pending targets")) {
+                  color = "#818cf8";
+                }
+                // Warning — amber
+                else if (lower.includes("warning") || lower.includes("[!]") || lower.includes("refuel")) {
+                  color = "#fbbf24"; bg = "rgba(251,191,36,0.04)";
+                }
+                // System / Screenshot — dim cyan
+                else if (lower.includes("[system]") || lower.includes("screenshot")) {
+                  color = "#64748b";
+                }
+
+                return (
+                  <div
+                    key={i}
+                    className="px-1.5 rounded-sm"
+                    style={{ color, background: bg, fontWeight }}
+                  >
+                    {line}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
