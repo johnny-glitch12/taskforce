@@ -82,6 +82,16 @@ Build a modern AI Agent Economy platform "Nova AI" with dark mode aesthetic, Lan
 4. **Sync Stop API** (`POST /api/csdrop/sync-stop`): Kills sync process, cleans up QR file. Requires CSDROP auth.
 5. **QR Image Endpoint** (`GET /api/csdrop/sync-qr`): Serves QR screenshot as JPEG with no-cache headers. No auth (for `<img src>` usage).
 6. **Frontend Sync Modal**: "Sync Session" button in Sovereign Bot tab opens a full-screen modal with: live QR code display (refreshes every 2s), LIVE indicator + countdown timer, sync logs, Cancel/Start/Done buttons, success/timeout state screens with appropriate messaging.
+7. **Bug Fix (March 26)**: Fixed screenshot path (`Path(__file__).parent.parent` → absolute `/app/backend/static`), added `flush=True` for real-time log streaming, added loading spinner UI with phase indicators ("Starting Chromium" → "Loading Discord" → "Rendering QR").
+
+### Phase 10 - Bot Path Hardening & Debug Mode (Complete - April 2, 2026)
+1. **Absolute Pathing**: All paths in sovereign.py now use `BOT_DIR = Path(__file__).resolve().parent` for DB, session, and screenshots. No more relative paths.
+2. **headless=True Fix**: Changed `headless=False` → `headless=True` in the main loop. The bot was crashing on headless servers because there's no display.
+3. **Boot Diagnostics**: On startup, bot prints full path verification (DB exists, session exists, screenshot dir exists), database target breakdown by status, promo link, and batch size.
+4. **Database Pulse Check**: Before each strike, bot logs `[DEBUG] Database Found. Pending targets in queue: {count}`. If count is 0, prints `[!] CRITICAL: Database is empty. Scrape targets before starting strike.` and aborts.
+5. **Demo Mode** (`--demo` flag): If the database is empty, run with `--demo` to send one test message to a hardcoded Discord ID, proving Playwright hands are working.
+6. **Cycle Error Handling**: Added try/except around each cycle so one failure doesn't crash the infinite loop.
+7. **CLI Arg Parsing**: Bot properly parses promo link and batch size from sys.argv, compatible with the server.py Popen call.
 
 ## Testing Status
 - Iteration 12: 100% backend (19/19), 100% frontend (Session Sync modal + all regression)

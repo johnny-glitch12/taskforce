@@ -436,6 +436,25 @@ function SyncSessionModal({ open, onClose, headers }) {
                   {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}
                 </div>
               </div>
+            ) : syncing && !qrUrl ? (
+              /* Loading spinner while browser is launching and navigating */
+              <div className="flex flex-col items-center justify-center py-14 gap-4">
+                <div className="relative w-16 h-16">
+                  <div className="absolute inset-0 rounded-full border-2 border-transparent animate-spin" style={{ borderTopColor: T.indigo, borderRightColor: T.accent }} />
+                  <div className="absolute inset-2 rounded-full border-2 border-transparent animate-spin" style={{ borderBottomColor: T.indigo, animationDirection: "reverse", animationDuration: "1.5s" }} />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Globe size={18} style={{ color: T.indigo }} />
+                  </div>
+                </div>
+                <div className="text-center">
+                  <p className="text-[13px] font-medium" style={{ color: T.text }}>Launching Browser...</p>
+                  <p className="text-[10px] mt-1" style={{ color: T.textDim }}>Navigating to Discord — QR code will appear shortly</p>
+                </div>
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono" style={{ background: "rgba(99,102,241,0.08)", color: T.indigo, border: "1px solid rgba(99,102,241,0.15)" }}>
+                  <Loader2 size={10} className="animate-spin" />
+                  {countdown > 110 ? "Starting Chromium..." : countdown > 100 ? "Loading Discord..." : "Rendering QR code..."}
+                </div>
+              </div>
             ) : syncStatus === "success" ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: "rgba(6,182,212,0.15)", border: "1px solid rgba(6,182,212,0.3)" }}>

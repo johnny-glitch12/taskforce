@@ -3,12 +3,14 @@ from pathlib import Path
 from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
 
-# Screenshot path for live dashboard feed
-SCREENSHOT_DIR = Path(__file__).resolve().parent.parent / "static"
-SCREENSHOT_DIR.mkdir(exist_ok=True)
+# ─── Absolute Paths ───
+BOT_DIR = Path(__file__).resolve().parent
+SCREENSHOT_DIR = Path("/app/backend/static")
+SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
 SCREENSHOT_PATH = SCREENSHOT_DIR / "live_stream.jpg"
 QR_SCREENSHOT_PATH = SCREENSHOT_DIR / "qr_sync.jpg"
-SESSION_FILE = Path(__file__).resolve().parent / "discord_session.json"
+SESSION_FILE = BOT_DIR / "discord_session.json"
+DB_FILE = BOT_DIR / "omni_viper_v8.db"
 
 LOGIN_TIMEOUT = 120  # 2 minutes
 
@@ -30,21 +32,35 @@ async def login_mode():
     Opens Discord login page, captures QR screenshots every 2s,
     waits for a successful scan, saves the session, and exits.
     """
-    print("[LOGIN] Session Sync Mode activated.")
-    print(f"[LOGIN] Timeout: {LOGIN_TIMEOUT}s. Scan the QR code from your Discord mobile app.")
+    print("[LOGIN] Session Sync Mode activated.", flush=True)
+    print(f"[LOGIN] Timeout: {LOGIN_TIMEOUT}s. Scan the QR code from your Discord mobile app.", flush=True)
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context()
+        context = await browser.new_context(
+            viewport={"width": 1280, "height": 720},
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        )
         page = await context.new_page()
         await stealth_async(page)
 
+        print("[LOGIN] Navigating to Discord login...", flush=True)
         try:
-            await page.goto("https://discord.com/login", wait_until="domcontentloaded", timeout=30000)
-            print("[LOGIN] Discord login page loaded.")
-            await asyncio.sleep(2)
+            await page.goto("https://discord.com/login", wait_until="networkidle", timeout=45000)
+            print("[LOGIN] Discord login page loaded.", flush=True)
+            # Give the QR code time to render
+            await asyncio.sleep(3)
+            # Capture initial screenshot immediately
+            await page.screenshot(path=str(QR_SCREENSHOT_PATH), type="jpeg", quality=70)
+            print("[LOGIN] Initial QR screenshot saved.", flush=True)
         except Exception as e:
-            print(f"[LOGIN] Failed to load Discord login: {e}")
+            print(f"[LOGIN] Failed to load Discord login: {e}", flush=True)
+            # Still try to capture whatever loaded
+            try:
+                await page.screenshot(path=str(QR_SCREENSHOT_PATH), type="jpeg", quality=70)
+                print("[LOGIN] Captured partial page screenshot.", flush=True)
+            except Exception:
+                pass
             await browser.close()
             return False
 
@@ -57,14 +73,14 @@ async def login_mode():
                 await page.screenshot(path=str(QR_SCREENSHOT_PATH), type="jpeg", quality=70)
                 elapsed = int(time.time() - start_time)
                 remaining = LOGIN_TIMEOUT - elapsed
-                print(f"[LOGIN] QR captured. Waiting for scan... ({remaining}s remaining)")
+                print(f"[LOGIN] QR captured. Waiting for scan... ({remaining}s remaining)", flush=True)
             except Exception:
                 pass
 
             # Check if URL changed to channels (successful login)
             current_url = page.url
             if "/channels" in current_url:
-                print("[LOGIN] SUCCESS! Discord login detected.")
+                print("[LOGIN] SUCCESS! Discord login detected.", flush=True)
                 success = True
                 break
 
@@ -74,14 +90,14 @@ async def login_mode():
             # Save the authenticated session
             try:
                 await context.storage_state(path=str(SESSION_FILE))
-                print(f"[LOGIN] Session saved to {SESSION_FILE}")
+                print(f"[LOGIN] Session saved to {SESSION_FILE}", flush=True)
                 # Final screenshot showing logged-in state
                 await page.screenshot(path=str(QR_SCREENSHOT_PATH), type="jpeg", quality=70)
             except Exception as e:
-                print(f"[LOGIN] Failed to save session: {e}")
+                print(f"[LOGIN] Failed to save session: {e}", flush=True)
                 success = False
         else:
-            print("[LOGIN] TIMEOUT. No scan detected within 2 minutes.")
+            print("[LOGIN] TIMEOUT. No scan detected within 2 minutes.", flush=True)
             # Clean up the QR screenshot
             try:
                 QR_SCREENSHOT_PATH.unlink(missing_ok=True)
@@ -90,7 +106,7 @@ async def login_mode():
 
         await browser.close()
         status = "success" if success else "timeout"
-        print(f"[LOGIN] Exit status: {status}")
+        print(f"[LOGIN] Exit status: {status}", flush=True)
         return success
 
 # ==========================================
@@ -98,8 +114,8 @@ async def login_mode():
 # ==========================================
 CONFIG = {
     "PROXY": "http://spzi6md7ie:4u_eyh8sZM3KElhty2@gate.decodo.com:10010",
-    "DB_PATH": "omni_viper_v8.db",
-    "SESSION_FILE": "discord_session.json",
+    "DB_PATH": str(DB_FILE),
+    "SESSION_FILE": str(SESSION_FILE),
     "LINKS": {
         "SITE": "csdrop.com",
         "PROMO": "https://csdrop.com/r/YOURCODE",
@@ -203,13 +219,19 @@ class PredatorEngine:
 
     async def hook_strike(self, batch_size=10):
         """PHASE 2: Strikes exactly 10 new people as requested."""
-        self.cursor.execute("SELECT user_id, username FROM targets WHERE status = 'pending' LIMIT ?", (batch_size,))
-        pending = self.cursor.fetchall()
-        if not pending: 
-            print("[*] Queue Empty. Refuel needed via Dashboard.")
+        # ─── Database Pulse Check ───
+        self.cursor.execute("SELECT COUNT(*) FROM targets WHERE status = 'pending'")
+        pending_count = self.cursor.fetchone()[0]
+        print(f"[DEBUG] Database Found. Pending targets in queue: {pending_count}", flush=True)
+
+        if pending_count == 0:
+            print("[!] CRITICAL: Database is empty. Scrape targets before starting strike.", flush=True)
             return
 
-        print(f"\n--- [ PHASE 2: THE HOOK ] (Striking batch of {len(pending)}) ---")
+        self.cursor.execute("SELECT user_id, username FROM targets WHERE status = 'pending' LIMIT ?", (batch_size,))
+        pending = self.cursor.fetchall()
+
+        print(f"\n--- [ PHASE 2: THE HOOK ] (Striking batch of {len(pending)}) ---", flush=True)
         for u_id, u_name in pending:
             try:
                 print(f"[*] Striking: @{u_name}")
@@ -240,42 +262,131 @@ class PredatorEngine:
 # ==========================================
 # IV. THE INFINITE LOOP MAIN
 # ==========================================
+
+# Demo mode: if --demo flag, send one test message then exit
+DEMO_TEST_ID = "277083087718973441"  # Hardcoded test Discord user
+
 async def main():
-    db = sqlite3.connect(CONFIG["DB_PATH"])
+    demo_mode = "--demo" in sys.argv
+    promo_link = CONFIG["LINKS"]["PROMO"]
+    batch_size = 10
+
+    # Parse CLI args (promo, batch) from server.py launch
+    args = [a for a in sys.argv[1:] if a not in ("--login", "--demo")]
+    if len(args) >= 1:
+        promo_link = args[0]
+    if len(args) >= 2:
+        try:
+            batch_size = int(args[1])
+        except ValueError:
+            pass
+
+    # ─── Path Verification ───
+    print(f"[BOOT] Bot directory: {BOT_DIR}", flush=True)
+    print(f"[BOOT] Database path: {DB_FILE} (exists: {DB_FILE.exists()})", flush=True)
+    print(f"[BOOT] Session path: {SESSION_FILE} (exists: {SESSION_FILE.exists()})", flush=True)
+    print(f"[BOOT] Screenshot dir: {SCREENSHOT_DIR} (exists: {SCREENSHOT_DIR.exists()})", flush=True)
+    print(f"[BOOT] Promo link: {promo_link} | Batch: {batch_size} | Demo: {demo_mode}", flush=True)
+
+    if not DB_FILE.exists():
+        print(f"[!] FATAL: Database not found at {DB_FILE}. Aborting.", flush=True)
+        return
+    if not SESSION_FILE.exists():
+        print(f"[!] FATAL: Session file not found at {SESSION_FILE}. Run --login first.", flush=True)
+        return
+
+    db = sqlite3.connect(str(DB_FILE))
+    cursor = db.cursor()
+
+    # ─── Database Pulse ───
+    cursor.execute("SELECT COUNT(*) FROM targets")
+    total = cursor.fetchone()[0]
+    cursor.execute("SELECT status, COUNT(*) FROM targets GROUP BY status")
+    breakdown = cursor.fetchall()
+    print(f"[BOOT] Database loaded. Total targets: {total}", flush=True)
+    for status, count in breakdown:
+        print(f"  [{status}]: {count}", flush=True)
+
+    cursor.execute("SELECT COUNT(*) FROM targets WHERE status = 'pending'")
+    pending_count = cursor.fetchone()[0]
+
+    if pending_count == 0 and not demo_mode:
+        print("[!] CRITICAL: Database is empty. Scrape targets before starting strike.", flush=True)
+        print("[*] Tip: Use --demo to test with a hardcoded user ID.", flush=True)
+        db.close()
+        return
+
     cycle = 0
 
-    while True: # THIS IS THE INFINITE LOOP
-        print(f"\n=== [ OMNI-VIPER CYCLE {cycle + 1} INITIALIZED ] ===")
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=False, proxy={"server": CONFIG["PROXY"]})
-            context = await browser.new_context(storage_state=CONFIG["SESSION_FILE"])
-            page = await context.new_page()
-            await stealth_async(page)
-            await _capture_feed(page)  # Initial feed capture
-            
-            predator = PredatorEngine(page, db)
+    while True:
+        print(f"\n=== [ OMNI-VIPER CYCLE {cycle + 1} INITIALIZED ] ===", flush=True)
+        try:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True, proxy={"server": CONFIG["PROXY"]})
+                context = await browser.new_context(storage_state=str(SESSION_FILE))
+                page = await context.new_page()
+                await stealth_async(page)
+                print("[*] Browser launched. Session loaded.", flush=True)
+                await _capture_feed(page)
 
-            # 1. First, check for any and all replies (The Hammer)
-            await predator.hammer_check()
-            await _capture_feed(page)
-            
-            # 2. Then, strike 10 new targets (The Hook)
-            await predator.hook_strike(batch_size=10)
-            await _capture_feed(page)
-            
-            # 3. Rest the system
-            nap = random.randint(300, 600)
-            print(f"\n[*] Cycle complete. Resting browser for {round(nap/60, 1)}m...")
-            await browser.close()
-            await asyncio.sleep(nap)
-            
+                # ─── Demo Mode: Single test message then exit ───
+                if demo_mode:
+                    print(f"\n--- [ DEMO MODE ] Sending test message to ID {DEMO_TEST_ID} ---", flush=True)
+                    try:
+                        await page.goto("https://discord.com/channels/@me", wait_until="domcontentloaded", timeout=30000)
+                        await asyncio.sleep(3)
+                        await _capture_feed(page)
+                        print("[DEMO] Navigated to DMs. Attempting search...", flush=True)
+                        await page.keyboard.press("Control+k")
+                        await asyncio.sleep(2)
+                        search_input = await page.wait_for_selector('[placeholder="Where would you like to go?"]', timeout=10000)
+                        await search_input.type("@b1lin", delay=random.randint(110, 230))
+                        await asyncio.sleep(5)
+                        await page.keyboard.press("Enter")
+                        await asyncio.sleep(8)
+                        await _capture_feed(page)
+                        await page.click('div[role="textbox"]')
+                        await page.keyboard.type("Demo test from Sovereign bot.", delay=random.randint(80, 160))
+                        await page.keyboard.press("Enter")
+                        print("[DEMO] Test message sent!", flush=True)
+                        await asyncio.sleep(3)
+                        await _capture_feed(page)
+                    except Exception as e:
+                        print(f"[DEMO] Failed: {e}", flush=True)
+                        await _capture_feed(page)
+                    await browser.close()
+                    db.close()
+                    print("[DEMO] Demo complete. Exiting.", flush=True)
+                    return
+
+                # ─── Normal Operation ───
+                predator = PredatorEngine(page, db)
+
+                # 1. Check for replies (The Hammer)
+                await predator.hammer_check()
+                await _capture_feed(page)
+
+                # 2. Strike new targets (The Hook)
+                await predator.hook_strike(batch_size=batch_size)
+                await _capture_feed(page)
+
+                # 3. Rest
+                nap = random.randint(300, 600)
+                print(f"\n[*] Cycle complete. Resting browser for {round(nap/60, 1)}m...", flush=True)
+                await browser.close()
+                await asyncio.sleep(nap)
+
+        except Exception as e:
+            print(f"[!] Cycle error: {e}", flush=True)
+            await asyncio.sleep(30)
+
         cycle += 1
         if cycle % 10 == 0:
-            print("[***] Extended Cool-down (15m) to avoid detection...")
+            print("[***] Extended Cool-down (15m) to avoid detection...", flush=True)
             await asyncio.sleep(900)
 
 if __name__ == "__main__":
     if "--login" in sys.argv:
         asyncio.run(login_mode())
     else:
-        asyncio.run(main())
+        asyncio.run(main())  # handles --demo flag internally
