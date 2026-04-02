@@ -346,6 +346,8 @@ function SyncSessionModal({ open, onClose, headers }) {
             setSyncStatus("success");
             toast.success("Session Secured! Discord login successful.");
             clearInterval(pollRef.current);
+            // Auto-close modal after brief success display
+            setTimeout(() => { onClose(); }, 2000);
           } else if (data.status === "timeout") {
             setSyncing(false);
             setSyncStatus("timeout");
