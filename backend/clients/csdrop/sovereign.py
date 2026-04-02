@@ -15,6 +15,18 @@ DB_FILE = BOT_DIR / "omni_viper_v8.db"
 LOGIN_TIMEOUT = 120  # 2 minutes
 
 
+ERROR_SCREENSHOT_PATH = SCREENSHOT_DIR / "error_last.jpg"
+
+
+async def _capture_error(page, context_msg=""):
+    """Save an error screenshot for debugging."""
+    try:
+        await page.screenshot(path=str(ERROR_SCREENSHOT_PATH), type="jpeg", quality=70)
+        print(f"[ERROR] Screenshot saved to {ERROR_SCREENSHOT_PATH} ({context_msg})", flush=True)
+    except Exception:
+        pass
+
+
 async def _capture_feed(page):
     """Save a screenshot for the Live Satellite Feed on the dashboard."""
     try:
@@ -150,18 +162,19 @@ HOOK_TEMPLATES = ["yo {username}, you got a sec? i need a quick favor", "hey {us
 
 async def human_lurk(page):
     try:
-        print("    [*] Lurking (Session Warming)...")
+        print("    [*] Lurking (Session Warming)...", flush=True)
         servers = await page.query_selector_all('div[role="treeitem"]')
         if servers:
             await random.choice(servers).click()
             await asyncio.sleep(random.randint(5, 10))
         await page.click('a[aria-label="Direct Messages"]', timeout=5000)
-    except: pass
+    except Exception:
+        pass
 
 async def human_search_and_click(page, username):
     """Uses Ctrl+K and '@' prefix with jitter to bypass Captchas."""
     try:
-        print(f"    [*] Triggering Stealth Search for @{username}...")
+        print(f"    [*] Triggering Stealth Search for @{username}...", flush=True)
         await asyncio.sleep(random.uniform(1.5, 3.5))
         await page.keyboard.press("Control+k")
         await asyncio.sleep(random.uniform(1.5, 2.5))
@@ -169,12 +182,33 @@ async def human_search_and_click(page, username):
         await search_input.type("@", delay=random.randint(200, 450))
         await asyncio.sleep(random.uniform(0.8, 1.5))
         await search_input.type(username, delay=random.randint(110, 230))
-        await asyncio.sleep(random.uniform(4, 6)) # Filter time
+        await asyncio.sleep(random.uniform(4, 6))  # Filter time
         await page.keyboard.press("Enter")
         await asyncio.sleep(random.randint(8, 12))
         return True
-    except:
-        await page.keyboard.press("Escape")
+    except Exception as e:
+        print(f"    [ERROR] Search failed for @{username}: {e}", flush=True)
+        await _capture_error(page, f"search_fail_{username}")
+        try:
+            await page.keyboard.press("Escape")
+        except Exception:
+            pass
+        return False
+
+
+async def _verify_message_sent(page, timeout=10):
+    """Verify a message was actually sent by checking the textbox is empty."""
+    try:
+        start = asyncio.get_event_loop().time()
+        while (asyncio.get_event_loop().time() - start) < timeout:
+            textbox = await page.query_selector('div[role="textbox"]')
+            if textbox:
+                text_content = await textbox.text_content()
+                if not text_content or text_content.strip() == "":
+                    return True
+            await asyncio.sleep(1)
+        return False
+    except Exception:
         return False
 
 # ==========================================
@@ -190,14 +224,17 @@ class PredatorEngine:
         """PHASE 1: THE DEEP SCAN. Checks all hooked users for replies."""
         self.cursor.execute("SELECT user_id, username FROM targets WHERE status = 'hooked'")
         targets = self.cursor.fetchall()
-        if not targets: return
+        if not targets:
+            return
 
-        print(f"\n--- [ PHASE 1: THE HAMMER ] (Checking {len(targets)} replies) ---")
+        print(f"\n--- [ PHASE 1: THE HAMMER ] (Checking {len(targets)} replies) ---", flush=True)
         for u_id, u_name in targets:
             try:
-                print(f"    [*] Scanning @{u_name}...")
-                await self.page.goto("https://discord.com/channels/@me", wait_until="domcontentloaded")
-                if not await human_search_and_click(self.page, u_name): continue
+                print(f"    [*] Scanning @{u_name}...", flush=True)
+                await self.page.goto("https://discord.com/channels/@me", wait_until="domcontentloaded", timeout=30000)
+                await asyncio.sleep(random.uniform(2, 4))
+                if not await human_search_and_click(self.page, u_name):
+                    continue
 
                 await asyncio.sleep(random.randint(5, 8))
                 msgs = await self.page.query_selector_all('li[class*="message_"]')
@@ -206,19 +243,41 @@ class PredatorEngine:
 
                 # Logic: If total messages > 1 and we haven't dropped our link yet
                 if len(msgs) >= 2 and CONFIG["LINKS"]["SITE"] not in content:
-                    print(f"    [!] REAL REPLY confirmed from @{u_name}!")
+                    print(f"    [!] REAL REPLY confirmed from @{u_name}!", flush=True)
                     msg = random.choice(PROMO_TEMPLATES).format(site=CONFIG["LINKS"]["SITE"], link=CONFIG["LINKS"]["PROMO"])
-                    await self.page.click('div[role="textbox"]')
-                    await asyncio.sleep(random.uniform(4, 7)) 
+
+                    # Click textbox and type with human delay
+                    textbox = await self.page.wait_for_selector('div[role="textbox"]', timeout=10000)
+                    await textbox.click()
+                    await asyncio.sleep(random.uniform(2, 4))
                     await self.page.keyboard.type(msg, delay=random.randint(80, 160))
+                    await asyncio.sleep(random.uniform(1, 2))
                     await self.page.keyboard.press("Enter")
-                    self.cursor.execute("UPDATE targets SET status = 'completed' WHERE user_id = ?", (u_id,))
+                    await asyncio.sleep(2)
+
+                    # Verify the message was sent
+                    if await _verify_message_sent(self.page, timeout=10):
+                        print(f"    [SUCCESS] Promo delivered to @{u_name}!", flush=True)
+                        self.cursor.execute("UPDATE targets SET status = 'completed' WHERE user_id = ?", (u_id,))
+                    else:
+                        print(f"    [ERROR] Selector Timeout — message may not have sent to @{u_name}", flush=True)
+                        await _capture_error(self.page, f"hammer_verify_{u_name}")
+
                     self.db.commit()
-                    await asyncio.sleep(random.randint(15, 25))
-            except: continue
+                    # Human delay between DMs
+                    nap = random.uniform(15, 25)
+                    print(f"    [*] Cooling down {nap:.0f}s...", flush=True)
+                    await asyncio.sleep(nap)
+                else:
+                    print(f"    [-] No actionable reply from @{u_name}.", flush=True)
+
+            except Exception as e:
+                print(f"    [ERROR] Hammer failed on @{u_name}: {e}", flush=True)
+                await _capture_error(self.page, f"hammer_{u_name}")
+                continue
 
     async def hook_strike(self, batch_size=10):
-        """PHASE 2: Strikes exactly 10 new people as requested."""
+        """PHASE 2: Strikes exactly N new people as requested."""
         # ─── Database Pulse Check ───
         self.cursor.execute("SELECT COUNT(*) FROM targets WHERE status = 'pending'")
         pending_count = self.cursor.fetchone()[0]
@@ -232,32 +291,77 @@ class PredatorEngine:
         pending = self.cursor.fetchall()
 
         print(f"\n--- [ PHASE 2: THE HOOK ] (Striking batch of {len(pending)}) ---", flush=True)
-        for u_id, u_name in pending:
-            try:
-                print(f"[*] Striking: @{u_name}")
-                await self.page.goto("https://discord.com/channels/@me", wait_until="domcontentloaded")
-                if not await human_search_and_click(self.page, u_name): continue
+        strikes_sent = 0
+        strikes_failed = 0
 
+        for idx, (u_id, u_name) in enumerate(pending):
+            try:
+                print(f"[*] Striking ({idx+1}/{len(pending)}): @{u_name}", flush=True)
+                await self.page.goto("https://discord.com/channels/@me", wait_until="domcontentloaded", timeout=30000)
+                await asyncio.sleep(random.uniform(2, 4))
+                if not await human_search_and_click(self.page, u_name):
+                    print(f"    [ERROR] Could not find @{u_name} in search. Skipping.", flush=True)
+                    strikes_failed += 1
+                    continue
+
+                sent = False
                 try:
                     wave_btn = await self.page.wait_for_selector('button:has-text("Wave")', timeout=8000)
                     await wave_btn.click()
-                    print("    [+++] WAVE SENT")
+                    await asyncio.sleep(2)
+                    print("    [+++] WAVE SENT", flush=True)
+                    sent = True
+                except Exception:
+                    # Text Fallback — find the textbox first
+                    try:
+                        textbox = await self.page.wait_for_selector('div[role="textbox"]', timeout=10000)
+                        await textbox.click()
+                        await asyncio.sleep(random.uniform(2, 4))
+                        msg = random.choice(HOOK_TEMPLATES).format(username=u_name)
+                        await self.page.keyboard.type(msg, delay=random.randint(80, 160))
+                        await asyncio.sleep(random.uniform(1, 2))
+                        await self.page.keyboard.press("Enter")
+                        await asyncio.sleep(2)
+
+                        # Verify the message was actually sent
+                        if await _verify_message_sent(self.page, timeout=10):
+                            print("    [SUCCESS] TEXT HOOK SENT & VERIFIED", flush=True)
+                            sent = True
+                        else:
+                            print("    [ERROR] Selector Timeout — message box not found or message stuck", flush=True)
+                            await _capture_error(self.page, f"hook_verify_{u_name}")
+                    except Exception as e:
+                        print(f"    [ERROR] Selector Timeout on textbox for @{u_name}: {e}", flush=True)
+                        await _capture_error(self.page, f"hook_textbox_{u_name}")
+
+                if sent:
                     self.cursor.execute("UPDATE targets SET status = 'hooked' WHERE user_id = ?", (u_id,))
-                except:
-                    # Text Fallback
-                    msg = random.choice(HOOK_TEMPLATES).format(username=u_name)
-                    await self.page.click('div[role="textbox"]')
-                    await self.page.keyboard.type(msg, delay=random.randint(80, 160))
-                    await self.page.keyboard.press("Enter")
-                    print("    [+++] TEXT HOOK SENT")
-                    self.cursor.execute("UPDATE targets SET status = 'hooked' WHERE user_id = ?", (u_id,))
-                
+                    strikes_sent += 1
+                else:
+                    strikes_failed += 1
+
                 self.db.commit()
                 await human_lurk(self.page)
                 await _capture_feed(self.page)
-                # Nap inside the batch
-                await asyncio.sleep(random.randint(45, 90))
-            except: continue
+
+                # Human delay between DMs (8-15 seconds)
+                nap = random.uniform(8, 15)
+                print(f"    [*] Human delay: {nap:.1f}s before next strike...", flush=True)
+                await asyncio.sleep(nap)
+
+                # Extra cooldown every 5 strikes
+                if (idx + 1) % 5 == 0:
+                    big_nap = random.randint(45, 90)
+                    print(f"    [*] Batch cooldown: {big_nap}s (anti-detection)...", flush=True)
+                    await asyncio.sleep(big_nap)
+
+            except Exception as e:
+                print(f"    [ERROR] Strike failed on @{u_name}: {e}", flush=True)
+                await _capture_error(self.page, f"strike_{u_name}")
+                strikes_failed += 1
+                continue
+
+        print(f"\n[REPORT] Hook Strike Complete: {strikes_sent} sent, {strikes_failed} failed out of {len(pending)}", flush=True)
 
 # ==========================================
 # IV. THE INFINITE LOOP MAIN

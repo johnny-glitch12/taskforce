@@ -1346,7 +1346,7 @@ async def csdrop_launch_bot(data: CsdropBotLaunch, user=Depends(get_csdrop_user)
 
     try:
         _csdrop_bot_process = subprocess.Popen(
-            [sys.executable, str(sovereign_path), data.promo, str(data.batch)],
+            [sys.executable, "-u", str(sovereign_path), data.promo, str(data.batch)],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             cwd=str(CSDROP_BOT_DIR),
@@ -1487,7 +1487,7 @@ async def csdrop_sync_session(user=Depends(get_csdrop_user)):
 
     try:
         _sync_process = subprocess.Popen(
-            [sys.executable, str(sovereign_path), "--login"],
+            [sys.executable, "-u", str(sovereign_path), "--login"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             cwd=str(CSDROP_BOT_DIR),
@@ -1587,6 +1587,19 @@ async def csdrop_sync_qr_image():
         media_type="image/jpeg",
         headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"},
     )
+
+@api_router.get("/csdrop/error-screenshot")
+async def csdrop_error_screenshot():
+    """Serve the last error screenshot. No auth so <img src> works."""
+    err_path = STATIC_DIR / "error_last.jpg"
+    if not err_path.exists():
+        raise HTTPException(status_code=404, detail="No error screenshot available.")
+    return FileResponse(
+        str(err_path),
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"},
+    )
+
 
 @api_router.get("/csdrop/agents")
 async def csdrop_list_agents(user=Depends(get_csdrop_user)):

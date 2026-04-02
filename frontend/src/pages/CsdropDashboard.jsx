@@ -213,13 +213,13 @@ function LiveFeed({ botRunning }) {
       setFeedAvailable(false);
       return;
     }
-    // Refresh image every 5 seconds by busting the cache
+    // Refresh image every 3 seconds by busting the cache
     const interval = setInterval(() => {
       const ts = Date.now();
       setFeedUrl(`${API}/api/csdrop/live-feed/image?t=${ts}`);
       setFeedAvailable(true);
       setLastUpdated(new Date().toLocaleTimeString());
-    }, 5000);
+    }, 3000);
     // Immediately set a first frame
     setFeedUrl(`${API}/api/csdrop/live-feed/image?t=${Date.now()}`);
     setFeedAvailable(true);
@@ -393,7 +393,7 @@ function SyncSessionModal({ open, onClose, headers }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }}>
       <div
         data-testid="cs-sync-modal"
-        className="relative w-full max-w-md mx-4 rounded-2xl overflow-hidden"
+        className="relative w-full max-w-2xl mx-4 rounded-2xl overflow-hidden"
         style={{ background: T.bg, border: `1px solid ${T.surfaceBorder}` }}
       >
         {/* Header */}
@@ -418,7 +418,7 @@ function SyncSessionModal({ open, onClose, headers }) {
                   alt="Discord QR Code"
                   data-testid="cs-qr-image"
                   className="w-full object-contain"
-                  style={{ maxHeight: 340 }}
+                  style={{ maxHeight: 480 }}
                   onError={(e) => { e.target.style.display = "none"; }}
                 />
                 {/* Scanline overlay */}
