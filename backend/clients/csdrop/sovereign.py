@@ -5,8 +5,9 @@ import json
 import os
 import time
 import sys
+import requests
 from pathlib import Path
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
 from playwright_stealth import stealth_async
 
 # ─── Absolute Paths ───
@@ -24,6 +25,7 @@ LOGIN_TIMEOUT = 120  # 2 minutes
 STEALTH_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 STEALTH_VIEWPORT = {"width": 1920, "height": 1080}
 DEBUG_SCREENSHOT_PATH = SCREENSHOT_DIR / "debug_render.jpg"
+CYCLE_TIMEOUT_PATH = SCREENSHOT_DIR / "cycle_timeout_debug.jpg"
 
 
 ERROR_SCREENSHOT_PATH = SCREENSHOT_DIR / "error_last.jpg"
@@ -710,6 +712,26 @@ async def main():
 
     while True:
         print(f"\n=== [ OMNI-VIPER CYCLE {cycle + 1} INITIALIZED ] ===", flush=True)
+
+        # ─── Proxy Health Check ───
+        proxy_url = CONFIG["PROXY"]
+        try:
+            proxy_host = proxy_url.split("@")[-1] if "@" in proxy_url else proxy_url.replace("http://", "")
+            print(f"[DEBUG] Testing proxy: {proxy_host}...", flush=True)
+            test_resp = requests.get(
+                "https://httpbin.org/ip",
+                proxies={"http": proxy_url, "https": proxy_url},
+                timeout=15,
+            )
+            print(f"[DEBUG] Proxy alive. External IP: {test_resp.json().get('origin', 'unknown')}. Status: {test_resp.status_code}", flush=True)
+        except Exception as proxy_err:
+            print(f"[ERROR] Proxy connection failed: {proxy_err}", flush=True)
+            print("[ERROR] Skipping this cycle — proxy is dead or unreachable.", flush=True)
+            await asyncio.sleep(60)
+            cycle += 1
+            continue
+
+        page = None  # Track for timeout screenshot
         try:
             async with async_playwright() as p:
                 browser = await p.chromium.launch(headless=True, proxy={"server": CONFIG["PROXY"]})
@@ -722,9 +744,29 @@ async def main():
                 await stealth_async(page)
                 print(f"[*] Browser launched. Viewport: {STEALTH_VIEWPORT['width']}x{STEALTH_VIEWPORT['height']}. Session loaded.", flush=True)
 
+                # ─── Console Log Listener (catch Discord-side errors) ───
+                page.on("console", lambda msg: print(f"[CONSOLE] [{msg.type}] {msg.text}", flush=True) if msg.type in ("error", "warning") else None)
+
                 # Wait for Discord to fully load before any action
-                print("[*] Navigating to Discord DMs...", flush=True)
-                await page.goto("https://discord.com/channels/@me", wait_until="networkidle", timeout=45000)
+                print("[*] Navigating to Discord DMs (60s timeout)...", flush=True)
+                response = await page.goto("https://discord.com/channels/@me", wait_until="networkidle", timeout=60000)
+
+                # ─── Network Monitoring: log the HTTP status ───
+                if response:
+                    status = response.status
+                    status_text = response.status_text
+                    print(f"[DEBUG] Discord Load Status: {status} {status_text}", flush=True)
+                    if status >= 400:
+                        print(f"[ERROR] Discord returned HTTP {status}. Possible block or auth failure.", flush=True)
+                        await page.screenshot(path=str(CYCLE_TIMEOUT_PATH), type="jpeg", quality=70)
+                        print(f"[DEBUG] Error screenshot saved to {CYCLE_TIMEOUT_PATH}", flush=True)
+                        await browser.close()
+                        await asyncio.sleep(60)
+                        cycle += 1
+                        continue
+                else:
+                    print("[WARN] No response object from page.goto — possible redirect or abort.", flush=True)
+
                 await asyncio.sleep(random.uniform(3, 5))
                 await _capture_feed(page)
 
@@ -778,8 +820,24 @@ async def main():
                 await browser.close()
                 await asyncio.sleep(nap)
 
+        except PlaywrightTimeout as te:
+            print(f"[!] CYCLE TIMEOUT: {te}", flush=True)
+            if page:
+                try:
+                    await page.screenshot(path=str(CYCLE_TIMEOUT_PATH), type="jpeg", quality=70)
+                    print(f"[DEBUG] Timeout screenshot saved to {CYCLE_TIMEOUT_PATH}", flush=True)
+                except Exception:
+                    print("[DEBUG] Could not capture timeout screenshot (page may be dead).", flush=True)
+            await asyncio.sleep(30)
+
         except Exception as e:
             print(f"[!] Cycle error: {e}", flush=True)
+            if page:
+                try:
+                    await page.screenshot(path=str(CYCLE_TIMEOUT_PATH), type="jpeg", quality=70)
+                    print(f"[DEBUG] Error screenshot saved to {CYCLE_TIMEOUT_PATH}", flush=True)
+                except Exception:
+                    pass
             await asyncio.sleep(30)
 
         cycle += 1

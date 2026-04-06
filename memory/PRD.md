@@ -98,6 +98,13 @@ Build a modern AI Agent Economy platform "Nova AI" with dark mode aesthetic, Lan
 4. **Pre-Strike Sidebar Wait**: Added `wait_for_selector('div[class*="searchBar"], a[aria-label="Direct Messages"]')` before each strike to ensure Discord UI is loaded
 5. **Error Recovery**: New `_dismiss_modals()` helper presses Escape twice to close stuck User Profile popups. Called after every failed search, failed strike, and between successful targets
 
+### Phase 13 - Cycle Timeout Diagnostics (Complete - April 6, 2026)
+1. **Snapshot on Cycle Error**: `PlaywrightTimeout` is caught separately from generic exceptions. On timeout, immediately saves screenshot to `/app/backend/static/cycle_timeout_debug.jpg`. Generic exceptions also capture a screenshot.
+2. **Network Monitoring**: After `page.goto()`, logs the HTTP status code and status text (e.g., `[DEBUG] Discord Load Status: 200 OK`). If status >= 400, saves screenshot and skips cycle.
+3. **Increased Timeout + Console Listener**: Discord load timeout increased from 45s to 60s. Added `page.on("console")` listener that prints all `error` and `warning` console messages from Discord's JS.
+4. **Proxy Health Test**: Before each cycle, uses `requests.get` through the proxy to `httpbin.org/ip` (15s timeout). Logs external IP on success. On failure, logs `[ERROR] Proxy connection failed`, skips the cycle, and waits 60s.
+5. **Timeout Screenshot Endpoint**: `GET /api/csdrop/cycle-timeout` serves the saved timeout screenshot (no auth, for `<img src>` usage).
+
 ## Testing Status
 - Iteration 15: 100% backend (14/14), 100% frontend (Manual Credential Bridge + regression)
 - Iteration 14: 100% backend (8/8), 100% frontend (Ghost Striking fixes + all regression)

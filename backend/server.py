@@ -1718,6 +1718,18 @@ async def csdrop_debug_render():
         headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"},
     )
 
+@api_router.get("/csdrop/cycle-timeout")
+async def csdrop_cycle_timeout_screenshot():
+    """Serve the cycle timeout debug screenshot. No auth so <img src> works."""
+    path = STATIC_DIR / "cycle_timeout_debug.jpg"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="No timeout screenshot available.")
+    return FileResponse(
+        str(path),
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"},
+    )
+
 
 @api_router.get("/csdrop/agents")
 async def csdrop_list_agents(user=Depends(get_csdrop_user)):
