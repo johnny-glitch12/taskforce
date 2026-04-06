@@ -322,11 +322,22 @@ function SyncSessionModal({ open, onClose, headers }) {
   const stopSync = async () => {
     try {
       await fetch(`${API}/api/csdrop/sync-stop`, { method: "POST", headers });
-      toast.info("Sync cancelled.");
     } catch {}
     setSyncing(false);
     setSyncStatus("idle");
     setQrUrl(null);
+  };
+
+  const cancelSync = async () => {
+    await stopSync();
+    toast.info("Sync cancelled.");
+  };
+
+  // Kill the backend process without any toast (for cleanup after success/timeout)
+  const killSyncProcess = async () => {
+    try {
+      await fetch(`${API}/api/csdrop/sync-stop`, { method: "POST", headers });
+    } catch {}
   };
 
   // Poll sync status + QR image
@@ -382,7 +393,13 @@ function SyncSessionModal({ open, onClose, headers }) {
 
   // Clean up on close
   const handleClose = () => {
-    if (syncing) stopSync();
+    if (syncing) {
+      // User is closing while QR is active — that's a cancel
+      cancelSync();
+    } else {
+      // Success, timeout, or idle — just kill any leftover process silently
+      killSyncProcess();
+    }
     setSyncStatus("idle");
     setQrUrl(null);
     setLogs([]);
@@ -508,7 +525,7 @@ function SyncSessionModal({ open, onClose, headers }) {
               </button>
             ) : syncing ? (
               <button
-                onClick={stopSync}
+                onClick={cancelSync}
                 data-testid="cs-cancel-sync-btn"
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-[13px] font-medium transition-all"
                 style={{ background: "rgba(239,68,68,0.1)", color: "#f87171", border: "1px solid rgba(239,68,68,0.2)" }}
