@@ -14,6 +14,11 @@ DB_FILE = BOT_DIR / "omni_viper_v8.db"
 
 LOGIN_TIMEOUT = 120  # 2 minutes
 
+# ─── Stealth Browser Config ───
+STEALTH_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+STEALTH_VIEWPORT = {"width": 1920, "height": 1080}
+DEBUG_SCREENSHOT_PATH = SCREENSHOT_DIR / "debug_render.jpg"
+
 
 ERROR_SCREENSHOT_PATH = SCREENSHOT_DIR / "error_last.jpg"
 
@@ -231,8 +236,8 @@ class PredatorEngine:
         for u_id, u_name in targets:
             try:
                 print(f"    [*] Scanning @{u_name}...", flush=True)
-                await self.page.goto("https://discord.com/channels/@me", wait_until="domcontentloaded", timeout=30000)
-                await asyncio.sleep(random.uniform(2, 4))
+                await self.page.goto("https://discord.com/channels/@me", wait_until="networkidle", timeout=45000)
+                await asyncio.sleep(random.uniform(3, 5))
                 if not await human_search_and_click(self.page, u_name):
                     continue
 
@@ -247,7 +252,13 @@ class PredatorEngine:
                     msg = random.choice(PROMO_TEMPLATES).format(site=CONFIG["LINKS"]["SITE"], link=CONFIG["LINKS"]["PROMO"])
 
                     # Click textbox and type with human delay
-                    textbox = await self.page.wait_for_selector('div[role="textbox"]', timeout=10000)
+                    try:
+                        textbox = await self.page.wait_for_selector('div[role="textbox"]', timeout=10000)
+                    except Exception:
+                        print(f"    [ERROR] Selector Timeout — textbox not found for @{u_name}", flush=True)
+                        await self.page.screenshot(path=str(DEBUG_SCREENSHOT_PATH), type="jpeg", quality=70)
+                        print(f"    [DEBUG] Render screenshot saved to {DEBUG_SCREENSHOT_PATH}", flush=True)
+                        continue
                     await textbox.click()
                     await asyncio.sleep(random.uniform(2, 4))
                     await self.page.keyboard.type(msg, delay=random.randint(80, 160))
@@ -297,8 +308,8 @@ class PredatorEngine:
         for idx, (u_id, u_name) in enumerate(pending):
             try:
                 print(f"[*] Striking ({idx+1}/{len(pending)}): @{u_name}", flush=True)
-                await self.page.goto("https://discord.com/channels/@me", wait_until="domcontentloaded", timeout=30000)
-                await asyncio.sleep(random.uniform(2, 4))
+                await self.page.goto("https://discord.com/channels/@me", wait_until="networkidle", timeout=45000)
+                await asyncio.sleep(random.uniform(3, 5))
                 if not await human_search_and_click(self.page, u_name):
                     print(f"    [ERROR] Could not find @{u_name} in search. Skipping.", flush=True)
                     strikes_failed += 1
@@ -332,6 +343,9 @@ class PredatorEngine:
                             await _capture_error(self.page, f"hook_verify_{u_name}")
                     except Exception as e:
                         print(f"    [ERROR] Selector Timeout on textbox for @{u_name}: {e}", flush=True)
+                        # Debug: capture what the headless screen actually looks like
+                        await page.screenshot(path=str(DEBUG_SCREENSHOT_PATH), type="jpeg", quality=70)
+                        print(f"    [DEBUG] Render screenshot saved to {DEBUG_SCREENSHOT_PATH}", flush=True)
                         await _capture_error(self.page, f"hook_textbox_{u_name}")
 
                 if sent:
@@ -427,17 +441,29 @@ async def main():
         try:
             async with async_playwright() as p:
                 browser = await p.chromium.launch(headless=True, proxy={"server": CONFIG["PROXY"]})
-                context = await browser.new_context(storage_state=str(SESSION_FILE))
+                context = await browser.new_context(
+                    storage_state=str(SESSION_FILE),
+                    viewport=STEALTH_VIEWPORT,
+                    user_agent=STEALTH_UA,
+                )
                 page = await context.new_page()
                 await stealth_async(page)
-                print("[*] Browser launched. Session loaded.", flush=True)
+                print(f"[*] Browser launched. Viewport: {STEALTH_VIEWPORT['width']}x{STEALTH_VIEWPORT['height']}. Session loaded.", flush=True)
+
+                # Wait for Discord to fully load before any action
+                print("[*] Navigating to Discord DMs...", flush=True)
+                await page.goto("https://discord.com/channels/@me", wait_until="networkidle", timeout=45000)
+                await asyncio.sleep(random.uniform(3, 5))
                 await _capture_feed(page)
+
+                # Debug screenshot — verify what the headless screen looks like
+                await page.screenshot(path=str(DEBUG_SCREENSHOT_PATH), type="jpeg", quality=70)
+                print("[*] Discord loaded. Debug render saved.", flush=True)
 
                 # ─── Demo Mode: Single test message then exit ───
                 if demo_mode:
                     print(f"\n--- [ DEMO MODE ] Sending test message to ID {DEMO_TEST_ID} ---", flush=True)
                     try:
-                        await page.goto("https://discord.com/channels/@me", wait_until="domcontentloaded", timeout=30000)
                         await asyncio.sleep(3)
                         await _capture_feed(page)
                         print("[DEMO] Navigated to DMs. Attempting search...", flush=True)

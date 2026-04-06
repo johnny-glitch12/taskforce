@@ -1601,6 +1601,19 @@ async def csdrop_error_screenshot():
     )
 
 
+@api_router.get("/csdrop/debug-render")
+async def csdrop_debug_render():
+    """Serve the debug render screenshot. No auth so <img src> works."""
+    dbg_path = STATIC_DIR / "debug_render.jpg"
+    if not dbg_path.exists():
+        raise HTTPException(status_code=404, detail="No debug render available.")
+    return FileResponse(
+        str(dbg_path),
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"},
+    )
+
+
 @api_router.get("/csdrop/agents")
 async def csdrop_list_agents(user=Depends(get_csdrop_user)):
     agents = await db.user_agents.find(
