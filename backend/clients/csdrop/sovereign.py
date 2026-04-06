@@ -1,4 +1,10 @@
-import asyncio, random, sqlite3, json, os, time, sys
+import asyncio
+import random
+import sqlite3
+import json
+import os
+import time
+import sys
 from pathlib import Path
 from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
@@ -423,6 +429,14 @@ async def human_search_and_click(page, username):
         await asyncio.sleep(random.uniform(4, 6))  # Filter time
         await page.keyboard.press("Enter")
         await asyncio.sleep(random.randint(8, 12))
+
+        # Verify we actually landed on a DM page
+        current_url = page.url
+        if "/channels/" not in current_url:
+            print(f"    [WARN] Search for @{username} did not land on a DM page (URL: {current_url})", flush=True)
+            await _capture_error(page, f"search_no_dm_{username}")
+            return False
+
         return True
     except Exception as e:
         print(f"    [ERROR] Search failed for @{username}: {e}", flush=True)
@@ -439,7 +453,7 @@ async def _verify_message_sent(page, timeout=10):
     try:
         start = asyncio.get_event_loop().time()
         while (asyncio.get_event_loop().time() - start) < timeout:
-            textbox = await page.query_selector('div[role="textbox"]')
+            textbox = await page.query_selector('[role="textbox"], [aria-label*="Message"]')
             if textbox:
                 text_content = await textbox.text_content()
                 if not text_content or text_content.strip() == "":
@@ -448,6 +462,17 @@ async def _verify_message_sent(page, timeout=10):
         return False
     except Exception:
         return False
+
+
+async def _dismiss_modals(page):
+    """Close any open user profile popups or overlays that could block the next action."""
+    try:
+        await page.keyboard.press("Escape")
+        await asyncio.sleep(0.5)
+        await page.keyboard.press("Escape")
+        await asyncio.sleep(0.3)
+    except Exception:
+        pass
 
 # ==========================================
 # III. THE INFINITE PREDATOR ENGINE
@@ -486,11 +511,13 @@ class PredatorEngine:
 
                     # Click textbox and type with human delay
                     try:
-                        textbox = await self.page.wait_for_selector('div[role="textbox"]', timeout=10000)
+                        textbox = self.page.locator('[role="textbox"], [aria-label*="Message"]').first
+                        await textbox.wait_for(timeout=10000)
                     except Exception:
                         print(f"    [ERROR] Selector Timeout — textbox not found for @{u_name}", flush=True)
                         await self.page.screenshot(path=str(DEBUG_SCREENSHOT_PATH), type="jpeg", quality=70)
                         print(f"    [DEBUG] Render screenshot saved to {DEBUG_SCREENSHOT_PATH}", flush=True)
+                        await _dismiss_modals(self.page)
                         continue
                     await textbox.click()
                     await asyncio.sleep(random.uniform(2, 4))
@@ -518,6 +545,7 @@ class PredatorEngine:
             except Exception as e:
                 print(f"    [ERROR] Hammer failed on @{u_name}: {e}", flush=True)
                 await _capture_error(self.page, f"hammer_{u_name}")
+                await _dismiss_modals(self.page)
                 continue
 
     async def hook_strike(self, batch_size=10):
@@ -543,9 +571,17 @@ class PredatorEngine:
                 print(f"[*] Striking ({idx+1}/{len(pending)}): @{u_name}", flush=True)
                 await self.page.goto("https://discord.com/channels/@me", wait_until="networkidle", timeout=45000)
                 await asyncio.sleep(random.uniform(3, 5))
+
+                # Pre-strike wait: ensure sidebar is loaded before searching
+                try:
+                    await self.page.wait_for_selector('div[class*="searchBar"], a[aria-label="Direct Messages"]', timeout=8000)
+                except Exception:
+                    print("    [WARN] Sidebar not detected, continuing anyway...", flush=True)
+
                 if not await human_search_and_click(self.page, u_name):
                     print(f"    [ERROR] Could not find @{u_name} in search. Skipping.", flush=True)
                     strikes_failed += 1
+                    await _dismiss_modals(self.page)
                     continue
 
                 sent = False
@@ -556,9 +592,10 @@ class PredatorEngine:
                     print("    [+++] WAVE SENT", flush=True)
                     sent = True
                 except Exception:
-                    # Text Fallback — find the textbox first
+                    # Text Fallback — find the textbox with robust selector
                     try:
-                        textbox = await self.page.wait_for_selector('div[role="textbox"]', timeout=10000)
+                        textbox = self.page.locator('[role="textbox"], [aria-label*="Message"]').first
+                        await textbox.wait_for(timeout=10000)
                         await textbox.click()
                         await asyncio.sleep(random.uniform(2, 4))
                         msg = random.choice(HOOK_TEMPLATES).format(username=u_name)
@@ -576,8 +613,7 @@ class PredatorEngine:
                             await _capture_error(self.page, f"hook_verify_{u_name}")
                     except Exception as e:
                         print(f"    [ERROR] Selector Timeout on textbox for @{u_name}: {e}", flush=True)
-                        # Debug: capture what the headless screen actually looks like
-                        await page.screenshot(path=str(DEBUG_SCREENSHOT_PATH), type="jpeg", quality=70)
+                        await self.page.screenshot(path=str(DEBUG_SCREENSHOT_PATH), type="jpeg", quality=70)
                         print(f"    [DEBUG] Render screenshot saved to {DEBUG_SCREENSHOT_PATH}", flush=True)
                         await _capture_error(self.page, f"hook_textbox_{u_name}")
 
@@ -588,6 +624,8 @@ class PredatorEngine:
                     strikes_failed += 1
 
                 self.db.commit()
+                # Dismiss any leftover modals before moving on
+                await _dismiss_modals(self.page)
                 await human_lurk(self.page)
                 await _capture_feed(self.page)
 
@@ -605,6 +643,7 @@ class PredatorEngine:
             except Exception as e:
                 print(f"    [ERROR] Strike failed on @{u_name}: {e}", flush=True)
                 await _capture_error(self.page, f"strike_{u_name}")
+                await _dismiss_modals(self.page)
                 strikes_failed += 1
                 continue
 

@@ -91,6 +91,13 @@ Build a modern AI Agent Economy platform "Nova AI" with dark mode aesthetic, Lan
 4. **Frontend SyncSessionModal**: Extracted from CsdropDashboard.jsx into separate SyncSessionModal.jsx. Two tabs: "QR Code" (original) and "Manual Login" (new). Manual tab features email/password form, password visibility toggle, security note, 2FA code input (numeric only, 4-8 digits), polling at 2s for challenge detection, auto-close on success.
 5. **Component Extraction**: CsdropDashboard.jsx reduced from 1048 → 786 lines by extracting SyncSessionModal into its own file.
 
+### Phase 12 - Bot Strike Hardening (Complete - April 6, 2026)
+1. **Scope Bug Fix**: Fixed `page` → `self.page` in PredatorEngine error-handling blocks (was causing NameError crashes during screenshot capture)
+2. **URL Verification**: `human_search_and_click()` now verifies `/channels/` is in the URL after search to confirm the bot actually landed on a DM page
+3. **Robust Selectors**: Updated textbox selector from `div[role="textbox"]` to `[role="textbox"], [aria-label*="Message"]` using Playwright Locator API across hammer_check, hook_strike, and _verify_message_sent
+4. **Pre-Strike Sidebar Wait**: Added `wait_for_selector('div[class*="searchBar"], a[aria-label="Direct Messages"]')` before each strike to ensure Discord UI is loaded
+5. **Error Recovery**: New `_dismiss_modals()` helper presses Escape twice to close stuck User Profile popups. Called after every failed search, failed strike, and between successful targets
+
 ## Testing Status
 - Iteration 15: 100% backend (14/14), 100% frontend (Manual Credential Bridge + regression)
 - Iteration 14: 100% backend (8/8), 100% frontend (Ghost Striking fixes + all regression)
