@@ -126,6 +126,239 @@ async def login_mode():
         print(f"[LOGIN] Exit status: {status}", flush=True)
         return success
 
+
+# ==========================================
+# VI. MANUAL LOGIN MODE (Email/Password + 2FA)
+# ==========================================
+MANUAL_TIMEOUT = 180  # 3 minutes total
+SIGNAL_2FA_FILE = BOT_DIR / "2fa_signal.txt"
+MANUAL_CREDS_FILE = BOT_DIR / "manual_creds.json"
+
+
+async def manual_login_mode():
+    """
+    Reads email/password from manual_creds.json, types them into Discord,
+    handles 2FA challenges by waiting for 2fa_signal.txt, saves session.
+    """
+    print("[MANUAL] Manual Credential Bridge activated.", flush=True)
+
+    # Read credentials
+    if not MANUAL_CREDS_FILE.exists():
+        print("[MANUAL] FATAL: manual_creds.json not found.", flush=True)
+        return False
+
+    try:
+        creds = json.loads(MANUAL_CREDS_FILE.read_text())
+        email = creds["email"]
+        password = creds["password"]
+        print(f"[MANUAL] Credentials loaded for: {email}", flush=True)
+    except Exception as e:
+        print(f"[MANUAL] FATAL: Failed to read credentials: {e}", flush=True)
+        return False
+    finally:
+        # Delete creds file immediately for security
+        try:
+            MANUAL_CREDS_FILE.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    # Clean up any old signal file
+    try:
+        SIGNAL_2FA_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context(
+            viewport=STEALTH_VIEWPORT,
+            user_agent=STEALTH_UA,
+        )
+        page = await context.new_page()
+        await stealth_async(page)
+
+        # Navigate to Discord login
+        print("[MANUAL] Navigating to Discord login...", flush=True)
+        try:
+            await page.goto("https://discord.com/login", wait_until="networkidle", timeout=45000)
+            await asyncio.sleep(3)
+            await page.screenshot(path=str(QR_SCREENSHOT_PATH), type="jpeg", quality=70)
+            print("[MANUAL] Login page loaded.", flush=True)
+        except Exception as e:
+            print(f"[MANUAL] Failed to load login page: {e}", flush=True)
+            await browser.close()
+            return False
+
+        # Type email
+        try:
+            print("[MANUAL] Entering email...", flush=True)
+            email_input = await page.wait_for_selector('input[name="email"]', timeout=10000)
+            await email_input.click()
+            await asyncio.sleep(0.5)
+            await email_input.fill("")
+            await email_input.type(email, delay=random.randint(40, 80))
+            await asyncio.sleep(0.5)
+        except Exception as e:
+            print(f"[MANUAL] Failed to enter email: {e}", flush=True)
+            await page.screenshot(path=str(ERROR_SCREENSHOT_PATH), type="jpeg", quality=70)
+            await browser.close()
+            return False
+
+        # Type password
+        try:
+            print("[MANUAL] Entering password...", flush=True)
+            pw_input = await page.wait_for_selector('input[name="password"]', timeout=10000)
+            await pw_input.click()
+            await asyncio.sleep(0.5)
+            await pw_input.type(password, delay=random.randint(40, 80))
+            await asyncio.sleep(1)
+        except Exception as e:
+            print(f"[MANUAL] Failed to enter password: {e}", flush=True)
+            await page.screenshot(path=str(ERROR_SCREENSHOT_PATH), type="jpeg", quality=70)
+            await browser.close()
+            return False
+
+        # Submit login
+        print("[MANUAL] Submitting login...", flush=True)
+        await page.keyboard.press("Enter")
+        await asyncio.sleep(5)
+        await page.screenshot(path=str(QR_SCREENSHOT_PATH), type="jpeg", quality=70)
+
+        # Check result — success, error, or 2FA challenge
+        start_time = time.time()
+        success = False
+
+        while (time.time() - start_time) < MANUAL_TIMEOUT:
+            current_url = page.url
+
+            # Check: Login succeeded (redirected to channels)
+            if "/channels" in current_url:
+                print("[MANUAL] SUCCESS! Login detected.", flush=True)
+                success = True
+                break
+
+            # Check: 2FA / MFA challenge screen
+            page_content = await page.content()
+            needs_2fa = False
+
+            # Discord 2FA indicators
+            mfa_selectors = [
+                'input[placeholder*="6-digit"]',
+                'input[placeholder*="authentication"]',
+                'input[aria-label*="code"]',
+                'input[autocomplete="one-time-code"]',
+            ]
+            for selector in mfa_selectors:
+                try:
+                    elem = await page.query_selector(selector)
+                    if elem:
+                        needs_2fa = True
+                        break
+                except Exception:
+                    pass
+
+            # Also check text content for 2FA/email verification prompts
+            if not needs_2fa:
+                for phrase in ["Two-Factor", "2FA", "Enter the code", "Check your email", "verification code", "Verify your identity"]:
+                    if phrase.lower() in page_content.lower():
+                        needs_2fa = True
+                        break
+
+            if needs_2fa:
+                print("[MANUAL] 2FA_REQUIRED — Waiting for verification code...", flush=True)
+                await page.screenshot(path=str(QR_SCREENSHOT_PATH), type="jpeg", quality=70)
+
+                # Enter the 2FA waiting loop
+                code_entered = False
+                while (time.time() - start_time) < MANUAL_TIMEOUT:
+                    # Check if signal file appeared
+                    if SIGNAL_2FA_FILE.exists():
+                        try:
+                            code = SIGNAL_2FA_FILE.read_text().strip()
+                            SIGNAL_2FA_FILE.unlink(missing_ok=True)
+                            print(f"[MANUAL] 2FA code received: {code}", flush=True)
+
+                            # Find the 2FA input and type the code
+                            typed = False
+                            for selector in mfa_selectors:
+                                try:
+                                    code_input = await page.wait_for_selector(selector, timeout=5000)
+                                    if code_input:
+                                        await code_input.click()
+                                        await asyncio.sleep(0.5)
+                                        await code_input.fill("")
+                                        await code_input.type(code, delay=random.randint(60, 120))
+                                        typed = True
+                                        break
+                                except Exception:
+                                    continue
+
+                            if not typed:
+                                # Fallback: just type into whatever is focused
+                                print("[MANUAL] Using keyboard fallback for 2FA input...", flush=True)
+                                await page.keyboard.type(code, delay=random.randint(60, 120))
+
+                            await asyncio.sleep(1)
+                            await page.keyboard.press("Enter")
+                            print("[MANUAL] 2FA code submitted. Waiting for result...", flush=True)
+                            await asyncio.sleep(5)
+                            await page.screenshot(path=str(QR_SCREENSHOT_PATH), type="jpeg", quality=70)
+                            code_entered = True
+                            break
+                        except Exception as e:
+                            print(f"[MANUAL] Error entering 2FA code: {e}", flush=True)
+                            await page.screenshot(path=str(ERROR_SCREENSHOT_PATH), type="jpeg", quality=70)
+                            break
+
+                    elapsed = int(time.time() - start_time)
+                    remaining = MANUAL_TIMEOUT - elapsed
+                    print(f"[MANUAL] Waiting for 2FA code... ({remaining}s remaining)", flush=True)
+                    await page.screenshot(path=str(QR_SCREENSHOT_PATH), type="jpeg", quality=70)
+                    await asyncio.sleep(2)
+
+                if not code_entered:
+                    print("[MANUAL] TIMEOUT waiting for 2FA code.", flush=True)
+                    break
+
+                # After 2FA, continue checking for redirect
+                continue
+
+            # Check: Login error (wrong password etc)
+            for err_text in ["Login or password is invalid", "INVALID_LOGIN", "ACCOUNT_LOGIN_VERIFICATION_EMAIL"]:
+                if err_text.lower() in page_content.lower():
+                    print(f"[MANUAL] LOGIN FAILED — Discord says: {err_text}", flush=True)
+                    await page.screenshot(path=str(ERROR_SCREENSHOT_PATH), type="jpeg", quality=70)
+                    await browser.close()
+                    return False
+
+            elapsed = int(time.time() - start_time)
+            remaining = MANUAL_TIMEOUT - elapsed
+            print(f"[MANUAL] Waiting for login result... ({remaining}s remaining)", flush=True)
+            await page.screenshot(path=str(QR_SCREENSHOT_PATH), type="jpeg", quality=70)
+            await asyncio.sleep(2)
+
+        if success:
+            try:
+                await context.storage_state(path=str(SESSION_FILE))
+                print(f"[MANUAL] Session saved to {SESSION_FILE}", flush=True)
+                await page.screenshot(path=str(QR_SCREENSHOT_PATH), type="jpeg", quality=70)
+            except Exception as e:
+                print(f"[MANUAL] Failed to save session: {e}", flush=True)
+                success = False
+        else:
+            print("[MANUAL] TIMEOUT. Login did not complete.", flush=True)
+
+        # Cleanup
+        try:
+            SIGNAL_2FA_FILE.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+        await browser.close()
+        status = "success" if success else "timeout"
+        print(f"[MANUAL] Exit status: {status}", flush=True)
+        return success
+
 # ==========================================
 # I. CONFIGURATION (Keep your site/links here)
 # ==========================================
@@ -518,5 +751,7 @@ async def main():
 if __name__ == "__main__":
     if "--login" in sys.argv:
         asyncio.run(login_mode())
+    elif "--manual" in sys.argv:
+        asyncio.run(manual_login_mode())
     else:
         asyncio.run(main())  # handles --demo flag internally

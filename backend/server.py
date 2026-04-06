@@ -1530,14 +1530,26 @@ async def csdrop_sync_status(user=Depends(get_csdrop_user)):
 
     # Determine outcome
     status = "idle"
+    needs_2fa = False
+    login_failed = False
     if running:
         status = "syncing"
+        # Check if bot is waiting for 2FA
+        if any("2FA_REQUIRED" in log for log in _sync_logs):
+            needs_2fa = True
+            status = "2fa_required"
+        # Check if login credentials were rejected
+        if any("LOGIN FAILED" in log for log in _sync_logs):
+            login_failed = True
+            status = "login_failed"
     elif _sync_process is not None:
-        # Process finished — check logs for success
         has_success = any("SUCCESS" in log for log in _sync_logs)
         has_timeout = any("TIMEOUT" in log for log in _sync_logs)
+        has_failed = any("LOGIN FAILED" in log for log in _sync_logs)
         if has_success:
             status = "success"
+        elif has_failed:
+            status = "login_failed"
         elif has_timeout:
             status = "timeout"
         else:
@@ -1552,6 +1564,8 @@ async def csdrop_sync_status(user=Depends(get_csdrop_user)):
     return {
         "status": status,
         "qr_available": qr_available,
+        "needs_2fa": needs_2fa,
+        "login_failed": login_failed,
         "logs": _sync_logs[-30:],
         "session_exists": session_exists,
         "session_last_updated": session_age,
@@ -1587,6 +1601,96 @@ async def csdrop_sync_qr_image():
         media_type="image/jpeg",
         headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"},
     )
+
+# ─── Manual Login (Email/Password + 2FA) ───
+
+class ManualLoginData(BaseModel):
+    email: str
+    password: str
+
+class TwoFAData(BaseModel):
+    code: str
+
+@api_router.post("/csdrop/manual-login")
+async def csdrop_manual_login(data: ManualLoginData, user=Depends(get_csdrop_user)):
+    """Start sovereign.py in --manual mode with provided credentials."""
+    global _sync_process, _sync_logs
+
+    if _csdrop_bot_process and _csdrop_bot_process.returncode is None:
+        return {"status": "error", "message": "Stop the bot first."}
+    if _sync_process and _sync_process.returncode is None:
+        return {"status": "error", "message": "A sync is already in progress."}
+    if not _check_module("playwright"):
+        return {"status": "error", "message": "Playwright not installed. Run Repair first."}
+
+    sovereign_path = CSDROP_BOT_DIR / "sovereign.py"
+    if not sovereign_path.exists():
+        raise HTTPException(status_code=500, detail="Bot script not found.")
+
+    # Write credentials to a temp file (bot reads and deletes immediately)
+    creds_file = CSDROP_BOT_DIR / "manual_creds.json"
+    creds_file.write_text(json.dumps({"email": data.email, "password": data.password}))
+
+    # Clean old QR/signal files
+    qr_path = STATIC_DIR / "qr_sync.jpg"
+    signal_file = CSDROP_BOT_DIR / "2fa_signal.txt"
+    for f in [qr_path, signal_file]:
+        if f.exists():
+            f.unlink()
+
+    _sync_logs = [f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] Starting manual login for {data.email}..."]
+
+    try:
+        _sync_process = subprocess.Popen(
+            [sys.executable, "-u", str(sovereign_path), "--manual"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            cwd=str(CSDROP_BOT_DIR),
+            text=True,
+            bufsize=1,
+        )
+
+        async def _read_sync_output():
+            global _sync_logs
+            loop = aio.get_event_loop()
+            while _sync_process and _sync_process.poll() is None:
+                line = await loop.run_in_executor(None, _sync_process.stdout.readline)
+                if line:
+                    ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
+                    _sync_logs.append(f"[{ts}] {line.rstrip()}")
+                    if len(_sync_logs) > 200:
+                        _sync_logs = _sync_logs[-100:]
+                else:
+                    break
+            ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
+            exit_code = _sync_process.returncode if _sync_process else -1
+            if exit_code == 0:
+                _sync_logs.append(f"[{ts}] Manual login completed successfully.")
+            else:
+                _sync_logs.append(f"[{ts}] Manual login ended (exit code: {exit_code}).")
+
+        aio.create_task(_read_sync_output())
+        logger.info(f"Manual login started by {user['email']}")
+        return {"status": "ok", "message": "Manual login started. Entering credentials..."}
+    except Exception as e:
+        # Clean up creds file on error
+        creds_file.unlink(missing_ok=True)
+        return {"status": "error", "message": f"Failed: {str(e)}"}
+
+@api_router.post("/csdrop/submit-2fa")
+async def csdrop_submit_2fa(data: TwoFAData, user=Depends(get_csdrop_user)):
+    """Write the 2FA code to a signal file for the bot to pick up."""
+    if not _sync_process or _sync_process.returncode is not None:
+        return {"status": "error", "message": "No login process running."}
+
+    code = data.code.strip()
+    if not code or len(code) < 4 or len(code) > 8:
+        return {"status": "error", "message": "Invalid code. Must be 4-8 digits."}
+
+    signal_file = CSDROP_BOT_DIR / "2fa_signal.txt"
+    signal_file.write_text(code)
+    logger.info(f"2FA code submitted by {user['email']}")
+    return {"status": "ok", "message": "2FA code submitted. Bot will enter it now."}
 
 @api_router.get("/csdrop/error-screenshot")
 async def csdrop_error_screenshot():
