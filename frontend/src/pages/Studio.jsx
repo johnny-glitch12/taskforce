@@ -451,7 +451,7 @@ function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNo
 }
 
 /* ─── Code Pane ─── */
-function CodePane({ visible, codeJson, onDeploy, linterResult, onRunLinter, saving }) {
+function CodePane({ visible, codeJson, onDeploy, onPublish, linterResult, onRunLinter, saving, publishing }) {
   const lines = codeJson ? codeJson.split("\n") : ["// No workflow data yet"];
 
   if (!visible) return null;
@@ -473,6 +473,21 @@ function CodePane({ visible, codeJson, onDeploy, linterResult, onRunLinter, savi
           </button>
         </div>
       </div>
+
+      {/* Publish to Marketplace button */}
+      {codeJson && (
+        <div className="px-3 py-2 flex items-center gap-2" style={{ borderBottom: '1px solid var(--border)' }}>
+          <button
+            onClick={onPublish}
+            data-testid="publish-agent-btn"
+            disabled={publishing}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-medium rounded-lg transition-all text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
+            style={{ border: '1px solid rgba(52,211,153,0.25)' }}
+          >
+            <Globe size={11} /> {publishing ? "Publishing..." : "Publish to Marketplace"}
+          </button>
+        </div>
+      )}
 
       {linterResult && (
         <div data-testid="linter-result" className={`px-3 py-2 flex items-center gap-2 text-[11px] ${
@@ -769,6 +784,35 @@ export default function Studio() {
 
   const handleDeploy = async () => { await saveWorkflow(); await runLinter(); toast.success("Workflow saved and scanned."); };
 
+  const [publishing, setPublishing] = useState(false);
+  const handlePublish = async () => {
+    if (!codeJson || nodes.length === 0) { toast.error("Nothing to publish. Add some nodes first."); return; }
+    setPublishing(true);
+    try {
+      const manifest = JSON.parse(codeJson);
+      const activeWf = workflows.find(w => w.id === activeWorkflowId);
+      const res = await fetch(`${API}/api/published-agents/publish`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          name: activeWf?.name || "My Agent",
+          description: `Agent with ${nodes.length} nodes built in Nova Studio`,
+          manifest,
+          trust_score: linterResult?.trust_score || 0,
+          linter_status: linterResult?.status || "unknown",
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(`Agent published! v${data.version}`);
+      } else {
+        const err = await res.json();
+        toast.error(err.detail || "Failed to publish.");
+      }
+    } catch { toast.error("Publish failed."); }
+    setPublishing(false);
+  };
+
   useEffect(() => {
     if (loaded && workflows.length === 0 && token) createWorkflow();
   }, [loaded, token]);
@@ -805,19 +849,19 @@ export default function Studio() {
       <div className="flex-1 flex flex-row overflow-hidden">
         {/* Desktop: Vibe chat is a sidebar when in node mode */}
         {!isMobile && mode === "vibe" && <ChatPane messages={messages} onSend={handleChatSend} visible={true} agentStatus={agentStatus} terminalHistory={terminalHistory} />}
-        {!isMobile && mode === "vibe" && <CodePane visible={true} codeJson={codeJson} onDeploy={handleDeploy} linterResult={linterResult} onRunLinter={runLinter} saving={saving} />}
+        {!isMobile && mode === "vibe" && <CodePane visible={true} codeJson={codeJson} onDeploy={handleDeploy} onPublish={handlePublish} linterResult={linterResult} onRunLinter={runLinter} saving={saving} publishing={publishing} />}
 
         {!isMobile && mode === "node" && (
           <>
             <CanvasPane visible={true} nodes={nodes} edges={edges} activeNode={activeNode} setActiveNode={setActiveNode} onMoveNode={moveNode} onAddNode={addNode} onDeleteNode={deleteNode} onAddEdge={addEdge} />
-            <CodePane visible={true} codeJson={codeJson} onDeploy={handleDeploy} linterResult={linterResult} onRunLinter={runLinter} saving={saving} />
+            <CodePane visible={true} codeJson={codeJson} onDeploy={handleDeploy} onPublish={handlePublish} linterResult={linterResult} onRunLinter={runLinter} saving={saving} publishing={publishing} />
           </>
         )}
 
         {/* Mobile: Single pane */}
         {isMobile && <ChatPane messages={messages} onSend={handleChatSend} visible={showChat} agentStatus={agentStatus} terminalHistory={terminalHistory} />}
         {isMobile && <CanvasPane visible={showCanvas} nodes={nodes} edges={edges} activeNode={activeNode} setActiveNode={setActiveNode} onMoveNode={moveNode} onAddNode={addNode} onDeleteNode={deleteNode} onAddEdge={addEdge} />}
-        {isMobile && <CodePane visible={showCode} codeJson={codeJson} onDeploy={handleDeploy} linterResult={linterResult} onRunLinter={runLinter} saving={saving} />}
+        {isMobile && <CodePane visible={showCode} codeJson={codeJson} onDeploy={handleDeploy} onPublish={handlePublish} linterResult={linterResult} onRunLinter={runLinter} saving={saving} publishing={publishing} />}
       </div>
     </div>
   );

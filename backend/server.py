@@ -1987,6 +1987,10 @@ app.include_router(agent_router, prefix="/api")
 from routes.security import router as security_router
 app.include_router(security_router, prefix="/api")
 
+# Include published agents + creator analytics router
+from routes.published import router as published_router
+app.include_router(published_router, prefix="/api")
+
 # Mount static files for live bot screenshots
 STATIC_DIR = Path(__file__).parent / "static"
 STATIC_DIR.mkdir(exist_ok=True)

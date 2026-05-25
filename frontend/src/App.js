@@ -17,6 +17,7 @@ import Dashboard from "@/pages/Dashboard";
 import CsdropDashboard from "@/pages/CsdropDashboard";
 import SecurityDashboard from "@/pages/SecurityDashboard";
 import Pricing from "@/pages/Pricing";
+import CreatorDashboard from "@/pages/CreatorDashboard";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -165,6 +166,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <SecurityDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/creator"
+                  element={
+                    <ProtectedRoute>
+                      <CreatorDashboard />
                     </ProtectedRoute>
                   }
                 />
