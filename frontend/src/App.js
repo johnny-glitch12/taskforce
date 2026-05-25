@@ -2,6 +2,7 @@ import { useState, useEffect, createContext, useContext, useCallback } from "rea
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
+import { ThemeProvider } from "@/lib/theme";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import Home from "@/pages/Home";
@@ -105,61 +106,63 @@ function App() {
 
   return (
     <AuthContext.Provider value={{ user, token, isAdmin, loading, login, register, logout }}>
-      <BrowserRouter>
-        <div className="min-h-screen bg-zinc-950 flex flex-col">
-          <Navbar />
-          <Toaster
-            position="bottom-right"
-            toastOptions={{
-              style: {
-                background: 'rgba(24, 24, 27, 0.9)',
-                backdropFilter: 'blur(12px)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                color: '#fafafa',
-                fontFamily: "'IBM Plex Sans', sans-serif",
-                borderRadius: '12px',
-                fontSize: '13px',
-              },
-            }}
-          />
-          <main className="flex-1">
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/academy" element={<Academy />} />
-              <Route path="/marketplace" element={<Marketplace />} />
-              <Route path="/agent/:id" element={<AgentDetail />} />
-              <Route path="/creator/:id" element={<CreatorProfile />} />
-              <Route path="/payment/success" element={<PaymentSuccess />} />
-              <Route
-                path="/studio"
-                element={
-                  <ProtectedRoute>
-                    <Studio />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard/csdrop"
-                element={
-                  <ProtectedRoute>
-                    <CsdropDashboard />
-                  </ProtectedRoute>
-                }
-              />
-            </Routes>
-          </main>
-          <Footer />
-        </div>
-      </BrowserRouter>
+      <ThemeProvider>
+        <BrowserRouter>
+          <div className="min-h-screen t-bg flex flex-col" style={{ transition: 'background-color 0.3s ease' }}>
+            <Navbar />
+            <Toaster
+              position="bottom-right"
+              toastOptions={{
+                style: {
+                  background: 'var(--toast-bg)',
+                  backdropFilter: 'blur(12px)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--toast-text)',
+                  fontFamily: "'IBM Plex Sans', sans-serif",
+                  borderRadius: '12px',
+                  fontSize: '13px',
+                },
+              }}
+            />
+            <main className="flex-1">
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/academy" element={<Academy />} />
+                <Route path="/marketplace" element={<Marketplace />} />
+                <Route path="/agent/:id" element={<AgentDetail />} />
+                <Route path="/creator/:id" element={<CreatorProfile />} />
+                <Route path="/payment/success" element={<PaymentSuccess />} />
+                <Route
+                  path="/studio"
+                  element={
+                    <ProtectedRoute>
+                      <Studio />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard"
+                  element={
+                    <ProtectedRoute>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/csdrop"
+                  element={
+                    <ProtectedRoute>
+                      <CsdropDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+              </Routes>
+            </main>
+            <Footer />
+          </div>
+        </BrowserRouter>
+      </ThemeProvider>
     </AuthContext.Provider>
   );
 }

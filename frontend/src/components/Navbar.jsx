@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/App";
-import { Menu, X } from "lucide-react";
+import { useTheme } from "@/lib/theme";
+import { Menu, X, Sun, Moon } from "lucide-react";
 import { useState } from "react";
 
 const baseNavLinks = [
@@ -12,6 +13,7 @@ const baseNavLinks = [
 
 export default function Navbar() {
   const { user, logout } = useAuth();
+  const { isDark, toggle } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -24,19 +26,13 @@ export default function Navbar() {
   return (
     <nav
       data-testid="navbar"
-      className="sticky top-0 z-50 bg-zinc-950/70 backdrop-blur-xl border-b border-white/[0.06]"
+      className="sticky top-0 z-50 backdrop-blur-xl t-border"
+      style={{ backgroundColor: 'var(--bg-nav)', borderBottom: '1px solid var(--border)' }}
     >
       <div className={`${isStudio ? 'px-5' : 'max-w-7xl mx-auto px-6 lg:px-8'} flex items-center justify-between h-[60px]`}>
-        {/* Logo - Text only */}
-        <Link
-          to="/"
-          data-testid="navbar-logo"
-          className="flex items-center group"
-        >
-          <span
-            className="text-white text-[15px] font-semibold tracking-[0.08em]"
-            style={{ fontFamily: "'Outfit', sans-serif" }}
-          >
+        {/* Logo */}
+        <Link to="/" data-testid="navbar-logo" className="flex items-center group">
+          <span className="text-[15px] font-semibold tracking-[0.08em] t-text" style={{ fontFamily: "'Outfit', sans-serif" }}>
             nova<span className="text-[#8B5CF6]">.</span>ai
           </span>
         </Link>
@@ -50,35 +46,38 @@ export default function Navbar() {
               data-testid={`nav-link-${link.label.toLowerCase()}`}
               className={`px-4 py-2 text-[13px] rounded-lg transition-all duration-200 ${
                 location.pathname === link.to
-                  ? "text-white bg-white/[0.06]"
-                  : "text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04]"
+                  ? "t-text"
+                  : "t-text-sub hover:t-text"
               }`}
+              style={location.pathname === link.to ? { background: 'var(--bg-card-hover)' } : {}}
             >
               {link.label}
             </Link>
           ))}
         </div>
 
-        {/* Auth Buttons */}
+        {/* Right side: Theme toggle + Auth */}
         <div className="hidden md:flex items-center gap-3">
+          <button
+            data-testid="theme-toggle-btn"
+            onClick={toggle}
+            className="theme-toggle"
+            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {isDark ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+
           {user ? (
             <button
               data-testid="logout-btn"
-              onClick={() => {
-                logout();
-                navigate("/");
-              }}
-              className="text-[13px] text-zinc-500 hover:text-white transition-colors duration-200"
+              onClick={() => { logout(); navigate("/"); }}
+              className="text-[13px] t-text-sub hover:t-text transition-colors duration-200"
             >
               Log out
             </button>
           ) : (
             <>
-              <Link
-                to="/login"
-                data-testid="login-btn"
-                className="text-[13px] text-zinc-500 hover:text-white transition-colors duration-200"
-              >
+              <Link to="/login" data-testid="login-btn" className="text-[13px] t-text-sub hover:t-text transition-colors duration-200">
                 Log in
               </Link>
               <Link
@@ -92,21 +91,27 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Mobile Hamburger */}
-        <button
-          data-testid="mobile-menu-btn"
-          className="md:hidden text-zinc-400 hover:text-white"
-          onClick={() => setMobileOpen(!mobileOpen)}
-        >
-          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
+        {/* Mobile: Theme toggle + Hamburger */}
+        <div className="md:hidden flex items-center gap-2">
+          <button data-testid="theme-toggle-mobile" onClick={toggle} className="theme-toggle" style={{ width: 32, height: 32 }}>
+            {isDark ? <Sun size={14} /> : <Moon size={14} />}
+          </button>
+          <button
+            data-testid="mobile-menu-btn"
+            className="t-text-sub hover:t-text"
+            onClick={() => setMobileOpen(!mobileOpen)}
+          >
+            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Menu */}
       {mobileOpen && (
         <div
           data-testid="mobile-menu"
-          className="md:hidden bg-zinc-950/95 backdrop-blur-xl border-t border-white/[0.06] px-6 py-5 flex flex-col gap-1 animate-fade-in"
+          className="md:hidden backdrop-blur-xl px-6 py-5 flex flex-col gap-1 animate-fade-in"
+          style={{ backgroundColor: 'var(--bg-nav)', borderTop: '1px solid var(--border)' }}
         >
           {navLinks.map((link) => (
             <Link
@@ -114,34 +119,25 @@ export default function Navbar() {
               to={link.to}
               onClick={() => setMobileOpen(false)}
               className={`py-2.5 px-3 text-sm rounded-lg transition-all ${
-                location.pathname === link.to
-                  ? "text-white bg-white/[0.06]"
-                  : "text-zinc-500"
+                location.pathname === link.to ? "t-text" : "t-text-sub"
               }`}
+              style={location.pathname === link.to ? { background: 'var(--bg-card-hover)' } : {}}
             >
               {link.label}
             </Link>
           ))}
-          <div className="border-t border-white/[0.06] mt-2 pt-3 flex flex-col gap-2">
+          <div className="mt-2 pt-3 flex flex-col gap-2" style={{ borderTop: '1px solid var(--border)' }}>
             {user ? (
               <button
                 data-testid="mobile-logout-btn"
-                onClick={() => {
-                  logout();
-                  navigate("/");
-                  setMobileOpen(false);
-                }}
-                className="text-sm text-zinc-500 text-left py-2 px-3"
+                onClick={() => { logout(); navigate("/"); setMobileOpen(false); }}
+                className="text-sm t-text-sub text-left py-2 px-3"
               >
                 Log out
               </button>
             ) : (
               <>
-                <Link
-                  to="/login"
-                  onClick={() => setMobileOpen(false)}
-                  className="text-sm text-zinc-500 py-2 px-3"
-                >
+                <Link to="/login" onClick={() => setMobileOpen(false)} className="text-sm t-text-sub py-2 px-3">
                   Log in
                 </Link>
                 <Link
