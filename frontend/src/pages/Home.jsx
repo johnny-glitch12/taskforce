@@ -289,7 +289,7 @@ export default function Home() {
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.65 }}
-            className="mt-14 mx-auto max-w-3xl rounded-sm overflow-hidden"
+            className="mt-10 mx-auto max-w-3xl rounded-sm overflow-hidden"
             style={{ border: '1px solid var(--border)', boxShadow: '0 0 40px rgba(34,211,238,0.08)' }}
             data-testid="hero-video"
           >
@@ -306,7 +306,7 @@ export default function Home() {
       </motion.section>
 
       {/* ═══ STATS BAR ═══ */}
-      <section className="py-16 px-6 lg:px-8 relative" style={{ borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+      <section className="py-10 px-6 lg:px-8 relative" style={{ borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
         <div className="max-w-5xl mx-auto grid grid-cols-2 lg:grid-cols-4 gap-6">
           {STATS.map((stat, i) => (
             <Reveal key={stat.label} delay={i * 0.1} className="text-center">
@@ -320,31 +320,33 @@ export default function Home() {
       </section>
 
       {/* ═══ FEATURES GRID ═══ */}
-      <section className="py-20 px-6 lg:px-8 relative">
+      <section className="py-14 px-6 lg:px-8 relative">
         <div className="max-w-5xl mx-auto">
-          <Reveal className="text-center mb-14">
+          <Reveal className="text-center mb-10">
             <span className="text-[10px] tracking-[0.2em] uppercase font-mono text-cyan-400 px-3 py-1 rounded-sm inline-block mb-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
               Capabilities
             </span>
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight t-text mb-4">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight t-text mb-3">
               Built for <span className="text-gradient-cyan">Operators</span>
             </h2>
             <p className="text-[15px] t-text-sub max-w-md mx-auto">Every tool you need to build, deploy, and scale autonomous agents.</p>
           </Reveal>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {FEATURES.map((feat, i) => (
               <Reveal key={feat.title} delay={i * 0.08}>
                 <motion.div
                   whileHover={{ y: -4, borderColor: feat.color + "30" }}
-                  className="p-5 rounded-sm transition-all group"
+                  className="h-full p-5 rounded-sm transition-all group flex flex-col"
                   style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
                 >
-                  <div className="w-10 h-10 rounded-sm flex items-center justify-center mb-4" style={{ background: feat.color + "10", border: `1px solid ${feat.color}20` }}>
-                    <feat.icon size={18} style={{ color: feat.color }} />
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-9 h-9 rounded-sm flex items-center justify-center shrink-0" style={{ background: feat.color + "10", border: `1px solid ${feat.color}20` }}>
+                      <feat.icon size={16} style={{ color: feat.color }} />
+                    </div>
+                    <h3 className="text-[13px] font-bold t-text font-mono tracking-wide">{feat.title}</h3>
                   </div>
-                  <h3 className="text-[14px] font-bold t-text mb-2 font-mono tracking-wide">{feat.title}</h3>
-                  <p className="text-[12px] t-text-sub leading-relaxed">{feat.desc}</p>
+                  <p className="text-[12px] t-text-sub leading-relaxed flex-1">{feat.desc}</p>
                 </motion.div>
               </Reveal>
             ))}
@@ -353,10 +355,10 @@ export default function Home() {
       </section>
 
       {/* ═══ HOW IT WORKS ═══ */}
-      <section className="py-20 px-6 lg:px-8 relative" style={{ borderTop: '1px solid var(--border)' }}>
+      <section className="py-14 px-6 lg:px-8 relative" style={{ borderTop: '1px solid var(--border)' }}>
         <div className="max-w-4xl mx-auto">
-          <Reveal className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight t-text mb-4">
+          <Reveal className="text-center mb-10">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight t-text mb-3">
               Three Steps to <span className="text-gradient-cyan">Deployment</span>
             </h2>
           </Reveal>
@@ -368,16 +370,16 @@ export default function Home() {
               { step: "03", title: "Deploy & Monetize", desc: "Publish to The Exchange. Set your pricing model — rent per output or sell the full IP outright." },
             ].map((item, i) => (
               <Reveal key={item.step} delay={i * 0.15}>
-                <div className="flex items-start gap-6 py-6" style={i < 2 ? { borderBottom: '1px solid var(--border)' } : {}}>
+                <div className="flex items-start gap-5 py-5" style={i < 2 ? { borderBottom: '1px solid var(--border)' } : {}}>
                   <motion.div
                     whileHover={{ scale: 1.1 }}
-                    className="w-12 h-12 rounded-sm flex items-center justify-center shrink-0 font-mono text-[16px] font-bold text-cyan-400"
+                    className="w-11 h-11 rounded-sm flex items-center justify-center shrink-0 font-mono text-[15px] font-bold text-cyan-400"
                     style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.12)' }}
                   >
                     {item.step}
                   </motion.div>
                   <div>
-                    <h3 className="text-[16px] font-bold t-text mb-1">{item.title}</h3>
+                    <h3 className="text-[15px] font-bold t-text mb-1">{item.title}</h3>
                     <p className="text-[13px] t-text-sub leading-relaxed">{item.desc}</p>
                   </div>
                 </div>
@@ -388,12 +390,12 @@ export default function Home() {
       </section>
 
       {/* ═══ CTA ═══ */}
-      <section className="py-20 px-6 lg:px-8 relative" style={{ borderTop: '1px solid var(--border)' }}>
+      <section className="py-14 px-6 lg:px-8 relative" style={{ borderTop: '1px solid var(--border)' }}>
         <Reveal className="max-w-3xl mx-auto text-center">
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight t-text mb-4">
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight t-text mb-3">
             Ready to <span className="text-gradient-cyan">Deploy</span>?
           </h2>
-          <p className="text-[15px] t-text-sub mb-8 max-w-md mx-auto">
+          <p className="text-[15px] t-text-sub mb-7 max-w-md mx-auto">
             Join thousands of operators already building on Task Force AI.
           </p>
           <motion.a
