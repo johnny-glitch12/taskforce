@@ -209,7 +209,10 @@ function AgentCard({ agent, index }) {
           >
             <Play size={11} /> Live Demo
           </Link>
-          <span className="text-[15px] font-semibold t-text">${agent.price}<span className="text-[12px] t-text-sub font-normal">/mo</span></span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] t-text-dim px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-card-hover)' }}>Rent</span>
+            <span className="text-[15px] font-semibold t-text">${agent.price}<span className="text-[11px] t-text-dim font-normal">/mo</span></span>
+          </div>
         </div>
       </div>
     </div>

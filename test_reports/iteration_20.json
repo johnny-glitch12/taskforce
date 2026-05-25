@@ -1,0 +1,43 @@
+{
+  "summary": "Frontend-only testing of the new Agent Detail page Purchase Panel (Rent/Acquire split UI) + themed Live Demo modal. All 15+ critical UI flows pass on desktop (1920x1080) and mobile (390x844). Dynamic pricing math is correct, theme variables drive every surface, and the marketplace 'Rent' badge renders on every card.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "GET /agent/1 renders agent-detail-page with title 'Customer Service Pro', creator @CXMaster (verified), rating 4.9 (124 reviews), trust 98, stats grid (847 deploys / <15 min / 124 users)",
+    "PurchasePanel: both tabs present (purchase-tab-rent default active, purchase-tab-acquire)",
+    "Rent tab: rent-panel visible by default with output-slider (default value=500), price breakdown ('500 outputs x $15/100'), platform fee $0, Total $75",
+    "Slider dynamic pricing: 500 -> $75 (default), 3000 -> $450, 10000 (max) -> $1500 — math = (count/100) * pricePerHundred where pricePerHundred=max(5, round(49*0.3))=15",
+    "rent-agent-btn text updates dynamically: 'Rent Now — $75' / '$450' / '$1500'",
+    "Rent panel: Stripe + Crypto payment badges + '256-bit encrypted' label visible",
+    "Acquire tab click switches to acquire-panel: shows 'ONE-TIME ACQUISITION', price $2,994 (=buyPrice 499 * 6), 'Lifetime ownership. No recurring costs.'",
+    "Acquire panel: all 4 value props rendered (Full IP Ownership, Edit Node Logic, Your Own Compute, Unlimited Outputs) each with icon + desc",
+    "buy-agent-btn shows 'Buy Outright — $2,994'; Stripe + Crypto badges + 'Escrow protected' visible",
+    "Overview & Reviews tabs (tab-overview, tab-reviews) toggle their respective tab-content sections",
+    "Live Demo modal: agent-demo-btn opens live-demo-modal; inline style uses var(--bg-elevated) and var(--border) — theme-aware (no hardcoded dark)",
+    "close-demo-modal closes the modal",
+    "Theme toggle (theme-toggle-btn): flips data-theme attribute (light <-> dark), agent-detail-page remains fully rendered; demo modal re-themed correctly",
+    "Mobile 390x844: purchase panel stacks below info card, tabs stay accessible, slider works (2000 -> $300), Acquire panel renders with all value props",
+    "/marketplace: 10 agent cards rendered; 'Rent' text appears 11 times (10 badges + 1 subtitle)",
+    "No console errors during interactions"
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AgentDetail.jsx is now ~440 lines with three components in one file (LiveDemoModal, PurchasePanel, AgentDetail). Consider extracting LiveDemoModal and PurchasePanel into their own files under /pages/agent-detail/ for maintainability (file size guideline).",
+    "handleCheckout in PurchasePanel sets checkingOut=null in finally path that's outside try/catch — minor: if window.location.href succeeds the redirect happens before the state reset, fine. But on network error the toast is shown AND state is reset, which is correct.",
+    "Inline gradient backgrounds on Buy Outright button (linear-gradient(135deg, #8B5CF6, #6D28D9)) are not theme-variabled — acceptable since brand violet is intentional in both themes.",
+    "demoResponses object hardcodes responses keyed by agent.id (1-6). For agents with id > 6 the fallback string is used; not a bug, but consider sourcing demo replies from agent payload for scalability.",
+    "PurchasePanel computes pricePerHundred and acquirePrice on every render — fine for now, could useMemo if Agent payload grows."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a (frontend-only)", "frontend": "100% (all 16 flows verified across desktop + mobile)" },
+  "test_credentials": { "admin": "admin@nova.ai / admin123" },
+  "seed_data_creation": "None — used existing seeded agent id=1 (Customer Service Pro, price=49, buyPrice=499)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Agent Detail Purchase Panel is fully working & theme-aware. Key testids: purchase-tab-rent, purchase-tab-acquire, output-slider (HTML range, fill() works), rent-agent-btn, buy-agent-btn, rent-panel, acquire-panel, agent-detail-page, agent-demo-btn, live-demo-modal, close-demo-modal, tab-overview, tab-reviews. Default rent for agent 1 = $75 (500 outputs * $15/100). Acquire = $2,994 (buyPrice 499 * 6). Theme toggle id = theme-toggle-btn / theme-toggle-mobile. Marketplace has 10 agent cards each with a 'Rent' badge near price."
+}

@@ -166,6 +166,32 @@
   cursor: pointer;
 }
 
+/* Range Slider Styling */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #8B5CF6;
+  cursor: pointer;
+  border: 3px solid var(--bg-primary);
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+  transition: all 0.2s ease;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.6);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #8B5CF6;
+  cursor: pointer;
+  border: 3px solid var(--bg-primary);
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+}
+
 /* Code syntax highlight mock */
 .syntax-keyword { color: #A78BFA; }
 .syntax-string { color: #8B5CF6; }
