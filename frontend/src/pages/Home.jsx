@@ -49,19 +49,102 @@ function Counter({ value, suffix = "" }) {
 function GridBackground() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {/* Base grid */}
       <div className="absolute inset-0" style={{
         backgroundImage: `
-          linear-gradient(rgba(34,211,238,0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(34,211,238,0.03) 1px, transparent 1px)
+          linear-gradient(rgba(34,211,238,0.07) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(34,211,238,0.07) 1px, transparent 1px)
         `,
         backgroundSize: '60px 60px',
       }} />
-      {/* Animated scan line */}
+
+      {/* Horizontal scan line — bright and wide */}
       <motion.div
-        className="absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400/20 to-transparent"
-        animate={{ y: [0, 800, 0] }}
-        transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-        style={{ top: 0 }}
+        className="absolute left-0 right-0 h-[2px]"
+        style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(34,211,238,0.5) 20%, rgba(34,211,238,0.8) 50%, rgba(34,211,238,0.5) 80%, transparent 100%)', boxShadow: '0 0 30px 8px rgba(34,211,238,0.15)' }}
+        animate={{ y: [-20, 2000] }}
+        transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+      />
+
+      {/* Second scan line — offset, dimmer */}
+      <motion.div
+        className="absolute left-0 right-0 h-[1px]"
+        style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(16,185,129,0.4) 30%, rgba(16,185,129,0.6) 50%, rgba(16,185,129,0.4) 70%, transparent 100%)', boxShadow: '0 0 20px 4px rgba(16,185,129,0.1)' }}
+        animate={{ y: [1500, -20] }}
+        transition={{ duration: 9, repeat: Infinity, ease: "linear" }}
+      />
+
+      {/* Vertical scan line — left to right */}
+      <motion.div
+        className="absolute top-0 bottom-0 w-[1px]"
+        style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(34,211,238,0.35) 30%, rgba(34,211,238,0.6) 50%, rgba(34,211,238,0.35) 70%, transparent 100%)', boxShadow: '0 0 20px 4px rgba(34,211,238,0.08)' }}
+        animate={{ x: [-20, 2000] }}
+        transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+      />
+
+      {/* Pulsing corner nodes */}
+      {[
+        { top: '15%', left: '10%', delay: 0 },
+        { top: '30%', right: '8%', delay: 1.5 },
+        { top: '60%', left: '18%', delay: 3 },
+        { top: '75%', right: '15%', delay: 0.8 },
+        { top: '45%', left: '50%', delay: 2.2 },
+      ].map((pos, i) => (
+        <motion.div
+          key={i}
+          className="absolute"
+          style={{ ...pos }}
+          animate={{ opacity: [0, 0.8, 0], scale: [0.8, 1.2, 0.8] }}
+          transition={{ duration: 3, repeat: Infinity, delay: pos.delay, ease: "easeInOut" }}
+        >
+          <div className="w-1.5 h-1.5 bg-cyan-400" style={{ boxShadow: '0 0 12px 4px rgba(34,211,238,0.3)' }} />
+        </motion.div>
+      ))}
+
+      {/* Animated connection lines between nodes */}
+      <svg className="absolute inset-0 w-full h-full" style={{ opacity: 0.15 }}>
+        <motion.line
+          x1="10%" y1="15%" x2="50%" y2="45%"
+          stroke="#22d3ee" strokeWidth="1"
+          strokeDasharray="8 6"
+          animate={{ strokeDashoffset: [0, -100] }}
+          transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+        />
+        <motion.line
+          x1="50%" y1="45%" x2="85%" y2="30%"
+          stroke="#22d3ee" strokeWidth="1"
+          strokeDasharray="8 6"
+          animate={{ strokeDashoffset: [0, -100] }}
+          transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
+        />
+        <motion.line
+          x1="18%" y1="60%" x2="50%" y2="45%"
+          stroke="#10b981" strokeWidth="1"
+          strokeDasharray="8 6"
+          animate={{ strokeDashoffset: [0, -80] }}
+          transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+        />
+        <motion.line
+          x1="85%" y1="75%" x2="50%" y2="45%"
+          stroke="#10b981" strokeWidth="1"
+          strokeDasharray="8 6"
+          animate={{ strokeDashoffset: [0, -80] }}
+          transition={{ duration: 4.5, repeat: Infinity, ease: "linear" }}
+        />
+      </svg>
+
+      {/* Large ambient glow orbs */}
+      <motion.div
+        className="absolute top-[10%] left-[5%] w-[350px] h-[350px] rounded-full"
+        style={{ background: 'radial-gradient(circle, rgba(34,211,238,0.06) 0%, transparent 70%)' }}
+        animate={{ opacity: [0.4, 0.8, 0.4], scale: [0.9, 1.1, 0.9] }}
+        transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="absolute bottom-[5%] right-[5%] w-[400px] h-[400px] rounded-full"
+        style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.05) 0%, transparent 70%)' }}
+        animate={{ opacity: [0.3, 0.7, 0.3], scale: [1, 1.15, 1] }}
+        transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 2 }}
       />
     </div>
   );
@@ -211,16 +294,21 @@ export default function Home() {
             data-testid="hero-video-placeholder"
           >
             <div className="aspect-video flex items-center justify-center relative">
-              {/* Animated pulse rings */}
+              {/* Animated pulse rings — larger and more visible */}
               <motion.div
-                className="absolute w-24 h-24 rounded-sm border border-cyan-400/10"
-                animate={{ scale: [1, 1.8], opacity: [0.3, 0] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
+                className="absolute w-28 h-28 rounded-sm border border-cyan-400/25"
+                animate={{ scale: [1, 2.2], opacity: [0.5, 0] }}
+                transition={{ duration: 2.5, repeat: Infinity, ease: "easeOut" }}
               />
               <motion.div
-                className="absolute w-24 h-24 rounded-sm border border-cyan-400/10"
-                animate={{ scale: [1, 1.8], opacity: [0.3, 0] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "easeOut", delay: 1 }}
+                className="absolute w-28 h-28 rounded-sm border border-cyan-400/25"
+                animate={{ scale: [1, 2.2], opacity: [0.5, 0] }}
+                transition={{ duration: 2.5, repeat: Infinity, ease: "easeOut", delay: 0.8 }}
+              />
+              <motion.div
+                className="absolute w-28 h-28 rounded-sm border border-cyan-400/15"
+                animate={{ scale: [1, 2.8], opacity: [0.3, 0] }}
+                transition={{ duration: 3, repeat: Infinity, ease: "easeOut", delay: 1.5 }}
               />
               <div className="text-center z-10">
                 <div className="w-16 h-16 rounded-sm flex items-center justify-center mx-auto mb-3" style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.15)' }}>
