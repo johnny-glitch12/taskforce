@@ -119,6 +119,16 @@ Build a modern AI Agent Economy platform "Nova AI" with dark mode aesthetic, Lan
 - **Marketplace Cards**: Added "Rent" badge on agent cards
 - **Mobile Responsive**: Purchase panel stacks cleanly, slider works on touch
 
+### Pricing Page - Mission Tiers (Phase 18 - May 25, 2026)
+- 4-tier pricing cards: Recruit ($0), Cadet ($19), Operator ($99), Command (Custom)
+- Monthly/Annual toggle with 20% discount calculation and "Save 20%" badge
+- Operator card highlighted as "MOST POPULAR" with animated purple gradient border glow
+- Each tier: icon, tagline, price, CTA button, 4 features with checkmarks
+- Annual mode shows discounted prices with strikethrough original yearly totals
+- Trust bar: 256-bit SSL, SOC 2 Compliant, 99.9% Uptime SLA
+- Theme-aware (light/dark), mobile responsive (single-column stack)
+- Nav link added between Academy and Marketplace
+
 ## Prioritized Backlog
 - **P1**: Save Node Coding manifest JSON to Supabase agents table
 - **P2**: Creator dashboard with advanced analytics
