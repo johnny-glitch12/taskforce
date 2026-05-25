@@ -16,6 +16,7 @@ import PaymentSuccess from "@/pages/PaymentSuccess";
 import Dashboard from "@/pages/Dashboard";
 import CsdropDashboard from "@/pages/CsdropDashboard";
 import SecurityDashboard from "@/pages/SecurityDashboard";
+import Pricing from "@/pages/Pricing";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -130,6 +131,7 @@ function App() {
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/academy" element={<Academy />} />
+                <Route path="/pricing" element={<Pricing />} />
                 <Route path="/marketplace" element={<Marketplace />} />
                 <Route path="/agent/:id" element={<AgentDetail />} />
                 <Route path="/creator/:id" element={<CreatorProfile />} />

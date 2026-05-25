@@ -7,6 +7,7 @@ import { useState } from "react";
 const baseNavLinks = [
   { to: "/", label: "Home" },
   { to: "/academy", label: "Academy" },
+  { to: "/pricing", label: "Pricing" },
   { to: "/marketplace", label: "Marketplace" },
   { to: "/studio", label: "Studio" },
 ];
