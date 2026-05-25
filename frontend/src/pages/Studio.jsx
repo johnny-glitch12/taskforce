@@ -50,14 +50,19 @@ function ModeToggle({ mode, setMode, isMobile }) {
   );
 }
 
-/* ─── Chat Pane ─── */
-function ChatPane({ messages, onSend, visible }) {
+/* ─── Chat Pane (wired to /api/run-agent + live terminal) ─── */
+function ChatPane({ messages, onSend, visible, agentStatus, terminalHistory }) {
   const [input, setInput] = useState("");
   const scrollRef = useRef(null);
+  const termRef = useRef(null);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
+
+  useEffect(() => {
+    if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight;
+  }, [terminalHistory]);
 
   const handleSend = (e) => {
     e.preventDefault();
@@ -66,6 +71,8 @@ function ChatPane({ messages, onSend, visible }) {
     setInput("");
   };
 
+  const isProcessing = agentStatus === "queued" || agentStatus === "processing";
+
   if (!visible) return null;
 
   return (
@@ -73,10 +80,20 @@ function ChatPane({ messages, onSend, visible }) {
       <div className="px-4 py-3 border-b border-white/[0.06] flex items-center gap-2">
         <Bot size={14} className="text-[#8B5CF6]" />
         <span className="text-[12px] tracking-wide text-zinc-500">Vibe Chat</span>
-        <span className="ml-auto text-[11px] text-zinc-600 bg-white/[0.04] px-2.5 py-0.5 rounded-full hidden sm:inline">
-          Describe your agent in plain English
-        </span>
+        {isProcessing && (
+          <span className="ml-auto flex items-center gap-1.5 text-[10px] text-[#A78BFA] bg-[#8B5CF6]/10 px-2.5 py-0.5 rounded-full border border-[#8B5CF6]/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#8B5CF6] animate-pulse" />
+            Agent Thinking...
+          </span>
+        )}
+        {!isProcessing && (
+          <span className="ml-auto text-[11px] text-zinc-600 bg-white/[0.04] px-2.5 py-0.5 rounded-full hidden sm:inline">
+            Describe your agent in plain English
+          </span>
+        )}
       </div>
+
+      {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center opacity-60">
@@ -87,23 +104,71 @@ function ChatPane({ messages, onSend, visible }) {
         )}
         {messages.map((msg, i) => (
           <div key={i} data-testid={`chat-message-${i}`} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[85%] px-3.5 py-2.5 text-[13px] leading-relaxed rounded-xl ${
+            <div className={`max-w-[85%] px-3.5 py-2.5 text-[13px] leading-relaxed rounded-xl whitespace-pre-wrap ${
               msg.role === "user"
                 ? "bg-[#8B5CF6]/10 text-zinc-200 border border-[#8B5CF6]/20"
                 : "bg-white/[0.03] text-zinc-400 border border-white/[0.06]"
             }`}>{msg.content}</div>
           </div>
         ))}
+        {isProcessing && (
+          <div className="flex justify-start">
+            <div className="max-w-[85%] px-3.5 py-3 text-[13px] rounded-xl bg-white/[0.03] border border-[#8B5CF6]/20">
+              <div className="flex items-center gap-2 text-[#A78BFA]">
+                <Zap size={12} className="animate-pulse" />
+                <span className="text-[12px]">Agent executing...</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Terminal History (nidoai useAgentTerminal equivalent) */}
+      {terminalHistory.length > 0 && (
+        <div
+          ref={termRef}
+          data-testid="agent-terminal"
+          className="h-28 mx-3 mb-2 rounded-lg overflow-y-auto font-mono text-[10px] leading-relaxed border border-white/[0.06]"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="sticky top-0 px-2.5 py-1 bg-black/80 border-b border-white/[0.05] flex items-center gap-1.5 z-10">
+            <div className={`w-1.5 h-1.5 rounded-full ${isProcessing ? "bg-emerald-400 animate-pulse" : agentStatus === "success" ? "bg-emerald-400" : agentStatus === "failed" ? "bg-red-400" : "bg-zinc-600"}`} />
+            <span className="text-zinc-500 text-[9px] tracking-wider uppercase">Agent Terminal</span>
+          </div>
+          <div className="p-2.5 space-y-0.5">
+            {terminalHistory.map((line, i) => {
+              const lower = line.toLowerCase();
+              const color = lower.includes("success") || lower.includes("completed")
+                ? "#4ade80"
+                : lower.includes("failed") || lower.includes("error")
+                ? "#f87171"
+                : lower.includes("processing") || lower.includes("reasoning")
+                ? "#a78bfa"
+                : lower.includes("init") || lower.includes("queued")
+                ? "#60a5fa"
+                : "#71717a";
+              return <div key={i} style={{ color }}>{line}</div>;
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Input */}
       <form onSubmit={handleSend} data-testid="chat-input-form" className="px-4 py-3 border-t border-white/[0.06] flex gap-2">
         <input
           type="text" value={input} onChange={(e) => setInput(e.target.value)}
-          placeholder="Tell me what your agent should do..."
+          placeholder={isProcessing ? "Waiting for agent..." : "Tell me what your agent should do..."}
+          disabled={isProcessing}
           data-testid="chat-input"
-          className="flex-1 bg-transparent text-[13px] text-white placeholder:text-zinc-600 focus:outline-none"
+          className="flex-1 bg-transparent text-[13px] text-white placeholder:text-zinc-600 focus:outline-none disabled:opacity-40"
         />
-        <button type="submit" data-testid="chat-send-btn" className="p-2 text-[#8B5CF6] hover:text-[#A78BFA] transition-colors">
-          <Send size={15} />
+        <button
+          type="submit"
+          disabled={isProcessing}
+          data-testid="chat-send-btn"
+          className="p-2 text-[#8B5CF6] hover:text-[#A78BFA] transition-colors disabled:opacity-30"
+        >
+          {isProcessing ? <Rocket size={15} className="animate-pulse" /> : <Send size={15} />}
         </button>
       </form>
     </div>
@@ -595,17 +660,72 @@ export default function Studio() {
 
   const selectWorkflow = (wfId) => { const wf = workflows.find((w) => w.id === wfId); if (wf) loadWorkflow(wf); };
 
-  const handleChatSend = (text) => {
-    const newMessages = [...messages, { role: "user", content: text }];
-    const response = generateAssistantResponse(text, nodes);
-    newMessages.push({ role: "assistant", content: response.message });
-    setMessages(newMessages);
-    if (response.newNodes.length > 0 || response.newEdges.length > 0) {
-      const updatedNodes = [...nodes, ...response.newNodes];
-      const updatedEdges = [...edges, ...response.newEdges];
-      setNodes(updatedNodes);
-      setEdges(updatedEdges);
-      setCodeJson(generateCodeJson(updatedNodes, updatedEdges));
+  const [agentStatus, setAgentStatus] = useState("idle"); // idle, queued, processing, success, failed
+  const [terminalHistory, setTerminalHistory] = useState([]);
+  const [activeLogId, setActiveLogId] = useState(null);
+  const pollRef = useRef(null);
+
+  // Poll agent logs when we have an active execution
+  useEffect(() => {
+    if (!activeLogId || agentStatus === "success" || agentStatus === "failed") {
+      clearInterval(pollRef.current);
+      return;
+    }
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`${API}/api/agent-logs/${activeLogId}`, { headers });
+        if (!res.ok) return;
+        const data = await res.json();
+        setTerminalHistory(data.terminal_history || []);
+        setAgentStatus(data.status);
+
+        if (data.status === "success") {
+          clearInterval(pollRef.current);
+          setMessages((prev) => [...prev, { role: "assistant", content: data.output_result || "Agent completed." }]);
+          // Also apply node suggestions if the response contains them
+          const response = generateAssistantResponse(data.input_payload?.user_message || "", nodes);
+          if (response.newNodes.length > 0) {
+            const updatedNodes = [...nodes, ...response.newNodes];
+            const updatedEdges = [...edges, ...response.newEdges];
+            setNodes(updatedNodes);
+            setEdges(updatedEdges);
+            setCodeJson(generateCodeJson(updatedNodes, updatedEdges));
+          }
+        } else if (data.status === "failed") {
+          clearInterval(pollRef.current);
+          setMessages((prev) => [...prev, { role: "assistant", content: `Agent error: ${data.message || "Execution failed."}` }]);
+        }
+      } catch {}
+    }, 1500);
+    return () => clearInterval(pollRef.current);
+  }, [activeLogId, agentStatus]);
+
+  const handleChatSend = async (text) => {
+    // Add user message immediately
+    setMessages((prev) => [...prev, { role: "user", content: text }]);
+    setAgentStatus("queued");
+    setTerminalHistory(["[INIT] Agent execution queued."]);
+
+    try {
+      const res = await fetch(`${API}/api/run-agent`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          user_message: text,
+          system_prompt: "You are Nova AI, an expert AI agent architect. Help the user design, build, and configure AI agents. Be concise but thorough. When describing agent configurations, use structured output with clear sections.",
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.logId) {
+        setActiveLogId(data.logId);
+        setAgentStatus("processing");
+      } else {
+        setAgentStatus("failed");
+        setMessages((prev) => [...prev, { role: "assistant", content: `Failed to start agent: ${data.message || "Unknown error"}` }]);
+      }
+    } catch (err) {
+      setAgentStatus("failed");
+      setMessages((prev) => [...prev, { role: "assistant", content: "Network error. Could not reach the agent API." }]);
     }
   };
 
@@ -691,7 +811,7 @@ export default function Studio() {
       {/* Main Panes */}
       <div className="flex-1 flex flex-row overflow-hidden">
         {/* Desktop: Vibe chat is a sidebar when in node mode */}
-        {!isMobile && mode === "vibe" && <ChatPane messages={messages} onSend={handleChatSend} visible={true} />}
+        {!isMobile && mode === "vibe" && <ChatPane messages={messages} onSend={handleChatSend} visible={true} agentStatus={agentStatus} terminalHistory={terminalHistory} />}
         {!isMobile && mode === "vibe" && <CodePane visible={true} codeJson={codeJson} onDeploy={handleDeploy} linterResult={linterResult} onRunLinter={runLinter} saving={saving} />}
 
         {!isMobile && mode === "node" && (
@@ -702,7 +822,7 @@ export default function Studio() {
         )}
 
         {/* Mobile: Single pane */}
-        {isMobile && <ChatPane messages={messages} onSend={handleChatSend} visible={showChat} />}
+        {isMobile && <ChatPane messages={messages} onSend={handleChatSend} visible={showChat} agentStatus={agentStatus} terminalHistory={terminalHistory} />}
         {isMobile && <CanvasPane visible={showCanvas} nodes={nodes} edges={edges} activeNode={activeNode} setActiveNode={setActiveNode} onMoveNode={moveNode} onAddNode={addNode} onDeleteNode={deleteNode} onAddEdge={addEdge} />}
         {isMobile && <CodePane visible={showCode} codeJson={codeJson} onDeploy={handleDeploy} linterResult={linterResult} onRunLinter={runLinter} saving={saving} />}
       </div>
