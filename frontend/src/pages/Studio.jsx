@@ -9,6 +9,8 @@ import {
   Database, Globe, Filter, Code, Layers,
 } from "lucide-react";
 
+import { useAgentTerminal } from "../hooks/useAgentTerminal";
+
 const API = process.env.REACT_APP_BACKEND_URL;
 
 const NODE_TYPES = [
@@ -660,51 +662,36 @@ export default function Studio() {
 
   const selectWorkflow = (wfId) => { const wf = workflows.find((w) => w.id === wfId); if (wf) loadWorkflow(wf); };
 
-  const [agentStatus, setAgentStatus] = useState("idle"); // idle, queued, processing, success, failed
-  const [terminalHistory, setTerminalHistory] = useState([]);
   const [activeLogId, setActiveLogId] = useState(null);
-  const pollRef = useRef(null);
 
-  // Poll agent logs when we have an active execution
+  // Supabase Realtime — replaces manual polling (nidoai useAgentTerminal)
+  const { history: terminalHistory, status: agentStatus, isLive, outputResult } = useAgentTerminal(activeLogId);
+
+  // When agent finishes, push the result into chat
+  const prevStatusRef = useRef(null);
   useEffect(() => {
-    if (!activeLogId || agentStatus === "success" || agentStatus === "failed") {
-      clearInterval(pollRef.current);
-      return;
-    }
-    pollRef.current = setInterval(async () => {
-      try {
-        const res = await fetch(`${API}/api/agent-logs/${activeLogId}`, { headers });
-        if (!res.ok) return;
-        const data = await res.json();
-        setTerminalHistory(data.terminal_history || []);
-        setAgentStatus(data.status);
+    if (prevStatusRef.current === agentStatus) return;
+    prevStatusRef.current = agentStatus;
 
-        if (data.status === "success") {
-          clearInterval(pollRef.current);
-          setMessages((prev) => [...prev, { role: "assistant", content: data.output_result || "Agent completed." }]);
-          // Also apply node suggestions if the response contains them
-          const response = generateAssistantResponse(data.input_payload?.user_message || "", nodes);
-          if (response.newNodes.length > 0) {
-            const updatedNodes = [...nodes, ...response.newNodes];
-            const updatedEdges = [...edges, ...response.newEdges];
-            setNodes(updatedNodes);
-            setEdges(updatedEdges);
-            setCodeJson(generateCodeJson(updatedNodes, updatedEdges));
-          }
-        } else if (data.status === "failed") {
-          clearInterval(pollRef.current);
-          setMessages((prev) => [...prev, { role: "assistant", content: `Agent error: ${data.message || "Execution failed."}` }]);
-        }
-      } catch {}
-    }, 1500);
-    return () => clearInterval(pollRef.current);
-  }, [activeLogId, agentStatus]);
+    if (agentStatus === "success" && outputResult) {
+      setMessages((prev) => [...prev, { role: "assistant", content: outputResult }]);
+      // Also apply node suggestions from pattern matcher
+      const response = generateAssistantResponse(outputResult, nodes);
+      if (response.newNodes.length > 0) {
+        const updatedNodes = [...nodes, ...response.newNodes];
+        const updatedEdges = [...edges, ...response.newEdges];
+        setNodes(updatedNodes);
+        setEdges(updatedEdges);
+        setCodeJson(generateCodeJson(updatedNodes, updatedEdges));
+      }
+    } else if (agentStatus === "failed") {
+      setMessages((prev) => [...prev, { role: "assistant", content: `Agent error: Check the terminal for details.` }]);
+    }
+  }, [agentStatus, outputResult]);
 
   const handleChatSend = async (text) => {
-    // Add user message immediately
     setMessages((prev) => [...prev, { role: "user", content: text }]);
-    setAgentStatus("queued");
-    setTerminalHistory(["[INIT] Agent execution queued."]);
+    setActiveLogId(null); // Reset to re-trigger hook
 
     try {
       const res = await fetch(`${API}/api/run-agent`, {
@@ -718,13 +705,10 @@ export default function Studio() {
       const data = await res.json();
       if (data.success && data.logId) {
         setActiveLogId(data.logId);
-        setAgentStatus("processing");
       } else {
-        setAgentStatus("failed");
         setMessages((prev) => [...prev, { role: "assistant", content: `Failed to start agent: ${data.message || "Unknown error"}` }]);
       }
-    } catch (err) {
-      setAgentStatus("failed");
+    } catch {
       setMessages((prev) => [...prev, { role: "assistant", content: "Network error. Could not reach the agent API." }]);
     }
   };
