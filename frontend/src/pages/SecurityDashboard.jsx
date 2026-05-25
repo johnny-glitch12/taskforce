@@ -53,7 +53,7 @@ function EventRow({ event }) {
       </div>
       {expanded && (
         <div className="px-4 pb-3 pt-0">
-          <div className="rounded-lg p-3 text-[12px] font-mono t-text-mute leading-relaxed" style={{ background: '#0d0d0f' }}>
+          <div className="rounded-lg p-3 text-[12px] font-mono t-text-mute leading-relaxed" style={{ background: 'var(--bg-secondary)' }}>
             {event.prompt_snippet || "No prompt captured"}
           </div>
         </div>

@@ -19,8 +19,9 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const isStudio = location.pathname === "/studio";
+  const isAdmin = user?.role === "admin";
   const navLinks = user
-    ? [...baseNavLinks, { to: "/dashboard", label: "Dashboard" }]
+    ? [...baseNavLinks, { to: "/dashboard", label: "Dashboard" }, ...(isAdmin ? [{ to: "/security", label: "Security" }] : [])]
     : baseNavLinks;
 
   return (
