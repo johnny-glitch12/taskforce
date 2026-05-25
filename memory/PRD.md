@@ -129,10 +129,24 @@ Build a modern AI Agent Economy platform "Nova AI" with dark mode aesthetic, Lan
 - Theme-aware (light/dark), mobile responsive (single-column stack)
 - Nav link added between Academy and Marketplace
 
+### Publish Agent Manifests to Supabase (Phase 19 - May 25, 2026)
+- "Publish to Marketplace" button in Studio Code Pane sends Node Coding JSON manifest to Supabase `published_agents` table
+- CRUD API: POST /api/published-agents/publish, GET /api/published-agents, GET /api/published-agents/{id}, PUT /api/published-agents/{id}, DELETE /api/published-agents/{id}
+- Manifest includes agent name, description, full node/edge JSON, trust score, linter status
+
+### Creator Dashboard (Phase 19 - May 25, 2026)
+- Dashboard at /creator with analytics: total agents, total executions, avg trust score, total versions
+- Agent rows with expandable version history and manifest preview
+- Stats cards, refresh button, "Build Agent" link to Studio
+- Delete published agents from the dashboard
+
+### Agent Version Control (Phase 19 - May 25, 2026)
+- Version auto-increments when manifest is updated via PUT
+- version_history JSONB array tracks: version number, published_at, node_count, edge_count per version
+- Name-only updates do NOT bump version (verified)
+- Full history viewable in Creator Dashboard expandable rows
+
 ## Prioritized Backlog
-- **P1**: Save Node Coding manifest JSON to Supabase agents table
-- **P2**: Creator dashboard with advanced analytics
-- **P2**: Agent version control system
 - **P3**: Hosted execution runtime (Celery + Redis)
 - **P3**: Pro tier Stripe subscription
 - **P3**: Refactor server.py into modular routers (Auth, CSDROP, Stripe)
