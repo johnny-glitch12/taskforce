@@ -110,6 +110,15 @@ Build a modern AI Agent Economy platform "Nova AI" with dark mode aesthetic, Lan
 - GET /api/csdrop/sync-status — Poll sync status
 - GET /api/csdrop/health — Bot health check
 
+### Marketplace Economics UI (Phase 17 - May 25, 2026)
+- **Split Purchasing Panel**: Tabbed "Rent" (per output) vs "Acquire" (Full IP) interface on Agent Detail page
+- **Rent State**: Output volume slider (100-10,000), dynamic price calculation ($X per 100 outputs), price breakdown, "Rent Now" CTA with live price
+- **Acquire State**: One-time acquisition price (buyPrice * 6), 4 value props (Full IP Ownership, Edit Node Logic, Your Own Compute, Unlimited Outputs), gradient "Buy Outright" CTA
+- **Payment Badges**: Stripe + Crypto indicators with encryption/escrow labels
+- **Theme-Aware**: Entire Agent Detail page + Live Demo modal use CSS variables
+- **Marketplace Cards**: Added "Rent" badge on agent cards
+- **Mobile Responsive**: Purchase panel stacks cleanly, slider works on touch
+
 ## Prioritized Backlog
 - **P1**: Save Node Coding manifest JSON to Supabase agents table
 - **P2**: Creator dashboard with advanced analytics
