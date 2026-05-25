@@ -1731,6 +1731,55 @@ async def csdrop_cycle_timeout_screenshot():
     )
 
 
+@api_router.post("/csdrop/test-proxy")
+async def csdrop_test_proxy(user=Depends(get_csdrop_user)):
+    """Test the proxy connection by hitting httpbin.org/ip through it."""
+    import requests as req
+    config_path = CSDROP_BOT_DIR / "sovereign.py"
+    proxy_url = None
+    try:
+        content = config_path.read_text()
+        match = re.search(r'"PROXY"\s*:\s*"([^"]+)"', content)
+        if match:
+            proxy_url = match.group(1)
+    except Exception:
+        pass
+    if not proxy_url:
+        return {"status": "error", "message": "Could not read proxy config from sovereign.py."}
+    try:
+        resp = req.get(
+            "https://httpbin.org/ip",
+            proxies={"http": proxy_url, "https": proxy_url},
+            timeout=15,
+        )
+        if resp.status_code == 407:
+            return {"status": "error", "code": 407, "message": "Proxy Error: Authentication Required. Check credentials or whitelist server IP."}
+        if resp.status_code >= 400:
+            return {"status": "error", "code": resp.status_code, "message": f"Proxy returned HTTP {resp.status_code}."}
+        return {"status": "ok", "code": resp.status_code, "ip": resp.json().get("origin", "unknown")}
+    except req.exceptions.ProxyError as e:
+        err = str(e)
+        if "407" in err:
+            return {"status": "error", "code": 407, "message": "Proxy Error: Authentication Required. Check credentials or whitelist server IP."}
+        return {"status": "error", "code": 0, "message": f"Proxy connection failed: {err[:200]}"}
+    except Exception as e:
+        return {"status": "error", "code": 0, "message": f"Proxy test failed: {str(e)[:200]}"}
+
+
+@api_router.get("/csdrop/bot-signal")
+async def csdrop_bot_signal(user=Depends(get_csdrop_user)):
+    """Read the bot signal file to detect STRIKE_PAUSED and other signals."""
+    signal_file = CSDROP_BOT_DIR / "bot_signal.txt"
+    if not signal_file.exists():
+        return {"signal": None, "reason": None}
+    content = signal_file.read_text().strip()
+    parts = content.split(":", 1)
+    return {
+        "signal": parts[0] if parts else None,
+        "reason": parts[1] if len(parts) > 1 else None,
+    }
+
+
 @api_router.get("/csdrop/agents")
 async def csdrop_list_agents(user=Depends(get_csdrop_user)):
     agents = await db.user_agents.find(

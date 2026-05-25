@@ -26,6 +26,7 @@ STEALTH_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTM
 STEALTH_VIEWPORT = {"width": 1920, "height": 1080}
 DEBUG_SCREENSHOT_PATH = SCREENSHOT_DIR / "debug_render.jpg"
 CYCLE_TIMEOUT_PATH = SCREENSHOT_DIR / "cycle_timeout_debug.jpg"
+BOT_SIGNAL_FILE = BOT_DIR / "bot_signal.txt"
 
 
 ERROR_SCREENSHOT_PATH = SCREENSHOT_DIR / "error_last.jpg"
@@ -709,9 +710,14 @@ async def main():
         return
 
     cycle = 0
+    proxy_fail_count = 0
 
     while True:
         print(f"\n=== [ OMNI-VIPER CYCLE {cycle + 1} INITIALIZED ] ===", flush=True)
+
+        # Clear any stale signal on fresh cycle start
+        if proxy_fail_count == 0:
+            BOT_SIGNAL_FILE.unlink(missing_ok=True)
 
         # ─── Proxy Health Check ───
         proxy_url = CONFIG["PROXY"]
@@ -723,10 +729,49 @@ async def main():
                 proxies={"http": proxy_url, "https": proxy_url},
                 timeout=15,
             )
-            print(f"[DEBUG] Proxy alive. External IP: {test_resp.json().get('origin', 'unknown')}. Status: {test_resp.status_code}", flush=True)
+            if test_resp.status_code == 407:
+                proxy_fail_count += 1
+                print(f"[ERROR] Proxy returned 407 Proxy Authentication Required. (fail {proxy_fail_count}/3)", flush=True)
+                print("[ERROR] Check proxy credentials or whitelist this server's IP.", flush=True)
+                if proxy_fail_count >= 3:
+                    BOT_SIGNAL_FILE.write_text("STRIKE_PAUSED:proxy_auth_407")
+                    print("[SIGNAL] STRIKE_PAUSED — 3 consecutive proxy auth failures. Halting strikes.", flush=True)
+                await asyncio.sleep(60)
+                cycle += 1
+                continue
+            elif test_resp.status_code >= 400:
+                proxy_fail_count += 1
+                print(f"[ERROR] Proxy returned HTTP {test_resp.status_code}. (fail {proxy_fail_count}/3)", flush=True)
+                if proxy_fail_count >= 3:
+                    BOT_SIGNAL_FILE.write_text(f"STRIKE_PAUSED:proxy_http_{test_resp.status_code}")
+                    print("[SIGNAL] STRIKE_PAUSED — 3 consecutive proxy failures. Halting strikes.", flush=True)
+                await asyncio.sleep(60)
+                cycle += 1
+                continue
+            else:
+                print(f"[DEBUG] Proxy alive. External IP: {test_resp.json().get('origin', 'unknown')}. Status: {test_resp.status_code}", flush=True)
+                proxy_fail_count = 0  # Reset on success
+                BOT_SIGNAL_FILE.unlink(missing_ok=True)
+        except requests.exceptions.ProxyError as proxy_err:
+            proxy_fail_count += 1
+            err_str = str(proxy_err)
+            if "407" in err_str:
+                print(f"[ERROR] Proxy Authentication Required (407). (fail {proxy_fail_count}/3)", flush=True)
+                print("[ERROR] Check proxy credentials or whitelist this server's IP.", flush=True)
+            else:
+                print(f"[ERROR] Proxy connection failed: {proxy_err} (fail {proxy_fail_count}/3)", flush=True)
+            if proxy_fail_count >= 3:
+                BOT_SIGNAL_FILE.write_text("STRIKE_PAUSED:proxy_connection_failed")
+                print("[SIGNAL] STRIKE_PAUSED — 3 consecutive proxy failures. Halting strikes.", flush=True)
+            await asyncio.sleep(60)
+            cycle += 1
+            continue
         except Exception as proxy_err:
-            print(f"[ERROR] Proxy connection failed: {proxy_err}", flush=True)
-            print("[ERROR] Skipping this cycle — proxy is dead or unreachable.", flush=True)
+            proxy_fail_count += 1
+            print(f"[ERROR] Proxy connection failed: {proxy_err} (fail {proxy_fail_count}/3)", flush=True)
+            if proxy_fail_count >= 3:
+                BOT_SIGNAL_FILE.write_text("STRIKE_PAUSED:proxy_connection_failed")
+                print("[SIGNAL] STRIKE_PAUSED — 3 consecutive proxy failures. Halting strikes.", flush=True)
             await asyncio.sleep(60)
             cycle += 1
             continue

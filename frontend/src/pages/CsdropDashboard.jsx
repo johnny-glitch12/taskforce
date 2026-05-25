@@ -30,14 +30,14 @@ const T = {
 };
 
 /* ─── Stat Card ─── */
-function Stat({ label, value, icon: Icon, accent = false }) {
+function Stat({ label, value, icon: Icon, accent = false, warning = false }) {
   return (
     <div className="cs-card p-4 sm:p-5" data-testid={`cs-stat-${label.toLowerCase().replace(/\s/g, "-")}`}>
       <div className="flex items-center justify-between mb-2.5">
         <span className="text-[11px] tracking-widest uppercase" style={{ color: T.textDim }}>{label}</span>
-        <Icon size={14} style={{ color: accent ? T.accent : T.indigo }} />
+        <Icon size={14} style={{ color: warning ? "#fbbf24" : accent ? T.accent : T.indigo }} />
       </div>
-      <p className="text-2xl font-bold" style={{ color: T.text, fontFamily: "'Outfit', sans-serif" }}>
+      <p className="text-2xl font-bold" style={{ color: warning ? "#fbbf24" : T.text, fontFamily: "'Outfit', sans-serif" }}>
         {value}
       </p>
     </div>
@@ -290,11 +290,13 @@ function LiveFeed({ botRunning }) {
 /* SyncSessionModal extracted to ./SyncSessionModal.jsx */
 
 /* ─── Bot Control Panel ─── */
-function BotPanel({ headers, botRunning, setBotRunning, envReady, onOpenSync }) {
+function BotPanel({ headers, botRunning, setBotRunning, envReady, onOpenSync, botSignal }) {
   const [promo, setPromo] = useState("https://csdrop.com/r/ABBAS");
   const [batch, setBatch] = useState("10");
   const [logs, setLogs] = useState([]);
   const [launching, setLaunching] = useState(false);
+  const [proxyTesting, setProxyTesting] = useState(false);
+  const [proxyResult, setProxyResult] = useState(null); // {status, ip, message, code}
   const logsRef = useRef(null);
   const pollRef = useRef(null);
 
@@ -354,13 +356,39 @@ function BotPanel({ headers, botRunning, setBotRunning, envReady, onOpenSync }) 
     } catch { toast.error("Stop failed."); }
   };
 
+  const testProxy = async () => {
+    setProxyTesting(true);
+    setProxyResult(null);
+    try {
+      const res = await fetch(`${API}/api/csdrop/test-proxy`, { method: "POST", headers });
+      const data = await res.json();
+      setProxyResult(data);
+      if (data.status === "ok") {
+        toast.success(`Proxy OK — IP: ${data.ip}`);
+      } else {
+        toast.error(data.message);
+      }
+    } catch {
+      setProxyResult({ status: "error", message: "Network error testing proxy." });
+      toast.error("Network error testing proxy.");
+    }
+    setProxyTesting(false);
+  };
+
   return (
     <div className="cs-card overflow-hidden">
       <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.surfaceBorder}` }}>
         <div className="flex items-center gap-2.5">
           <Bot size={15} style={{ color: T.accent }} />
           <span className="text-[13px] font-medium" style={{ color: T.text }}>Sovereign Bot</span>
-          <div className={`w-2 h-2 rounded-full ${botRunning ? "bg-emerald-400 animate-pulse" : ""}`} style={{ background: botRunning ? undefined : T.textDim }} />
+          {botSignal?.signal === "STRIKE_PAUSED" ? (
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+              <span className="text-[9px] font-mono text-yellow-400">PAUSED</span>
+            </div>
+          ) : (
+            <div className={`w-2 h-2 rounded-full ${botRunning ? "bg-emerald-400 animate-pulse" : ""}`} style={{ background: botRunning ? undefined : T.textDim }} />
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button onClick={onOpenSync} data-testid="cs-sync-session-btn" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all" style={{ background: "rgba(99,102,241,0.08)", color: T.indigo, border: "1px solid rgba(99,102,241,0.2)" }}>
@@ -392,6 +420,35 @@ function BotPanel({ headers, botRunning, setBotRunning, envReady, onOpenSync }) 
             <label className="text-[11px] mb-1.5 block" style={{ color: T.textDim }}>Batch Size</label>
             <input type="number" value={batch} onChange={(e) => setBatch(e.target.value)} data-testid="cs-batch-input" className="w-full rounded-lg px-3 py-2.5 text-[12px] font-mono focus:outline-none" style={{ background: "rgba(6, 6, 26, 0.6)", border: `1px solid ${T.surfaceBorder}`, color: T.text }} />
           </div>
+        </div>
+
+        {/* Proxy Test */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={testProxy}
+            disabled={proxyTesting}
+            data-testid="cs-test-proxy-btn"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] font-medium transition-all disabled:opacity-50"
+            style={{ background: "rgba(99,102,241,0.08)", color: T.indigo, border: "1px solid rgba(99,102,241,0.2)" }}
+          >
+            {proxyTesting ? <Loader2 size={11} className="animate-spin" /> : <Globe size={11} />}
+            Test Proxy
+          </button>
+          {proxyResult && (
+            <div className="flex items-center gap-1.5 text-[11px] font-mono">
+              {proxyResult.status === "ok" ? (
+                <>
+                  <CheckCircle2 size={12} style={{ color: T.accent }} />
+                  <span style={{ color: T.accent }}>OK — {proxyResult.ip}</span>
+                </>
+              ) : (
+                <>
+                  <XCircle size={12} className="text-red-400" />
+                  <span className="text-red-400">{proxyResult.code === 407 ? "407 Auth Required" : "Failed"}</span>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Bot Logs — Real-Time Terminal */}
@@ -450,7 +507,7 @@ function BotPanel({ headers, botRunning, setBotRunning, envReady, onOpenSync }) 
                   color = "#818cf8";
                 }
                 // Warning — amber
-                else if (lower.includes("warning") || lower.includes("[!]") || lower.includes("refuel")) {
+                else if (lower.includes("warning") || lower.includes("[!]") || lower.includes("refuel") || lower.includes("paused") || lower.includes("[signal]") || lower.includes("407")) {
                   color = "#fbbf24"; bg = "rgba(251,191,36,0.04)";
                 }
                 // System / Screenshot — dim cyan
@@ -530,6 +587,7 @@ RESULT = {
   const [repairing, setRepairing] = useState(false);
   const [repairLogs, setRepairLogs] = useState([]);
   const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [botSignal, setBotSignal] = useState(null); // {signal, reason}
 
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
@@ -593,12 +651,14 @@ RESULT = {
 
   const fetchData = useCallback(async () => {
     try {
-      const [s, e] = await Promise.all([
+      const [s, e, sig] = await Promise.all([
         fetch(`${API}/api/csdrop/dashboard`, { headers }).then((r) => r.ok ? r.json() : null),
         fetch(`${API}/api/csdrop/executions`, { headers }).then((r) => r.ok ? r.json() : []),
+        fetch(`${API}/api/csdrop/bot-signal`, { headers }).then((r) => r.ok ? r.json() : null),
       ]);
       if (s) { setStats(s); setBotRunning(s.bot_running); }
       setExecutions(Array.isArray(e) ? e : []);
+      if (sig) setBotSignal(sig.signal ? sig : null);
     } catch {}
     setLoading(false);
   }, [token]);
@@ -663,10 +723,35 @@ RESULT = {
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-8">
           <Stat label="Agents" value={stats?.agent_count || 0} icon={Code} accent />
           <Stat label="Total Runs" value={stats?.total_runs || 0} icon={Zap} />
-          <Stat label="Bot Status" value={botRunning ? "LIVE" : "OFF"} icon={Activity} accent={botRunning} />
+          <Stat
+            label="Bot Status"
+            value={botSignal?.signal === "STRIKE_PAUSED" ? "PAUSED" : botRunning ? "LIVE" : "OFF"}
+            icon={Activity}
+            accent={botRunning && !botSignal?.signal}
+            warning={botSignal?.signal === "STRIKE_PAUSED"}
+          />
           <Stat label="Logs" value={stats?.bot_log_count || 0} icon={Terminal} />
           <Stat label="Env Health" value={health?.ready ? "OK" : "ISSUE"} icon={Heart} accent={health?.ready} />
         </div>
+
+        {/* Proxy Error Alert */}
+        {botSignal?.signal === "STRIKE_PAUSED" && (
+          <div
+            data-testid="cs-proxy-alert"
+            className="flex items-start gap-3 p-4 rounded-xl mb-4"
+            style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)" }}
+          >
+            <AlertTriangle size={16} className="text-red-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-[13px] font-semibold text-red-400">Strike Paused — Proxy Error</p>
+              <p className="text-[11px] mt-0.5" style={{ color: T.textMuted }}>
+                {botSignal.reason?.includes("407")
+                  ? "Proxy Error: Authentication Required (407). Check credentials or whitelist this server's IP."
+                  : `Proxy connection failed after 3 attempts. Reason: ${botSignal.reason || "unknown"}`}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* System Health */}
         <SystemHealth health={health} onRepair={handleRepair} repairLogs={repairLogs} repairing={repairing} />
@@ -753,7 +838,7 @@ RESULT = {
 
         {/* Sovereign Bot Tab */}
         {activeTab === "bot" && (
-          <BotPanel headers={headers} botRunning={botRunning} setBotRunning={setBotRunning} envReady={health?.ready || false} onOpenSync={() => setSyncModalOpen(true)} />
+          <BotPanel headers={headers} botRunning={botRunning} setBotRunning={setBotRunning} envReady={health?.ready || false} onOpenSync={() => setSyncModalOpen(true)} botSignal={botSignal} />
         )}
 
         {/* Session Sync Modal */}
