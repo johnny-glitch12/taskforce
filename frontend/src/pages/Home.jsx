@@ -284,39 +284,23 @@ export default function Home() {
             </motion.div>
           )}
 
-          {/* Video Placeholder */}
+          {/* Hero Video — 30-Second High-Tempo Loop */}
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.65 }}
             className="mt-14 mx-auto max-w-3xl rounded-sm overflow-hidden"
-            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', boxShadow: '0 0 30px rgba(34,211,238,0.06)' }}
-            data-testid="hero-video-placeholder"
+            style={{ border: '1px solid var(--border)', boxShadow: '0 0 40px rgba(34,211,238,0.08)' }}
+            data-testid="hero-video"
           >
-            <div className="aspect-video flex items-center justify-center relative">
-              {/* Animated pulse rings — larger and more visible */}
-              <motion.div
-                className="absolute w-28 h-28 rounded-sm border border-cyan-400/25"
-                animate={{ scale: [1, 2.2], opacity: [0.5, 0] }}
-                transition={{ duration: 2.5, repeat: Infinity, ease: "easeOut" }}
-              />
-              <motion.div
-                className="absolute w-28 h-28 rounded-sm border border-cyan-400/25"
-                animate={{ scale: [1, 2.2], opacity: [0.5, 0] }}
-                transition={{ duration: 2.5, repeat: Infinity, ease: "easeOut", delay: 0.8 }}
-              />
-              <motion.div
-                className="absolute w-28 h-28 rounded-sm border border-cyan-400/15"
-                animate={{ scale: [1, 2.8], opacity: [0.3, 0] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "easeOut", delay: 1.5 }}
-              />
-              <div className="text-center z-10">
-                <div className="w-16 h-16 rounded-sm flex items-center justify-center mx-auto mb-3" style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.15)' }}>
-                  <Play size={28} className="text-cyan-400 ml-1" fill="currentColor" fillOpacity={0.2} />
-                </div>
-                <p className="text-[12px] font-mono t-text-mute tracking-wide uppercase">30-Second High-Tempo Loop</p>
-              </div>
-            </div>
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full aspect-video object-cover"
+              src="https://customer-assets.emergentagent.com/job_dark-mode-nova/artifacts/rzrr061t_c3dde6e0-599a-4612-9294-65ac300e7471_720p_mp4_30_16-9%20%281%29.mp4"
+            />
           </motion.div>
         </div>
       </motion.section>

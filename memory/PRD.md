@@ -99,6 +99,19 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 - Admin: admin@nova.ai / admin123
 - CSDROP: admin@csdrop.com / nova_csdrop_2026
 
+### Overwatch Admin Dashboard (Phase 22 - May 25, 2026)
+- Master analytics command center at /overwatch (admin-only)
+- 4 KPI cards: Daily Net Income (cyan), Active Subscriptions, Exchange Volume (20% take rate), Compute Burn Rate (red/green profit margin indicator)
+- Revenue Split stacked bar chart (Subscriptions vs Exchange, 30 days via Recharts)
+- Top Categories donut chart (Web3 Trackers, Lead Gen, Customer Support, Data Analysis, Code Review)
+- Live Execution Feed: terminal-style table with Top 5 grossing agents, execution counts, gross yield, red KILL AGENT override buttons
+- Security integration: shows audit count and blocked count from real Supabase security_events
+- NOTE: KPI data is MOCKED (demo data). Live feed agent data is MOCKED. Charts use generated data.
+
+### Hero Video (Phase 22 - May 25, 2026)
+- Replaced video placeholder with actual auto-playing looping video in hero section
+- Video URL: customer-assets CDN (uploaded by user)
+
 ## Prioritized Backlog
 - **P3**: Hosted execution runtime (Celery + Redis)
 - **P3**: Pro tier Stripe subscription

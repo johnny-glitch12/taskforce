@@ -16,6 +16,7 @@ import PaymentSuccess from "@/pages/PaymentSuccess";
 import Dashboard from "@/pages/Dashboard";
 import CsdropDashboard from "@/pages/CsdropDashboard";
 import SecurityDashboard from "@/pages/SecurityDashboard";
+import OverwatchDashboard from "@/pages/OverwatchDashboard";
 import Pricing from "@/pages/Pricing";
 import CreatorDashboard from "@/pages/CreatorDashboard";
 
@@ -175,6 +176,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <SecurityDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/overwatch"
+                  element={
+                    <ProtectedRoute>
+                      <OverwatchDashboard />
                     </ProtectedRoute>
                   }
                 />
