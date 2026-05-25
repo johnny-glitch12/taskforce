@@ -87,6 +87,9 @@
   background-image: radial-gradient(circle at center, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
   background-size: 24px 24px;
 }
+[data-theme="light"] .canvas-grid {
+  background-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.07) 1px, transparent 1px);
+}
 
 /* Noise texture overlay */
 .noise-overlay::before {

@@ -27,7 +27,9 @@ Build a modern AI Agent Economy platform "Nova AI" with dark mode aesthetic, Lan
 - CSS variables for all theme tokens in App.css (--bg-primary, --text-primary, --border, etc.)
 - Theme utility classes: t-bg, t-text, t-text-sub, t-text-mute, t-card, t-input, t-border, t-orb
 - Toggle button in Navbar (Sun/Moon icons) with localStorage persistence
-- Applied across: Home, Academy, Marketplace, Login, Dashboard, SecurityDashboard, Footer, Navbar
+- Applied across ALL pages: Home, Academy, Marketplace, Login, Dashboard, SecurityDashboard, **Studio (Vibe Chat, Node Canvas, Code Pane, Workflow Selector)**, Footer, Navbar
+- Mobile responsive: Theme toggle accessible on mobile next to hamburger menu
+- Terminal and code editors intentionally stay dark (IDE convention)
 
 ### Security Audit Dashboard (Phase 16 - May 25, 2026)
 - `security_events` Supabase table logs all firewall verdicts
