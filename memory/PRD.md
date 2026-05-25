@@ -130,6 +130,15 @@ Build a modern AI Agent Economy platform "Nova AI" with dark mode aesthetic, Lan
 5. **Frontend ChatPane**: Wired Submit to run-agent API. Shows "Agent Thinking..." badge, live Agent Terminal, color-coded logs, auto-renders response on completion.
 6. **Supabase Client** (`/app/frontend/src/lib/supabase.js`): Singleton client for Realtime and direct reads.
 
+### Phase 15 - Security Hardening (Complete - May 25, 2026)
+1. **Semantic Firewall** (`/app/backend/lib/firewall.py`): Gemini Flash audits every user prompt before agent execution. Verdicts: SAFE/SUSPICIOUS/UNSAFE. UNSAFE prompts return HTTP 403. Fail-open on LLM errors.
+2. **Rate Limiting** (`/app/backend/lib/rate_limiter.py`): 5 requests/minute per user with in-memory sliding window. Returns HTTP 429 with retry_after seconds.
+3. **Concurrent Execution Cap**: 1 active agent per user. In-memory lock set BEFORE firewall check to prevent race conditions. Supabase fallback for crash recovery. Returns HTTP 409.
+4. **SSRF Protection** (`/app/backend/lib/executor_security.py`): `validate_url()` and `secure_fetch()` for future tool execution. Blocks: cloud metadata IPs (169.254.169.254), all private ranges (10/172.16/192.168/127), non-http schemes, dangerous ports. DNS resolved once to prevent rebinding.
+5. **Gate Order**: Rate Limit → Concurrent Cap (+ reserve slot) → Semantic Firewall → Execute. Rate limit checked first (cheapest), firewall last (LLM call).
+6. **Frontend Integration**: Chat shows specific error messages for 403 (firewall), 429 (rate limit), 409 (concurrent). Terminal logs show cyan `[FIREWALL]` entries.
+7. **Test Suite**: `/app/backend/tests/test_security_layers.py` — 16 tests covering all security layers + regressions (pytest).
+
 ## Key API Endpoints (Updated)
 - POST /api/run-agent — Start agent execution (returns logId)
 - GET /api/agent-logs/{logId} — Poll execution status + terminal history

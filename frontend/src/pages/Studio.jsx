@@ -146,6 +146,8 @@ function ChatPane({ messages, onSend, visible, agentStatus, terminalHistory }) {
                 ? "#f87171"
                 : lower.includes("processing") || lower.includes("reasoning")
                 ? "#a78bfa"
+                : lower.includes("firewall")
+                ? "#22d3ee"
                 : lower.includes("init") || lower.includes("queued")
                 ? "#60a5fa"
                 : "#71717a";
@@ -705,8 +707,14 @@ export default function Studio() {
       const data = await res.json();
       if (data.success && data.logId) {
         setActiveLogId(data.logId);
+      } else if (res.status === 403) {
+        setMessages((prev) => [...prev, { role: "assistant", content: `Blocked by security firewall. Your prompt was flagged as potentially unsafe. Try rephrasing.` }]);
+      } else if (res.status === 429) {
+        setMessages((prev) => [...prev, { role: "assistant", content: `Rate limit hit. ${data.detail || "Slow down and try again in a minute."}` }]);
+      } else if (res.status === 409) {
+        setMessages((prev) => [...prev, { role: "assistant", content: `An agent is already running. Wait for it to finish before sending another request.` }]);
       } else {
-        setMessages((prev) => [...prev, { role: "assistant", content: `Failed to start agent: ${data.message || "Unknown error"}` }]);
+        setMessages((prev) => [...prev, { role: "assistant", content: `Failed to start agent: ${data.detail || data.message || "Unknown error"}` }]);
       }
     } catch {
       setMessages((prev) => [...prev, { role: "assistant", content: "Network error. Could not reach the agent API." }]);
