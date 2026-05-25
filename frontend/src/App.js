@@ -36,11 +36,11 @@ function ProtectedRoute({ children }) {
 
 function App() {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(() => localStorage.getItem("nova_token"));
+  const [token, setToken] = useState(() => localStorage.getItem("taskforce_token"));
   const [loading, setLoading] = useState(true);
 
   const validateToken = useCallback(async () => {
-    const stored = localStorage.getItem("nova_token");
+    const stored = localStorage.getItem("taskforce_token");
     if (!stored) { setLoading(false); return; }
     try {
       const res = await fetch(`${API}/api/auth/me`, {
@@ -51,12 +51,12 @@ function App() {
         setUser(data);
         setToken(stored);
       } else {
-        localStorage.removeItem("nova_token");
+        localStorage.removeItem("taskforce_token");
         setToken(null);
         setUser(null);
       }
     } catch {
-      localStorage.removeItem("nova_token");
+      localStorage.removeItem("taskforce_token");
       setToken(null);
       setUser(null);
     }
@@ -76,7 +76,7 @@ function App() {
       throw new Error(err.detail || "Login failed");
     }
     const data = await res.json();
-    localStorage.setItem("nova_token", data.token);
+    localStorage.setItem("taskforce_token", data.token);
     setToken(data.token);
     setUser(data.user);
     return data.user;
@@ -93,14 +93,14 @@ function App() {
       throw new Error(err.detail || "Registration failed");
     }
     const data = await res.json();
-    localStorage.setItem("nova_token", data.token);
+    localStorage.setItem("taskforce_token", data.token);
     setToken(data.token);
     setUser(data.user);
     return data.user;
   };
 
   const logout = () => {
-    localStorage.removeItem("nova_token");
+    localStorage.removeItem("taskforce_token");
     setToken(null);
     setUser(null);
   };

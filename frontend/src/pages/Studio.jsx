@@ -717,7 +717,7 @@ export default function Studio() {
         headers,
         body: JSON.stringify({
           user_message: text,
-          system_prompt: "You are Nova AI, an expert AI agent architect. Help the user design, build, and configure AI agents. Be concise but thorough. When describing agent configurations, use structured output with clear sections.",
+          system_prompt: "You are Task Force AI, an expert AI agent architect. Help the user design, build, and configure AI agents. Be concise but thorough. When describing agent configurations, use structured output with clear sections.",
         }),
       });
       const data = await res.json();

@@ -734,7 +734,7 @@ async def seed_database():
         await db.users.insert_one({
             "id": admin_id, "email": "admin@nova.ai",
             "password_hash": hash_password("admin123"),
-            "name": "Nova Admin", "role": "admin", "created_at": now,
+            "name": "Task Force Admin", "role": "admin", "created_at": now,
         })
         logger.info("Admin user seeded: admin@nova.ai / admin123")
 
@@ -2018,7 +2018,7 @@ async def startup():
         await db.users.insert_one({
             "id": admin_id, "email": "admin@nova.ai",
             "password_hash": hash_password("admin123"),
-            "name": "Nova Admin", "role": "admin", "created_at": now,
+            "name": "Task Force Admin", "role": "admin", "created_at": now,
         })
         logger.info("Admin user created")
 

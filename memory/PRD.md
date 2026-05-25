@@ -1,157 +1,105 @@
-# Nova AI - Product Requirements Document
+# Task Force AI - Product Requirements Document
 
 ## Original Problem Statement
-Build a modern AI Agent Economy platform "Nova AI" with dark mode aesthetic, Landing Page, Marketplace, Academy, "Nova Studio" IDE (Vibe/Node modes), User Dashboard with sandboxed agent execution, and Private Client Portals. Full FastAPI/MongoDB backend with JWT auth, Stripe payments, RestrictedPython sandboxing, and client isolation.
+Build "Task Force AI" — a tactical, enterprise-grade AI agent execution economy platform. Features: Landing Page, The Exchange (marketplace), Task Force Academy, "The Armory" split-pane IDE with "Command Prompt" (LLM chat) and "Node Coding" (visual graph). Full-stack FastAPI/React with Supabase, Stripe, Gemini LLM integration.
 
 ## Architecture
-- **Frontend**: React SPA, React Router, Tailwind CSS, Shadcn UI, Context API, ThemeProvider (light/dark)
+- **Frontend**: React SPA, React Router, Tailwind CSS, Framer Motion, Shadcn UI, ThemeProvider (light/dark)
 - **Backend**: FastAPI, Passlib/Bcrypt, python-jose (JWT), Motor (async MongoDB), APScheduler, RestrictedPython
-- **Database**: MongoDB (users, waitlist, agents, creators, reviews, workflows, password_resets, payment_transactions, user_agents, agent_executions, csdrop_executions) + Supabase (agent_logs, security_events)
-- **Payments**: Stripe via emergentintegrations (test mode)
-- **Sandbox**: RestrictedPython v8 + signal timeout + import whitelist
+- **Database**: MongoDB (users, waitlist, agents, creators, workflows, etc.) + Supabase (agent_logs, security_events, published_agents)
+- **Payments**: Stripe via emergentintegrations (test mode, no crypto integration)
 - **LLM**: Gemini 2.5 Flash via Emergent LLM Key
+- **Design System**: Tactical Cyan (#22d3ee) + Terminal Green (#10b981), JetBrains Mono/Rajdhani/Inter fonts, hard-edge borders (rounded-sm), deep matte black backgrounds
+
+## Global Glossary
+- Company: Task Force AI
+- IDE: The Armory (was Nova Studio)
+- Chat Builder: Command Prompt (was Vibe Coder)
+- Marketplace: The Exchange
+- Education: Task Force Academy
+- Entity: TASK FORCE AI DEVELOPMENT SERVICES L.L.C.
 
 ## All Implemented Features
 
-### Core Platform
-- Home page with waitlist CTA + social proof counter
-- Marketplace with search, category pills, trending agents, faceted search API, creator spotlight cards
-- Agent Detail pages with live demo + Stripe Rent/Buy checkout
-- Creator Profile pages
-- Academy with interactive course cards (4 courses), video placeholders, code playground
-- Premium dark-mode purple aesthetic with glassmorphism
+### Global Rebrand (Phase 20 - May 25, 2026)
+- Full A-Z text replacement: Nova AI → Task Force AI across all components
+- Tactical design system: Cyan/green accents, monospace typography, hard-edge borders
+- Hero: "The AI Execution Economy." with scroll-triggered framer-motion animations
+- Stats bar with animated counters, Features grid (6 cards), "Three Steps to Deployment", bottom CTA
+- Scan line animation, pulse rings, parallax hero scroll
+- Footer: "TASK FORCE AI DEVELOPMENT SERVICES L.L.C." with Terms of Service + Enterprise Contact
+- Navbar: TASKFORCE logo, uppercase mono nav links, ENLIST CTA
 
-### Global Theme System (Phase 16 - May 25, 2026)
-- Light/Dark mode toggle with auto-detect from system preference
-- ThemeProvider context in `/app/frontend/src/lib/theme.js`
-- CSS variables for all theme tokens in App.css (--bg-primary, --text-primary, --border, etc.)
-- Theme utility classes: t-bg, t-text, t-text-sub, t-text-mute, t-card, t-input, t-border, t-orb
-- Toggle button in Navbar (Sun/Moon icons) with localStorage persistence
-- Applied across ALL pages: Home, Academy, Marketplace, Login, Dashboard, SecurityDashboard, **Studio (Vibe Chat, Node Canvas, Code Pane, Workflow Selector)**, Footer, Navbar
-- Mobile responsive: Theme toggle accessible on mobile next to hamburger menu
-- Terminal and code editors intentionally stay dark (IDE convention)
+### Theme System
+- Light/Dark mode with system auto-detect + localStorage persistence
+- CSS variables for all tokens, theme-toggle (Sun/Moon) in Navbar
+- Applied to all pages
 
-### Security Audit Dashboard (Phase 16 - May 25, 2026)
-- `security_events` Supabase table logs all firewall verdicts
-- `log_security_event()` called from agent route after every firewall audit
-- `GET /api/security/stats` - Aggregated counts (total, safe, suspicious, unsafe, blocked) - Admin only
-- `GET /api/security/events` - Event list with verdict filter, 200 max limit - Admin only
-- SecurityDashboard UI at `/security` route: stat boxes, filter pills, expandable event rows
-- Admin-only nav link in Navbar
+### Pricing Page - Subscription Matrix
+- 4 tiers: RECRUIT ($0), CADET ($19), OPERATOR ($99), COMMAND (Custom)
+- OPERATOR highlighted with cyan gradient glow + "MOST POPULAR" badge
+- Monthly/Annual toggle with 20% discount
+- Trust bar: 256-BIT ENCRYPTION, SOC 2, 99.9% UPTIME SLA
 
-### Authentication & Auth
-- JWT authentication (login, register, forgot-password, reset-password)
-- Role-based access: admin, user, client
-- Client-specific auth guards (client_id isolation)
-- Auto-redirect by role (csdrop -> /dashboard/csdrop)
+### The Exchange (Marketplace) Economics
+- Split Purchase Panel: Rent (output slider 100-10000, dynamic pricing) vs Acquire (IP acquisition)
+- Payment badges: Stripe, Crypto, 80/20 Revenue Split
+- Creator spotlight, category pills, trending agents
 
-### Nova Studio IDE
-- Draggable n8n-style node canvas with pan/zoom (0.3x-2.5x)
-- 8 node types: trigger, llm, condition, action, http_request, webhook, database, transform
-- Vibe Mode chat connected to Gemini 2.5 Flash via Emergent LLM key
-- Live Agent Terminal with Supabase Realtime streaming
-- Code pane with JSON output + Compliance Linter (trust score 0-100)
-- Workflow CRUD with auto-save (2s debounce)
-- Full mobile optimization (3-tab toggle on iPhone)
+### Publish Agent Manifests to Supabase
+- "Publish to Marketplace" button in Armory Code Pane
+- CRUD API: POST/GET/PUT/DELETE /api/published-agents/*
+- Manifest stored as JSONB in Supabase
 
-### User Dashboard
-- Agent deployment with code editor, env vars, trigger selection
-- 3 starter templates (Echo Bot, Data Cruncher, JSON Transformer)
-- Manual execution with JSON input + result display
-- Webhook triggers (unique URL per agent)
-- Execution history with logs
-- Tier system: Free (3 agents), Pro (unlimited)
+### Creator Dashboard
+- Analytics: total agents, executions, trust score, versions
+- Agent rows with expandable version history
+- Delete and manage published agents
 
-### Stripe Payments
-- Checkout session creation for Agent Rent/Buy
-- Payment status polling + webhook handling
-- Payment Success page
+### Agent Version Control
+- Auto-incrementing versions on manifest updates
+- version_history JSONB tracks each publish
+- Full history viewable in Creator Dashboard
 
-### CSDROP Private Client Portal (Phase 6-13)
-- Client Authentication with client_id isolation
-- Custom Branding (Deep Indigo + Cyan theme)
-- Sovereign Bot Controls (Launch/Stop)
-- Manual Login with 2FA support
-- Live Satellite Feed with auto-refresh
-- QR Code Sync for Discord headless login
-- Cycle Timeout Diagnostics with Proxy Health Testing
-- Bot Strike Hardening (5 bug fixes)
+### Authentication
+- JWT auth (login, register, forgot/reset password)
+- Role-based: admin, user, client
+- Login redirects to /armory
 
-### Agent Execution Engine (Phase 14)
-- Supabase-backed agent_logs with Realtime streaming
-- Gemini 2.5 Flash LLM via Emergent LLM Key
-- useAgentTerminal hook for live terminal updates
-- Background task worker with timestamped history
+### The Armory (IDE)
+- Draggable node canvas with pan/zoom
+- 8 node types, JSON manifest output
+- Command Prompt chat connected to Gemini
+- Live Agent Terminal via Supabase Realtime
+- Compliance Linter (trust score 0-100)
+- Workflow CRUD with auto-save
 
-### Security Hardening (Phase 15)
-- Semantic Firewall (Gemini Flash prompt auditing)
-- Rate Limiting (5 req/min per user)
-- Concurrent Execution Cap (1 active per user)
-- SSRF Protection (blocks private IPs, dangerous ports, DNS rebinding)
-- Gate Order: Rate Limit -> Concurrent Cap -> Firewall -> Execute
+### Security
+- Semantic Firewall (Gemini prompt auditing)
+- Rate Limiting, Concurrent Cap, SSRF Protection
+- Security Audit Dashboard at /security (admin only)
 
-## Testing Status
-- Iteration 19: 100% backend (7/7 security), 100% frontend (all theme/UI flows verified)
-- Iteration 15-18: 100% on all previous features
-- Test files: /app/test_reports/iteration_1.json through iteration_19.json
+### CSDROP Private Portal
+- Client auth with isolation, sovereign bot controls
+- Manual login + 2FA, QR sync, cycle diagnostics
+
+## Key Routes
+- / — Home (landing)
+- /academy — Task Force Academy
+- /pricing — Subscription Matrix
+- /exchange — The Exchange (marketplace)
+- /agent/:id — Agent Detail + Purchase Panel
+- /armory — The Armory (IDE)
+- /login — Auth
+- /dashboard — User Dashboard
+- /creator — Creator Dashboard
+- /security — Security Audit (admin)
 
 ## Credentials
 - Admin: admin@nova.ai / admin123
 - CSDROP: admin@csdrop.com / nova_csdrop_2026
-- Stripe: sk_test_emergent (test mode)
-
-## Key API Endpoints
-- POST /api/run-agent — Start agent execution (returns logId)
-- GET /api/agent-logs/{logId} — Poll execution status + terminal history
-- GET /api/security/stats — Aggregated security stats (admin only)
-- GET /api/security/events — Security event list with filters (admin only)
-- POST /api/csdrop/manual-login — Start manual Discord login
-- POST /api/csdrop/submit-2fa — Submit 2FA code
-- GET /api/csdrop/sync-status — Poll sync status
-- GET /api/csdrop/health — Bot health check
-
-### Marketplace Economics UI (Phase 17 - May 25, 2026)
-- **Split Purchasing Panel**: Tabbed "Rent" (per output) vs "Acquire" (Full IP) interface on Agent Detail page
-- **Rent State**: Output volume slider (100-10,000), dynamic price calculation ($X per 100 outputs), price breakdown, "Rent Now" CTA with live price
-- **Acquire State**: One-time acquisition price (buyPrice * 6), 4 value props (Full IP Ownership, Edit Node Logic, Your Own Compute, Unlimited Outputs), gradient "Buy Outright" CTA
-- **Payment Badges**: Stripe + Crypto indicators with encryption/escrow labels
-- **Theme-Aware**: Entire Agent Detail page + Live Demo modal use CSS variables
-- **Marketplace Cards**: Added "Rent" badge on agent cards
-- **Mobile Responsive**: Purchase panel stacks cleanly, slider works on touch
-
-### Pricing Page - Mission Tiers (Phase 18 - May 25, 2026)
-- 4-tier pricing cards: Recruit ($0), Cadet ($19), Operator ($99), Command (Custom)
-- Monthly/Annual toggle with 20% discount calculation and "Save 20%" badge
-- Operator card highlighted as "MOST POPULAR" with animated purple gradient border glow
-- Each tier: icon, tagline, price, CTA button, 4 features with checkmarks
-- Annual mode shows discounted prices with strikethrough original yearly totals
-- Trust bar: 256-bit SSL, SOC 2 Compliant, 99.9% Uptime SLA
-- Theme-aware (light/dark), mobile responsive (single-column stack)
-- Nav link added between Academy and Marketplace
-
-### Publish Agent Manifests to Supabase (Phase 19 - May 25, 2026)
-- "Publish to Marketplace" button in Studio Code Pane sends Node Coding JSON manifest to Supabase `published_agents` table
-- CRUD API: POST /api/published-agents/publish, GET /api/published-agents, GET /api/published-agents/{id}, PUT /api/published-agents/{id}, DELETE /api/published-agents/{id}
-- Manifest includes agent name, description, full node/edge JSON, trust score, linter status
-
-### Creator Dashboard (Phase 19 - May 25, 2026)
-- Dashboard at /creator with analytics: total agents, total executions, avg trust score, total versions
-- Agent rows with expandable version history and manifest preview
-- Stats cards, refresh button, "Build Agent" link to Studio
-- Delete published agents from the dashboard
-
-### Agent Version Control (Phase 19 - May 25, 2026)
-- Version auto-increments when manifest is updated via PUT
-- version_history JSONB array tracks: version number, published_at, node_count, edge_count per version
-- Name-only updates do NOT bump version (verified)
-- Full history viewable in Creator Dashboard expandable rows
 
 ## Prioritized Backlog
 - **P3**: Hosted execution runtime (Celery + Redis)
 - **P3**: Pro tier Stripe subscription
 - **P3**: Refactor server.py into modular routers (Auth, CSDROP, Stripe)
-
-## Known Mocks
-- Node Coding JSON output saving (currently only displays in UI, needs to save to DB)
-- Stripe: test/sandbox mode
-- Pro upgrade button: UI only
