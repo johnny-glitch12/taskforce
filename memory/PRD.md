@@ -122,7 +122,17 @@ Build a modern AI Agent Economy platform "Nova AI" with dark mode aesthetic, Lan
 - Stripe: test/sandbox mode
 - Pro upgrade button: UI only
 
-## Key API Endpoints
+### Phase 14 - Vibe Chat → Real Agent Execution (nidoai Architecture) (Complete - May 25, 2026)
+1. **Agent Execution Engine** (`/app/backend/routes/agent.py`): Created `POST /api/run-agent` endpoint matching nidoai's `route.ts` pattern — validates input, creates `agent_logs` document, fires background worker, returns `{success, logId}`
+2. **Agent Worker** (replaces nidoai's Inngest `agentWorker.ts`): Gemini orchestration via Emergent LLM key (`gemini-2.5-flash`), runs as FastAPI BackgroundTask, writes timestamped entries to `terminal_history` array, status transitions: queued → processing → success/failed
+3. **Polling Endpoint** (`GET /api/agent-logs/{logId}`): Replaces nidoai's Supabase Realtime `useAgentTerminal` hook with 1.5s polling — returns full execution log including status, terminal_history, output_result
+4. **Frontend ChatPane Rewrite**: Wired Submit button to POST /api/run-agent, added "Agent Thinking..." badge, "Agent executing..." bubble, disabled input during processing, auto-renders response on completion
+5. **Agent Terminal UI**: Embedded terminal in chat pane with color-coded logs (green=success, red=error, purple=processing, blue=init), status dot indicator, auto-scroll
+6. **Architecture Note**: Used MongoDB `agent_logs` collection (Supabase PostgreSQL was unreachable). Data model matches nidoai schema exactly — swappable when Supabase credentials are available
+
+## Key API Endpoints (Updated)
+- POST /api/run-agent — Start agent execution (returns logId)
+- GET /api/agent-logs/{logId} — Poll execution status + terminal history
 - POST /api/csdrop/manual-login — Start manual Discord login with email/password
 - POST /api/csdrop/submit-2fa — Submit 2FA/verification code to bot
 - GET /api/csdrop/sync-status — Poll sync status (includes needs_2fa, login_failed)
