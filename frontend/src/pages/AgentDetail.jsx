@@ -45,13 +45,13 @@ function LiveDemoModal({ agent, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" data-testid="live-demo-modal">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-lg rounded-2xl flex flex-col h-[70vh] max-h-[600px] overflow-hidden animate-fade-in-up" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', animationFillMode: "forwards" }}>
+      <div className="relative w-full max-w-lg rounded-sm flex flex-col h-[70vh] max-h-[600px] overflow-hidden animate-fade-in-up" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', animationFillMode: "forwards" }}>
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#8B5CF6]/15 flex items-center justify-center"><Bot size={16} className="text-[#8B5CF6]" /></div>
+            <div className="w-8 h-8 rounded-lg bg-cyan-400/15 flex items-center justify-center"><Bot size={16} className="text-cyan-400" /></div>
             <div>
               <p className="text-[14px] font-medium t-text" style={{ fontFamily: "'Outfit', sans-serif" }}>{agent.shortTitle}</p>
-              <p className="text-[11px] text-emerald-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Live Demo</p>
+              <p className="text-[11px] text-emerald-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-sm bg-emerald-400" /> Live Demo</p>
             </div>
           </div>
           <button onClick={onClose} data-testid="close-demo-modal" className="w-8 h-8 rounded-lg flex items-center justify-center t-text-sub hover:t-text transition-colors" style={{ background: 'var(--bg-card)' }}><X size={16} /></button>
@@ -59,15 +59,15 @@ function LiveDemoModal({ agent, onClose }) {
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
           {messages.map((msg, i) => (
             <div key={i} data-testid={`demo-message-${i}`} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[80%] px-3.5 py-2.5 text-[13px] leading-relaxed rounded-xl ${msg.role === "user" ? "bg-[#8B5CF6]/15 t-text border border-[#8B5CF6]/20" : "t-text-sub border"}`} style={msg.role !== "user" ? { background: 'var(--bg-card)', borderColor: 'var(--border)' } : {}}>{msg.content}</div>
+              <div className={`max-w-[80%] px-3.5 py-2.5 text-[13px] leading-relaxed rounded-sm ${msg.role === "user" ? "bg-cyan-400/15 t-text border border-cyan-400/20" : "t-text-sub border"}`} style={msg.role !== "user" ? { background: 'var(--bg-card)', borderColor: 'var(--border)' } : {}}>{msg.content}</div>
             </div>
           ))}
-          {isTyping && (<div className="flex justify-start"><div className="rounded-xl px-4 py-3 flex items-center gap-1" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}><span className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: "0ms" }} /><span className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: "150ms" }} /><span className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: "300ms" }} /></div></div>)}
+          {isTyping && (<div className="flex justify-start"><div className="rounded-sm px-4 py-3 flex items-center gap-1" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}><span className="w-1.5 h-1.5 rounded-sm bg-zinc-500 animate-bounce" style={{ animationDelay: "0ms" }} /><span className="w-1.5 h-1.5 rounded-sm bg-zinc-500 animate-bounce" style={{ animationDelay: "150ms" }} /><span className="w-1.5 h-1.5 rounded-sm bg-zinc-500 animate-bounce" style={{ animationDelay: "300ms" }} /></div></div>)}
           <div ref={messagesEnd} />
         </div>
         <form onSubmit={handleSend} className="px-5 py-3 flex gap-2" style={{ borderTop: '1px solid var(--border)' }}>
-          <input type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Try asking something..." data-testid="demo-chat-input" className="flex-1 t-input rounded-xl px-4 py-2.5 text-[13px] focus:outline-none focus:border-[#8B5CF6]/40 transition-all" style={{ border: '1px solid var(--input-border)' }} />
-          <button type="submit" data-testid="demo-send-btn" className="px-4 py-2.5 bg-[#8B5CF6] text-white rounded-xl hover:bg-[#A78BFA] transition-all text-[13px] font-medium flex items-center gap-1.5"><Send size={13} /> Send</button>
+          <input type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Try asking something..." data-testid="demo-chat-input" className="flex-1 t-input rounded-sm px-4 py-2.5 text-[13px] focus:outline-none focus:border-cyan-400/40 transition-all" style={{ border: '1px solid var(--input-border)' }} />
+          <button type="submit" data-testid="demo-send-btn" className="px-4 py-2.5 bg-cyan-400 text-white rounded-sm hover:bg-cyan-300 transition-all text-[13px] font-medium flex items-center gap-1.5"><Send size={13} /> Send</button>
         </form>
       </div>
     </div>
@@ -98,7 +98,7 @@ function PurchasePanel({ agent, user, token, checkingOut, setCheckingOut }) {
   };
 
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+    <div className="rounded-sm overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
       {/* Tab Header */}
       <div className="flex" style={{ borderBottom: '1px solid var(--border)' }}>
         {[
@@ -117,7 +117,7 @@ function PurchasePanel({ agent, user, token, checkingOut, setCheckingOut }) {
             <span>{tab.label}</span>
             <span className={`text-[10px] font-normal ${purchaseMode === tab.id ? "t-text-sub" : "t-text-dim"}`}>{tab.sub}</span>
             {purchaseMode === tab.id && (
-              <div className="absolute bottom-0 left-[15%] right-[15%] h-[2px] bg-[#8B5CF6] rounded-full" />
+              <div className="absolute bottom-0 left-[15%] right-[15%] h-[2px] bg-cyan-400 rounded-sm" />
             )}
           </button>
         ))}
@@ -140,10 +140,10 @@ function PurchasePanel({ agent, user, token, checkingOut, setCheckingOut }) {
               value={outputCount}
               onChange={(e) => setOutputCount(Number(e.target.value))}
               data-testid="output-slider"
-              className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+              className="w-full h-1.5 rounded-sm appearance-none cursor-pointer"
               style={{
-                background: `linear-gradient(to right, #8B5CF6 ${((outputCount - 100) / 9900) * 100}%, var(--border) ${((outputCount - 100) / 9900) * 100}%)`,
-                accentColor: '#8B5CF6',
+                background: `linear-gradient(to right, #22d3ee ${((outputCount - 100) / 9900) * 100}%, var(--border) ${((outputCount - 100) / 9900) * 100}%)`,
+                accentColor: '#22d3ee',
               }}
             />
             <div className="flex justify-between mt-1.5 text-[10px] t-text-dim">
@@ -155,7 +155,7 @@ function PurchasePanel({ agent, user, token, checkingOut, setCheckingOut }) {
           </div>
 
           {/* Price Breakdown */}
-          <div className="rounded-xl p-4 space-y-2" style={{ background: 'var(--bg-secondary)' }}>
+          <div className="rounded-sm p-4 space-y-2" style={{ background: 'var(--bg-secondary)' }}>
             <div className="flex justify-between text-[12px]">
               <span className="t-text-sub">{outputCount.toLocaleString()} outputs x ${pricePerHundred}/100</span>
               <span className="t-text font-medium">${rentPrice}</span>
@@ -175,7 +175,7 @@ function PurchasePanel({ agent, user, token, checkingOut, setCheckingOut }) {
             onClick={() => handleCheckout("rent")}
             data-testid="rent-agent-btn"
             disabled={checkingOut === "rent"}
-            className="w-full py-3.5 bg-[#8B5CF6] text-white text-[14px] font-medium rounded-full hover:bg-[#A78BFA] transition-all shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_30px_rgba(139,92,246,0.4)] flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full py-3.5 bg-cyan-400 text-white text-[14px] font-medium rounded-sm hover:bg-cyan-300 transition-all shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_30px_rgba(139,92,246,0.4)] flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {checkingOut === "rent" ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
             Rent Now — ${rentPrice}
@@ -183,10 +183,10 @@ function PurchasePanel({ agent, user, token, checkingOut, setCheckingOut }) {
 
           {/* Payment Badges */}
           <div className="flex items-center justify-center gap-3">
-            <div className="flex items-center gap-1.5 text-[10px] t-text-dim px-2.5 py-1 rounded-full" style={{ background: 'var(--bg-secondary)' }}>
+            <div className="flex items-center gap-1.5 text-[10px] t-text-dim px-2.5 py-1 rounded-sm" style={{ background: 'var(--bg-secondary)' }}>
               <CreditCard size={10} /> Stripe
             </div>
-            <div className="flex items-center gap-1.5 text-[10px] t-text-dim px-2.5 py-1 rounded-full" style={{ background: 'var(--bg-secondary)' }}>
+            <div className="flex items-center gap-1.5 text-[10px] t-text-dim px-2.5 py-1 rounded-sm" style={{ background: 'var(--bg-secondary)' }}>
               <Lock size={10} /> Crypto
             </div>
             <span className="text-[10px] t-text-dim">256-bit encrypted</span>
@@ -214,9 +214,9 @@ function PurchasePanel({ agent, user, token, checkingOut, setCheckingOut }) {
               { icon: Server, label: "Your Own Compute", desc: "Deploy on your infrastructure with no platform rate limits." },
               { icon: Cpu, label: "Unlimited Outputs", desc: "No metering. Run as many outputs as your infrastructure allows." },
             ].map((prop) => (
-              <div key={prop.label} className="flex items-start gap-3 p-3 rounded-xl transition-all" style={{ background: 'var(--bg-secondary)' }}>
-                <div className="w-8 h-8 rounded-lg bg-[#8B5CF6]/10 flex items-center justify-center shrink-0 mt-0.5">
-                  <prop.icon size={14} className="text-[#8B5CF6]" />
+              <div key={prop.label} className="flex items-start gap-3 p-3 rounded-sm transition-all" style={{ background: 'var(--bg-secondary)' }}>
+                <div className="w-8 h-8 rounded-lg bg-cyan-400/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <prop.icon size={14} className="text-cyan-400" />
                 </div>
                 <div>
                   <p className="text-[13px] t-text font-medium">{prop.label}</p>
@@ -231,9 +231,9 @@ function PurchasePanel({ agent, user, token, checkingOut, setCheckingOut }) {
             onClick={() => handleCheckout("buy")}
             data-testid="buy-agent-btn"
             disabled={checkingOut === "buy"}
-            className="w-full py-3.5 text-[14px] font-medium rounded-full transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full py-3.5 text-[14px] font-medium rounded-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             style={{
-              background: 'linear-gradient(135deg, #8B5CF6, #6D28D9)',
+              background: 'linear-gradient(135deg, #22d3ee, #0891b2)',
               color: 'white',
               boxShadow: '0 0 25px rgba(139,92,246,0.3), inset 0 1px 0 rgba(255,255,255,0.1)',
             }}
@@ -244,13 +244,13 @@ function PurchasePanel({ agent, user, token, checkingOut, setCheckingOut }) {
 
           {/* Payment Badges */}
           <div className="flex items-center justify-center gap-3">
-            <div className="flex items-center gap-1.5 text-[10px] t-text-dim px-2.5 py-1 rounded-full" style={{ background: 'var(--bg-secondary)' }}>
+            <div className="flex items-center gap-1.5 text-[10px] t-text-dim px-2.5 py-1 rounded-sm" style={{ background: 'var(--bg-secondary)' }}>
               <CreditCard size={10} /> Stripe
             </div>
-            <div className="flex items-center gap-1.5 text-[10px] t-text-dim px-2.5 py-1 rounded-full" style={{ background: 'var(--bg-secondary)' }}>
+            <div className="flex items-center gap-1.5 text-[10px] t-text-dim px-2.5 py-1 rounded-sm" style={{ background: 'var(--bg-secondary)' }}>
               <Lock size={10} /> Crypto
             </div>
-            <span className="text-[10px] t-text-dim">Escrow protected</span>
+            <span className="text-[10px] t-text-dim">80/20 Revenue Split</span>
           </div>
         </div>
       )}
@@ -285,36 +285,36 @@ export default function AgentDetail() {
     load();
   }, [id]);
 
-  if (loading) return <div className="min-h-[calc(100vh-60px)] flex items-center justify-center"><Loader2 size={24} className="text-[#8B5CF6] animate-spin" /></div>;
+  if (loading) return <div className="min-h-[calc(100vh-60px)] flex items-center justify-center"><Loader2 size={24} className="text-cyan-400 animate-spin" /></div>;
   if (!agent) return <div className="min-h-[calc(100vh-60px)] flex items-center justify-center"><p className="t-text-sub">Agent not found.</p></div>;
 
   return (
     <div data-testid="agent-detail-page" className="min-h-[calc(100vh-60px)] px-6 lg:px-8 py-10 relative">
-      <div className="absolute top-0 left-[30%] w-[400px] h-[400px] rounded-full bg-[#8B5CF6]/[0.03] blur-[120px] pointer-events-none t-orb" />
+      <div className="absolute top-0 left-[30%] w-[400px] h-[400px] rounded-sm bg-cyan-400/[0.03] blur-[120px] pointer-events-none t-orb" />
       <div className="max-w-5xl mx-auto relative">
-        <Link to="/marketplace" data-testid="back-to-marketplace" className="inline-flex items-center gap-1.5 text-[13px] t-text-sub hover:t-text transition-colors mb-6">
-          <ArrowLeft size={14} /> Back to Marketplace
+        <Link to="/exchange" data-testid="back-to-marketplace" className="inline-flex items-center gap-1.5 text-[13px] t-text-sub hover:t-text transition-colors mb-6">
+          <ArrowLeft size={14} /> Back to The Exchange
         </Link>
 
         {/* Hero */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-10">
           {/* Left: Image + Demo */}
           <div className="lg:col-span-3">
-            <div className="h-64 rounded-2xl overflow-hidden relative mb-4" style={{ background: 'var(--bg-secondary)' }}>
+            <div className="h-64 rounded-sm overflow-hidden relative mb-4" style={{ background: 'var(--bg-secondary)' }}>
               {agent.image ? (
                 <img src={agent.image} alt={agent.shortTitle} className="w-full h-full object-cover opacity-50" />
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-violet-950/60 to-zinc-950" />
               )}
-              <button onClick={() => setShowDemo(true)} data-testid="agent-demo-btn" className="absolute bottom-4 left-4 flex items-center gap-2 px-5 py-2.5 bg-[#8B5CF6] text-white text-[13px] font-medium rounded-full hover:bg-[#A78BFA] transition-all shadow-[0_0_20px_rgba(139,92,246,0.3)]">
+              <button onClick={() => setShowDemo(true)} data-testid="agent-demo-btn" className="absolute bottom-4 left-4 flex items-center gap-2 px-5 py-2.5 bg-cyan-400 text-white text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all shadow-[0_0_20px_rgba(139,92,246,0.3)]">
                 <Play size={14} /> Live Demo
               </button>
             </div>
 
             {/* Video placeholder */}
-            <div data-testid="demo-video-placeholder" className="rounded-2xl h-48 flex items-center justify-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+            <div data-testid="demo-video-placeholder" className="rounded-sm h-48 flex items-center justify-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
               <div className="text-center">
-                <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: 'var(--bg-card-hover)' }}>
+                <div className="w-14 h-14 rounded-sm flex items-center justify-center mx-auto mb-3" style={{ background: 'var(--bg-card-hover)' }}>
                   <Play size={24} className="t-text-mute ml-1" />
                 </div>
                 <p className="text-[13px] t-text-sub">Demo video coming soon</p>
@@ -325,14 +325,14 @@ export default function AgentDetail() {
           {/* Right: Details + Purchase Panel */}
           <div className="lg:col-span-2 space-y-4">
             {/* Agent Info Card */}
-            <div className="rounded-2xl p-6" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+            <div className="rounded-sm p-6" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
               {/* Creator */}
               <Link to={`/creator/${agent.creator_id}`} className="flex items-center gap-2.5 mb-4 group">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-[12px] text-white font-medium" style={{ background: agent.creator_color }}>
+                <div className="w-8 h-8 rounded-sm flex items-center justify-center text-[12px] text-white font-medium" style={{ background: agent.creator_color }}>
                   {agent.creator_initial}
                 </div>
-                <span className="text-[13px] t-text-sub group-hover:text-[#A78BFA] transition-colors">{agent.creator_username}</span>
-                {agent.creator_verified && <BadgeCheck size={13} className="text-[#8B5CF6]" />}
+                <span className="text-[13px] t-text-sub group-hover:text-cyan-300 transition-colors">{agent.creator_username}</span>
+                {agent.creator_verified && <BadgeCheck size={13} className="text-cyan-400" />}
               </Link>
 
               <h1 data-testid="agent-detail-title" className="text-xl font-bold t-text mb-3 leading-tight" style={{ fontFamily: "'Outfit', sans-serif" }}>
@@ -358,14 +358,14 @@ export default function AgentDetail() {
                   { icon: Clock, label: agent.setupTime },
                   { icon: Users, label: `${agent.reviews} users` },
                 ].map((s) => (
-                  <div key={s.label} className="rounded-xl p-3 text-center" style={{ background: 'var(--bg-secondary)' }}>
-                    <s.icon size={14} className="text-[#8B5CF6] mx-auto mb-1" />
+                  <div key={s.label} className="rounded-sm p-3 text-center" style={{ background: 'var(--bg-secondary)' }}>
+                    <s.icon size={14} className="text-cyan-400 mx-auto mb-1" />
                     <p className="text-[11px] t-text-sub">{s.label}</p>
                   </div>
                 ))}
               </div>
 
-              <button onClick={() => setShowDemo(true)} data-testid="try-demo-sidebar-btn" className="w-full py-3 text-[13px] text-[#8B5CF6] border border-[#8B5CF6]/30 rounded-full hover:bg-[#8B5CF6]/10 transition-all flex items-center justify-center gap-2">
+              <button onClick={() => setShowDemo(true)} data-testid="try-demo-sidebar-btn" className="w-full py-3 text-[13px] text-cyan-400 border border-cyan-400/30 rounded-sm hover:bg-cyan-400/10 transition-all flex items-center justify-center gap-2">
                 <Play size={13} /> Try Live Demo
               </button>
             </div>
@@ -376,20 +376,20 @@ export default function AgentDetail() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-6 rounded-full p-1 w-fit" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }} data-testid="agent-tabs">
+        <div className="flex gap-1 mb-6 rounded-sm p-1 w-fit" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }} data-testid="agent-tabs">
           {["overview", "reviews"].map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)} data-testid={`tab-${tab}`} className={`px-5 py-2 text-[13px] rounded-full transition-all capitalize ${activeTab === tab ? "bg-[#8B5CF6] text-white" : "t-text-sub hover:t-text"}`}>{tab}</button>
+            <button key={tab} onClick={() => setActiveTab(tab)} data-testid={`tab-${tab}`} className={`px-5 py-2 text-[13px] rounded-sm transition-all capitalize ${activeTab === tab ? "bg-cyan-400 text-white" : "t-text-sub hover:t-text"}`}>{tab}</button>
           ))}
         </div>
 
         {/* Tab Content */}
         {activeTab === "overview" && (
           <div data-testid="overview-tab-content" className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-16">
-            <div className="rounded-2xl p-6" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+            <div className="rounded-sm p-6" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
               <h3 className="text-[16px] font-semibold t-text mb-4" style={{ fontFamily: "'Outfit', sans-serif" }}>About this agent</h3>
               <p className="text-[14px] t-text-sub leading-relaxed">{agent.longDescription}</p>
             </div>
-            <div className="rounded-2xl p-6" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+            <div className="rounded-sm p-6" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
               <h3 className="text-[16px] font-semibold t-text mb-4" style={{ fontFamily: "'Outfit', sans-serif" }}>Features</h3>
               <div className="space-y-3">
                 {agent.features.map((f, i) => (
@@ -416,10 +416,10 @@ export default function AgentDetail() {
             </div>
             <div className="space-y-4">
               {reviews.map((r) => (
-                <div key={r.id} data-testid={`review-${r.id}`} className="rounded-2xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+                <div key={r.id} data-testid={`review-${r.id}`} className="rounded-sm p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] t-text-sub font-medium" style={{ background: 'var(--bg-secondary)' }}>{r.user_name[0]}</div>
+                      <div className="w-7 h-7 rounded-sm flex items-center justify-center text-[11px] t-text-sub font-medium" style={{ background: 'var(--bg-secondary)' }}>{r.user_name[0]}</div>
                       <span className="text-[13px] t-text font-medium">{r.user_name}</span>
                     </div>
                     <span className="text-[12px] t-text-dim">{r.date}</span>

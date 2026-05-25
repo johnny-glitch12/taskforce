@@ -43,16 +43,18 @@ html {
 }
 
 body {
-  font-family: 'IBM Plex Sans', sans-serif;
-  background-color: var(--bg-primary, #09090b);
-  color: var(--text-primary, #fafafa);
+  font-family: 'Inter', 'Rajdhani', sans-serif;
+  background-color: var(--bg-primary, #000000);
+  color: var(--text-primary, #e4e4e7);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Rajdhani', 'Inter', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 code, pre, .font-mono {
@@ -60,17 +62,17 @@ code, pre, .font-mono {
 }
 
 ::selection {
-  background: rgba(139, 92, 246, 0.35);
+  background: rgba(34, 211, 238, 0.25);
   color: white;
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #09090b;
+  background: #000;
 }
 
 ::-webkit-scrollbar-thumb {

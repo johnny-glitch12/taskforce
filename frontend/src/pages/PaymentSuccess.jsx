@@ -35,18 +35,18 @@ export default function PaymentSuccess() {
 
   return (
     <div className="min-h-[calc(100vh-60px)] flex items-center justify-center px-6">
-      <div className="fixed top-[20%] left-1/2 -translate-x-1/2 w-[400px] h-[400px] rounded-full bg-[#8B5CF6]/[0.06] blur-[100px] pointer-events-none" />
-      <div data-testid="payment-result-card" className="relative w-full max-w-md bg-white/[0.03] border border-white/[0.08] rounded-2xl p-8 text-center animate-fade-in-up backdrop-blur-sm" style={{ animationFillMode: "forwards" }}>
+      <div className="fixed top-[20%] left-1/2 -translate-x-1/2 w-[400px] h-[400px] rounded-sm bg-cyan-400/[0.06] blur-[100px] pointer-events-none" />
+      <div data-testid="payment-result-card" className="relative w-full max-w-md bg-white/[0.03] border border-white/[0.08] rounded-sm p-8 text-center animate-fade-in-up backdrop-blur-sm" style={{ animationFillMode: "forwards" }}>
         {status === "loading" && (
           <>
-            <Loader2 size={40} className="text-[#8B5CF6] animate-spin mx-auto mb-4" />
+            <Loader2 size={40} className="text-cyan-400 animate-spin mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-white mb-2" style={{ fontFamily: "'Outfit', sans-serif" }}>Processing Payment</h2>
             <p className="text-[13px] text-zinc-500">Verifying your transaction...</p>
           </>
         )}
         {status === "success" && (
           <>
-            <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-5">
+            <div className="w-16 h-16 rounded-sm bg-emerald-500/10 flex items-center justify-center mx-auto mb-5">
               <CheckCircle2 size={32} className="text-emerald-400" />
             </div>
             <h2 data-testid="payment-success-title" className="text-xl font-semibold text-white mb-2" style={{ fontFamily: "'Outfit', sans-serif" }}>Payment Successful</h2>
@@ -56,10 +56,10 @@ export default function PaymentSuccess() {
             </p>
             {data?.amount != null && <p className="text-[13px] text-zinc-600 mb-6">${(data.amount / 100).toFixed(2)} {data.currency?.toUpperCase()}</p>}
             <div className="flex flex-col sm:flex-row gap-3">
-              <Link to="/studio" data-testid="go-to-studio-btn" className="flex-1 py-3 bg-[#8B5CF6] text-white text-[13px] font-medium rounded-full hover:bg-[#A78BFA] transition-all text-center">
+              <Link to="/studio" data-testid="go-to-studio-btn" className="flex-1 py-3 bg-cyan-400 text-white text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all text-center">
                 Open Studio
               </Link>
-              <Link to="/marketplace" data-testid="back-to-marketplace-btn" className="flex-1 py-3 bg-white/[0.06] text-white text-[13px] font-medium rounded-full border border-white/[0.08] hover:bg-white/[0.1] transition-all text-center">
+              <Link to="/marketplace" data-testid="back-to-marketplace-btn" className="flex-1 py-3 bg-white/[0.06] text-white text-[13px] font-medium rounded-sm border border-white/[0.08] hover:bg-white/[0.1] transition-all text-center">
                 Marketplace
               </Link>
             </div>
@@ -67,7 +67,7 @@ export default function PaymentSuccess() {
         )}
         {(status === "error" || status === "expired" || status === "timeout") && (
           <>
-            <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-5">
+            <div className="w-16 h-16 rounded-sm bg-red-500/10 flex items-center justify-center mx-auto mb-5">
               <XCircle size={32} className="text-red-400" />
             </div>
             <h2 className="text-xl font-semibold text-white mb-2" style={{ fontFamily: "'Outfit', sans-serif" }}>
@@ -76,7 +76,7 @@ export default function PaymentSuccess() {
             <p className="text-[13px] text-zinc-500 mb-6">
               {status === "expired" ? "Your payment session has expired. Please try again." : "We couldn't verify your payment. Please try again or contact support."}
             </p>
-            <Link to="/marketplace" className="inline-block py-3 px-8 bg-[#8B5CF6] text-white text-[13px] font-medium rounded-full hover:bg-[#A78BFA] transition-all">
+            <Link to="/marketplace" className="inline-block py-3 px-8 bg-cyan-400 text-white text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all">
               Back to Marketplace
             </Link>
           </>

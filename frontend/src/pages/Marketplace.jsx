@@ -26,7 +26,7 @@ function SearchHero({ searchQuery, setSearchQuery }) {
         className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-[-0.03em] t-text mb-3"
         style={{ fontFamily: "'Outfit', sans-serif" }}
       >
-        Nova <span className="text-gradient-purple">Marketplace</span>
+        The <span className="text-gradient-cyan">Exchange</span>
       </h1>
       <p className="text-[15px] t-text-sub mb-8 max-w-md mx-auto">
         Discover, rent, and deploy production-ready AI agents.
@@ -39,7 +39,7 @@ function SearchHero({ searchQuery, setSearchQuery }) {
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="What kind of agent do you need today?"
           data-testid="marketplace-search-input"
-          className="w-full t-input focus:outline-none focus:border-[#8B5CF6]/40 transition-all pl-12 pr-5 py-4 text-[15px] rounded-2xl"
+          className="w-full t-input focus:outline-none focus:border-cyan-400/40 transition-all pl-12 pr-5 py-4 text-[15px] rounded-sm"
           style={{ border: '1px solid var(--input-border)' }}
         />
       </div>
@@ -58,9 +58,9 @@ function CategoryPills({ activeCategory, setActiveCategory }) {
             key={cat.id}
             onClick={() => setActiveCategory(cat.id)}
             data-testid={`category-${cat.id}`}
-            className={`flex items-center gap-2 px-4 py-2 text-[13px] rounded-full whitespace-nowrap transition-all duration-200 ${
+            className={`flex items-center gap-2 px-4 py-2 text-[13px] rounded-sm whitespace-nowrap transition-all duration-200 ${
               isActive
-                ? "bg-[#8B5CF6] text-white shadow-[0_0_15px_rgba(139,92,246,0.25)]"
+                ? "bg-cyan-400 text-white shadow-[0_0_15px_rgba(139,92,246,0.25)]"
                 : "t-text-sub"
             }`}
             style={!isActive ? { background: 'var(--bg-card)', border: '1px solid var(--border)' } : {}}
@@ -84,7 +84,7 @@ function CreatorSpotlight() {
     <section className="mb-14" data-testid="creator-spotlight">
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-lg font-semibold t-text" style={{ fontFamily: "'Outfit', sans-serif" }}>
-          Meet the Supernovas
+          Top Operators
         </h2>
         <span className="text-[12px] t-text-dim">Top-rated creators</span>
       </div>
@@ -94,23 +94,23 @@ function CreatorSpotlight() {
             to={`/creator/${c.id}`}
             key={c.id}
             data-testid={`creator-card-${c.id}`}
-            className="min-w-[260px] rounded-2xl p-5 transition-all duration-300 hover:border-[#8B5CF6]/30 hover:shadow-lg group flex-shrink-0"
+            className="min-w-[260px] rounded-sm p-5 transition-all duration-300 hover:border-cyan-400/30 hover:shadow-lg group flex-shrink-0"
             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
           >
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold" style={{ background: c.color }}>
+              <div className="w-10 h-10 rounded-sm flex items-center justify-center text-white text-sm font-semibold" style={{ background: c.color }}>
                 {c.initial}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[14px] font-medium t-text truncate">{c.name}</span>
-                  {c.verified && <BadgeCheck size={13} className="text-[#8B5CF6] flex-shrink-0" />}
+                  {c.verified && <BadgeCheck size={13} className="text-cyan-400 flex-shrink-0" />}
                 </div>
                 <span className="text-[12px] t-text-sub">{c.username}</span>
               </div>
             </div>
             <div className="flex items-center gap-2 mb-3">
-              <span className="text-[11px] bg-[#8B5CF6]/15 text-[#A78BFA] px-2 py-0.5 rounded-full font-medium">Supernova</span>
+              <span className="text-[11px] bg-cyan-400/10 text-cyan-400 px-2 py-0.5 rounded-sm font-mono font-medium">Operator</span>
               <span className="text-[11px] t-text-sub flex items-center gap-1"><Shield size={10} /> {c.trustScore}</span>
             </div>
             <p className="text-[13px] t-text-mute mb-3">{c.heroStat}</p>
@@ -119,7 +119,7 @@ function CreatorSpotlight() {
                 <span key={i} className="text-[10px] t-text-sub px-2 py-1 rounded-md truncate" style={{ background: 'var(--bg-card-hover)' }}>{a}</span>
               ))}
             </div>
-            <div className="mt-4 flex items-center gap-1 text-[12px] text-[#8B5CF6] group-hover:text-[#A78BFA] transition-colors">
+            <div className="mt-4 flex items-center gap-1 text-[12px] text-cyan-400 group-hover:text-cyan-300 transition-colors">
               View Portfolio <ChevronRight size={12} />
             </div>
           </Link>
@@ -142,7 +142,7 @@ function AgentCard({ agent, index }) {
   return (
     <div
       data-testid={`agent-card-${agent.id}`}
-      className="rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#8B5CF6]/25 hover:shadow-lg group opacity-0 animate-fade-in-up"
+      className="rounded-sm overflow-hidden transition-all duration-300 hover:border-cyan-400/25 hover:shadow-lg group opacity-0 animate-fade-in-up"
       style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', animationDelay: `${index * 60}ms`, animationFillMode: "forwards" }}
     >
       {/* Image / Gradient */}
@@ -153,16 +153,16 @@ function AgentCard({ agent, index }) {
           <div className="w-full h-full bg-gradient-to-br from-violet-950/80 to-zinc-950 opacity-60" />
         )}
         {agent.trendingLabel && (
-          <span className="absolute top-3 left-3 text-[10px] bg-[#8B5CF6]/80 backdrop-blur-sm text-white px-2.5 py-1 rounded-full font-medium flex items-center gap-1">
+          <span className="absolute top-3 left-3 text-[10px] bg-cyan-400/80 backdrop-blur-sm text-white px-2.5 py-1 rounded-sm font-medium flex items-center gap-1">
             <TrendingUp size={10} /> {agent.trendingLabel}
           </span>
         )}
         <button
           onClick={(e) => { e.stopPropagation(); setSaved(!saved); }}
           data-testid={`agent-save-${agent.id}`}
-          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center transition-all hover:bg-black/60"
+          className="absolute top-3 right-3 w-8 h-8 rounded-sm bg-black/40 backdrop-blur-sm flex items-center justify-center transition-all hover:bg-black/60"
         >
-          <Heart size={14} className={saved ? "fill-[#8B5CF6] text-[#8B5CF6]" : "text-white/60"} />
+          <Heart size={14} className={saved ? "fill-[#8B5CF6] text-cyan-400" : "text-white/60"} />
         </button>
       </div>
 
@@ -174,18 +174,18 @@ function AgentCard({ agent, index }) {
           data-testid={`agent-creator-link-${agent.id}`}
           className="flex items-center gap-2 mb-2.5 group/creator"
         >
-          <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-white font-medium" style={{ background: creator.color }}>
+          <div className="w-6 h-6 rounded-sm flex items-center justify-center text-[10px] text-white font-medium" style={{ background: creator.color }}>
             {creator.initial}
           </div>
-          <span className="text-[12px] t-text-sub group-hover/creator:text-[#A78BFA] transition-colors">{creator.username}</span>
-          {creator.verified && <BadgeCheck size={11} className="text-[#8B5CF6]" />}
+          <span className="text-[12px] t-text-sub group-hover/creator:text-cyan-300 transition-colors">{creator.username}</span>
+          {creator.verified && <BadgeCheck size={11} className="text-cyan-400" />}
         </Link>
       </div>
 
       {/* Content */}
       <div className="px-4 pb-4">
         <Link to={`/agent/${agent.id}`} data-testid={`agent-title-link-${agent.id}`}>
-          <h3 className="text-[14px] font-medium t-text leading-snug mb-2.5 line-clamp-2 hover:text-[#A78BFA] transition-colors cursor-pointer" style={{ fontFamily: "'Outfit', sans-serif" }}>
+          <h3 className="text-[14px] font-medium t-text leading-snug mb-2.5 line-clamp-2 hover:text-cyan-300 transition-colors cursor-pointer" style={{ fontFamily: "'Outfit', sans-serif" }}>
             {agent.title}
           </h3>
         </Link>
@@ -205,7 +205,7 @@ function AgentCard({ agent, index }) {
           <Link
             to={`/agent/${agent.id}?demo=true`}
             data-testid={`agent-live-demo-${agent.id}`}
-            className="flex items-center gap-1.5 text-[12px] text-[#8B5CF6] hover:text-[#A78BFA] transition-colors font-medium"
+            className="flex items-center gap-1.5 text-[12px] text-cyan-400 hover:text-cyan-300 transition-colors font-medium"
           >
             <Play size={11} /> Live Demo
           </Link>
@@ -246,7 +246,7 @@ export default function Marketplace() {
 
   return (
     <div data-testid="marketplace-page" className="min-h-[calc(100vh-60px)] px-6 lg:px-8 py-12 md:py-16 relative">
-      <div className="absolute top-0 right-[10%] w-[400px] h-[400px] rounded-full bg-[#8B5CF6]/[0.03] blur-[120px] pointer-events-none t-orb" />
+      <div className="absolute top-0 right-[10%] w-[400px] h-[400px] rounded-sm bg-cyan-400/[0.03] blur-[120px] pointer-events-none t-orb" />
       <div className="max-w-6xl mx-auto relative">
         <SearchHero searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
         <CategoryPills activeCategory={activeCategory} setActiveCategory={setActiveCategory} />
@@ -256,7 +256,7 @@ export default function Marketplace() {
         <section className="mb-14" data-testid="trending-section">
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-lg font-semibold t-text flex items-center gap-2" style={{ fontFamily: "'Outfit', sans-serif" }}>
-              <TrendingUp size={18} className="text-[#8B5CF6]" /> Most Deployed This Week
+              <TrendingUp size={18} className="text-cyan-400" /> Most Deployed This Week
             </h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

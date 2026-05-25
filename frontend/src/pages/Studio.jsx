@@ -14,10 +14,10 @@ import { useAgentTerminal } from "../hooks/useAgentTerminal";
 const API = process.env.REACT_APP_BACKEND_URL;
 
 const NODE_TYPES = [
-  { type: "trigger", label: "Trigger", icon: "Mail", color: "#8B5CF6" },
-  { type: "llm", label: "LLM", icon: "Brain", color: "#A78BFA" },
-  { type: "condition", label: "Condition", icon: "Filter", color: "#6D28D9" },
-  { type: "action", label: "Action", icon: "FileText", color: "#7C3AED" },
+  { type: "trigger", label: "Trigger", icon: "Mail", color: "#22d3ee" },
+  { type: "llm", label: "LLM", icon: "Brain", color: "#06b6d4" },
+  { type: "condition", label: "Condition", icon: "Filter", color: "#0891b2" },
+  { type: "action", label: "Action", icon: "FileText", color: "#0e7490" },
   { type: "http_request", label: "HTTP Request", icon: "Globe", color: "#5B21B6" },
   { type: "webhook", label: "Webhook", icon: "Zap", color: "#C084FC" },
   { type: "database", label: "Database", icon: "Database", color: "#4C1D95" },
@@ -30,22 +30,22 @@ function getIcon(name) { return ICON_MAP[name] || Zap; }
 /* ─── Mode Toggle ─── */
 function ModeToggle({ mode, setMode, isMobile }) {
   return (
-    <div data-testid="mode-toggle" className="flex items-center gap-1 rounded-full p-1" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+    <div data-testid="mode-toggle" className="flex items-center gap-1 rounded-sm p-1" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
       {["vibe", "node", ...(isMobile ? ["code"] : [])].map((m) => (
         <button
           key={m}
           onClick={() => setMode(m)}
           data-testid={`${m}-mode-btn`}
-          className={`flex items-center gap-1.5 px-3 sm:px-5 py-2 text-[12px] sm:text-[13px] rounded-full transition-all duration-300 ${
+          className={`flex items-center gap-1.5 px-3 sm:px-5 py-2 text-[12px] sm:text-[13px] rounded-sm transition-all duration-300 ${
             mode === m
-              ? "bg-[#8B5CF6] text-white shadow-[0_0_15px_rgba(139,92,246,0.25)]"
+              ? "bg-cyan-400 text-white shadow-[0_0_15px_rgba(139,92,246,0.25)]"
               : "t-text-sub hover:t-text"
           }`}
         >
           {m === "vibe" && <MessageCircle size={13} />}
           {m === "node" && <GitBranch size={13} />}
           {m === "code" && <Code size={13} />}
-          <span className="hidden sm:inline">{m === "vibe" ? "Vibe" : m === "node" ? "Node" : "Code"}</span>
+          <span className="hidden sm:inline">{m === "vibe" ? "Command" : m === "node" ? "Node" : "Code"}</span>
         </button>
       ))}
     </div>
@@ -80,16 +80,16 @@ function ChatPane({ messages, onSend, visible, agentStatus, terminalHistory }) {
   return (
     <div data-testid="studio-chat-pane" className="flex-1 t-bg flex flex-col h-full min-w-0" style={{ borderRight: '1px solid var(--border)' }}>
       <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid var(--border)' }}>
-        <Bot size={14} className="text-[#8B5CF6]" />
-        <span className="text-[12px] tracking-wide t-text-sub">Vibe Chat</span>
+        <Bot size={14} className="text-cyan-400" />
+        <span className="text-[12px] tracking-wide t-text-sub">Command Prompt</span>
         {isProcessing && (
-          <span className="ml-auto flex items-center gap-1.5 text-[10px] text-[#A78BFA] bg-[#8B5CF6]/10 px-2.5 py-0.5 rounded-full border border-[#8B5CF6]/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#8B5CF6] animate-pulse" />
+          <span className="ml-auto flex items-center gap-1.5 text-[10px] text-cyan-300 bg-cyan-400/10 px-2.5 py-0.5 rounded-sm border border-cyan-400/20">
+            <span className="w-1.5 h-1.5 rounded-sm bg-cyan-400 animate-pulse" />
             Agent Thinking...
           </span>
         )}
         {!isProcessing && (
-          <span className="ml-auto text-[11px] t-text-dim px-2.5 py-0.5 rounded-full hidden sm:inline" style={{ background: 'var(--bg-card)' }}>
+          <span className="ml-auto text-[11px] t-text-dim px-2.5 py-0.5 rounded-sm hidden sm:inline" style={{ background: 'var(--bg-card)' }}>
             Describe your agent in plain English
           </span>
         )}
@@ -108,15 +108,15 @@ function ChatPane({ messages, onSend, visible, agentStatus, terminalHistory }) {
           <div key={i} data-testid={`chat-message-${i}`} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[85%] px-3.5 py-2.5 text-[13px] leading-relaxed rounded-xl whitespace-pre-wrap ${
               msg.role === "user"
-                ? "bg-[#8B5CF6]/10 text-[var(--text-primary)] border border-[#8B5CF6]/20"
+                ? "bg-cyan-400/10 text-[var(--text-primary)] border border-cyan-400/20"
                 : "t-text-sub border"
             }`} style={msg.role !== "user" ? { background: 'var(--bg-card)', borderColor: 'var(--border)' } : {}}>{msg.content}</div>
           </div>
         ))}
         {isProcessing && (
           <div className="flex justify-start">
-            <div className="max-w-[85%] px-3.5 py-3 text-[13px] rounded-xl border border-[#8B5CF6]/20" style={{ background: 'var(--bg-card)' }}>
-              <div className="flex items-center gap-2 text-[#A78BFA]">
+            <div className="max-w-[85%] px-3.5 py-3 text-[13px] rounded-xl border border-cyan-400/20" style={{ background: 'var(--bg-card)' }}>
+              <div className="flex items-center gap-2 text-cyan-300">
                 <Zap size={12} className="animate-pulse" />
                 <span className="text-[12px]">Agent executing...</span>
               </div>
@@ -134,7 +134,7 @@ function ChatPane({ messages, onSend, visible, agentStatus, terminalHistory }) {
           style={{ background: "#0d0d0f", border: "1px solid var(--border)" }}
         >
           <div className="sticky top-0 px-2.5 py-1 bg-black/80 flex items-center gap-1.5 z-10" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-            <div className={`w-1.5 h-1.5 rounded-full ${isProcessing ? "bg-emerald-400 animate-pulse" : agentStatus === "success" ? "bg-emerald-400" : agentStatus === "failed" ? "bg-red-400" : "bg-zinc-600"}`} />
+            <div className={`w-1.5 h-1.5 rounded-sm ${isProcessing ? "bg-emerald-400 animate-pulse" : agentStatus === "success" ? "bg-emerald-400" : agentStatus === "failed" ? "bg-red-400" : "bg-zinc-600"}`} />
             <span className="text-zinc-500 text-[9px] tracking-wider uppercase">Agent Terminal</span>
           </div>
           <div className="p-2.5 space-y-0.5">
@@ -170,7 +170,7 @@ function ChatPane({ messages, onSend, visible, agentStatus, terminalHistory }) {
           type="submit"
           disabled={isProcessing}
           data-testid="chat-send-btn"
-          className="p-2 text-[#8B5CF6] hover:text-[#A78BFA] transition-colors disabled:opacity-30"
+          className="p-2 text-cyan-400 hover:text-cyan-300 transition-colors disabled:opacity-30"
         >
           {isProcessing ? <Rocket size={15} className="animate-pulse" /> : <Send size={15} />}
         </button>
@@ -304,7 +304,7 @@ function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNo
     >
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 px-4 py-3 backdrop-blur-sm flex items-center gap-2 z-20" style={{ backgroundColor: 'var(--bg-nav)', borderBottom: '1px solid var(--border)' }}>
-        <Zap size={14} className="text-[#A78BFA]" />
+        <Zap size={14} className="text-cyan-300" />
         <span className="text-[12px] tracking-wide t-text-sub hidden sm:inline">Node Canvas</span>
         <div className="ml-auto flex items-center gap-1.5">
           <button onClick={() => setScale((s) => Math.min(2.5, s + 0.2))} data-testid="zoom-in-btn" className="p-1.5 t-text-sub hover:t-text transition-colors" title="Zoom In"><ZoomIn size={14} /></button>
@@ -313,7 +313,7 @@ function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNo
           <button onClick={resetView} data-testid="reset-view-btn" className="p-1.5 t-text-sub hover:t-text transition-colors" title="Reset View"><Maximize2 size={14} /></button>
           <div className="w-px h-4 mx-1" style={{ background: 'var(--border)' }} />
           <div className="relative">
-            <button data-testid="add-node-btn" onClick={() => setShowNodeMenu(!showNodeMenu)} className="flex items-center gap-1.5 px-3 py-1.5 t-text-mute text-[11px] rounded-lg hover:border-[#8B5CF6]/30 transition-all" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+            <button data-testid="add-node-btn" onClick={() => setShowNodeMenu(!showNodeMenu)} className="flex items-center gap-1.5 px-3 py-1.5 t-text-mute text-[11px] rounded-lg hover:border-cyan-400/30 transition-all" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
               <Plus size={12} /> <span className="hidden sm:inline">Add Node</span>
             </button>
             {showNodeMenu && (
@@ -358,7 +358,7 @@ function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNo
             return (
               <path key={i}
                 d={`M ${from.x} ${from.y} C ${from.x + dx} ${from.y}, ${to.x - dx} ${to.y}, ${to.x} ${to.y}`}
-                className={`fill-none ${isActive ? "stroke-[#8B5CF6]" : "stroke-zinc-800"}`}
+                className={`fill-none ${isActive ? "stroke-[#22d3ee]" : "stroke-zinc-800"}`}
                 strokeWidth={isActive ? 2 : 1.5}
                 style={{ filter: isActive ? "drop-shadow(0 0 6px rgba(139,92,246,0.4))" : "none" }}
               />
@@ -371,7 +371,7 @@ function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNo
           const Icon = getIcon(node.icon);
           const isActive = node.id === activeNode;
           const nodeType = NODE_TYPES.find((nt) => nt.type === node.type);
-          const color = nodeType?.color || "#8B5CF6";
+          const color = nodeType?.color || "#22d3ee";
           return (
             <div
               key={node.id}
@@ -410,7 +410,7 @@ function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNo
                 </div>
               </div>
               {/* Connection dot */}
-              <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-crosshair"
+              <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity cursor-crosshair"
                 style={{ border: '2px solid var(--border-hover)', background: 'var(--bg-elevated)' }}
                 onMouseDown={(e) => {
                   e.stopPropagation();
@@ -419,7 +419,7 @@ function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNo
                   setConnecting({ fromId: node.id, mouseX: e.clientX, mouseY: e.clientY });
                 }}
               />
-              <div className="absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+              <div className="absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity"
                 style={{ border: '2px solid var(--border-hover)', background: 'var(--bg-elevated)' }}
                 onMouseUp={() => {
                   if (connecting && connecting.fromId !== node.id) {
@@ -465,10 +465,10 @@ function CodePane({ visible, codeJson, onDeploy, onPublish, linterResult, onRunL
         </div>
         <div className="flex items-center gap-1.5">
           <button onClick={() => { navigator.clipboard.writeText(codeJson || ""); toast.success("Copied."); }} data-testid="copy-code-btn" className="p-1.5 t-text-sub hover:t-text" title="Copy"><Copy size={12} /></button>
-          <button onClick={onRunLinter} data-testid="run-linter-btn" className="flex items-center gap-1 px-2.5 py-1.5 t-text-mute text-[11px] rounded-full hover:border-[#8B5CF6]/30 transition-all" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <button onClick={onRunLinter} data-testid="run-linter-btn" className="flex items-center gap-1 px-2.5 py-1.5 t-text-mute text-[11px] rounded-sm hover:border-cyan-400/30 transition-all" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
             <Shield size={11} /> Scan
           </button>
-          <button onClick={onDeploy} data-testid="deploy-agent-btn" disabled={saving} className="flex items-center gap-1 px-3 py-1.5 bg-[#8B5CF6] text-white text-[11px] font-medium rounded-full hover:bg-[#A78BFA] transition-all shadow-[0_0_15px_rgba(139,92,246,0.2)] disabled:opacity-50">
+          <button onClick={onDeploy} data-testid="deploy-agent-btn" disabled={saving} className="flex items-center gap-1 px-3 py-1.5 bg-cyan-400 text-white text-[11px] font-medium rounded-sm hover:bg-cyan-300 transition-all shadow-[0_0_15px_rgba(139,92,246,0.2)] disabled:opacity-50">
             <Rocket size={11} /> {saving ? "..." : "Deploy"}
           </button>
         </div>
@@ -505,7 +505,7 @@ function CodePane({ visible, codeJson, onDeploy, onPublish, linterResult, onRunL
         <div className="px-3 py-2 max-h-[100px] overflow-y-auto" style={{ borderBottom: '1px solid var(--border)' }}>
           {linterResult.flags.map((f, i) => (
             <div key={i} data-testid={`linter-flag-${i}`} className="flex items-start gap-2 py-1 text-[10px]">
-              <span className={`mt-0.5 w-1.5 h-1.5 rounded-full shrink-0 ${f.level === "critical" ? "bg-red-400" : f.level === "warning" ? "bg-amber-400" : "bg-blue-400"}`} />
+              <span className={`mt-0.5 w-1.5 h-1.5 rounded-sm shrink-0 ${f.level === "critical" ? "bg-red-400" : f.level === "warning" ? "bg-amber-400" : "bg-blue-400"}`} />
               <span className="t-text-sub">{f.message}</span>
             </div>
           ))}
@@ -534,7 +534,7 @@ function colorize(line) {
   while ((m = regex.exec(line)) !== null) {
     if (m.index > last) parts.push(<span key={key++} className="text-zinc-400">{line.slice(last, m.index)}</span>);
     const after = line.slice(m.index + m[0].length);
-    parts.push(<span key={key++} className={after.trimStart().startsWith(":") ? "text-zinc-300" : "text-[#A78BFA]"}>"{m[1]}"</span>);
+    parts.push(<span key={key++} className={after.trimStart().startsWith(":") ? "text-zinc-300" : "text-cyan-300"}>"{m[1]}"</span>);
     last = m.index + m[0].length;
   }
   if (last < line.length) {
@@ -554,7 +554,7 @@ function WorkflowSelector({ workflows, activeId, onSelect, onCreate, onDelete })
 
   return (
     <div className="relative">
-      <button data-testid="workflow-selector-btn" onClick={() => setOpen(!open)} className="flex items-center gap-2 px-2.5 py-1.5 t-text text-[12px] rounded-lg hover:border-[#8B5CF6]/30 transition-all max-w-[160px] sm:max-w-[200px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+      <button data-testid="workflow-selector-btn" onClick={() => setOpen(!open)} className="flex items-center gap-2 px-2.5 py-1.5 t-text text-[12px] rounded-lg hover:border-cyan-400/30 transition-all max-w-[160px] sm:max-w-[200px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
         <FileText size={12} />
         <span className="truncate">{active?.name || "No workflow"}</span>
         <ChevronDown size={12} className="t-text-dim shrink-0" />
@@ -563,12 +563,12 @@ function WorkflowSelector({ workflows, activeId, onSelect, onCreate, onDelete })
         <div className="absolute left-0 top-full mt-1 w-56 rounded-xl p-1.5 z-50 shadow-xl" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
           {workflows.map((wf) => (
             <div key={wf.id} className="flex items-center group">
-              <button data-testid={`select-workflow-${wf.id}`} onClick={() => { onSelect(wf.id); setOpen(false); }} className={`flex-1 text-left px-3 py-2 text-[12px] rounded-lg truncate ${wf.id === activeId ? "t-text bg-[#8B5CF6]/10" : "t-text-mute hover:bg-[var(--bg-card-hover)]"}`}>{wf.name}</button>
+              <button data-testid={`select-workflow-${wf.id}`} onClick={() => { onSelect(wf.id); setOpen(false); }} className={`flex-1 text-left px-3 py-2 text-[12px] rounded-lg truncate ${wf.id === activeId ? "t-text bg-cyan-400/10" : "t-text-mute hover:bg-[var(--bg-card-hover)]"}`}>{wf.name}</button>
               <button onClick={() => onDelete(wf.id)} className="opacity-0 group-hover:opacity-100 p-1 t-text-dim hover:text-red-400 mr-1"><X size={11} /></button>
             </div>
           ))}
           <div className="mt-1 pt-1" style={{ borderTop: '1px solid var(--border)' }}>
-            <button data-testid="create-workflow-btn" onClick={() => { onCreate(); setOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-[#A78BFA] hover:bg-[var(--bg-card-hover)] rounded-lg"><Plus size={12} /> New Workflow</button>
+            <button data-testid="create-workflow-btn" onClick={() => { onCreate(); setOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-cyan-300 hover:bg-[var(--bg-card-hover)] rounded-lg"><Plus size={12} /> New Workflow</button>
           </div>
         </div>
       )}
@@ -796,7 +796,7 @@ export default function Studio() {
         headers,
         body: JSON.stringify({
           name: activeWf?.name || "My Agent",
-          description: `Agent with ${nodes.length} nodes built in Nova Studio`,
+          description: `Agent with ${nodes.length} nodes built in The Armory`,
           manifest,
           trust_score: linterResult?.trust_score || 0,
           linter_status: linterResult?.status || "unknown",
@@ -832,8 +832,8 @@ export default function Studio() {
       {/* Toggle Bar */}
       <div data-testid="studio-toggle-bar" className="flex items-center justify-between px-3 sm:px-5 py-2.5 backdrop-blur-sm gap-2" style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'var(--bg-nav)' }}>
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <Sparkles size={14} className="text-[#8B5CF6] shrink-0" />
-          <span className="text-[13px] font-medium t-text hidden sm:inline" style={{ fontFamily: "'Outfit', sans-serif" }}>Nova Studio</span>
+          <Sparkles size={14} className="text-cyan-400 shrink-0" />
+          <span className="text-[13px] font-medium t-text hidden sm:inline" style={{ fontFamily: "'Outfit', sans-serif" }}>The Armory</span>
           <WorkflowSelector workflows={workflows} activeId={activeWorkflowId} onSelect={selectWorkflow} onCreate={createWorkflow} onDelete={deleteWorkflow} />
           {saving && <span className="text-[10px] t-text-dim animate-pulse hidden sm:inline">Saving...</span>}
         </div>
@@ -847,7 +847,7 @@ export default function Studio() {
 
       {/* Main Panes */}
       <div className="flex-1 flex flex-row overflow-hidden">
-        {/* Desktop: Vibe chat is a sidebar when in node mode */}
+        {/* Desktop: Command chat is a sidebar when in node mode */}
         {!isMobile && mode === "vibe" && <ChatPane messages={messages} onSend={handleChatSend} visible={true} agentStatus={agentStatus} terminalHistory={terminalHistory} />}
         {!isMobile && mode === "vibe" && <CodePane visible={true} codeJson={codeJson} onDeploy={handleDeploy} onPublish={handlePublish} linterResult={linterResult} onRunLinter={runLinter} saving={saving} publishing={publishing} />}
 

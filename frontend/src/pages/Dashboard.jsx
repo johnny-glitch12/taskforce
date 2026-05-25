@@ -74,9 +74,9 @@ function StatCard({ label, value, max, icon: Icon, color }) {
         {value}{max ? <span className="text-[14px] t-text-dim">/{max}</span> : ""}
       </p>
       {max && (
-        <div className="mt-3 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-card-hover)' }}>
+        <div className="mt-3 h-1.5 rounded-sm overflow-hidden" style={{ background: 'var(--bg-card-hover)' }}>
           <div
-            className="h-full rounded-full transition-all duration-700"
+            className="h-full rounded-sm transition-all duration-700"
             style={{ width: `${pct}%`, background: pct >= 90 ? "#EF4444" : color }}
           />
         </div>
@@ -94,13 +94,13 @@ function AgentCard({ agent, onRun, onToggle, onDelete, onViewLogs, onCopyWebhook
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1.5">
-              <div className={`w-2 h-2 rounded-full shrink-0 ${isReady ? "bg-emerald-400" : "bg-zinc-600"}`} />
+              <div className={`w-2 h-2 rounded-sm shrink-0 ${isReady ? "bg-emerald-400" : "bg-zinc-600"}`} />
               <h3 className="text-[14px] font-medium t-text truncate">{agent.name}</h3>
             </div>
             <p className="text-[12px] t-text-sub line-clamp-1">{agent.description || "No description"}</p>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            <button onClick={() => onRun(agent.id)} data-testid={`run-agent-${agent.id}`} disabled={!isReady} className="p-2 rounded-lg bg-[#8B5CF6]/10 text-[#8B5CF6] hover:bg-[#8B5CF6]/20 transition-colors disabled:opacity-30" title="Run"><Play size={14} /></button>
+            <button onClick={() => onRun(agent.id)} data-testid={`run-agent-${agent.id}`} disabled={!isReady} className="p-2 rounded-lg bg-cyan-400/10 text-cyan-400 hover:bg-cyan-400/20 transition-colors disabled:opacity-30" title="Run"><Play size={14} /></button>
             <button onClick={() => onToggle(agent.id, agent.status)} data-testid={`toggle-agent-${agent.id}`} className={`p-2 rounded-lg transition-colors ${isReady ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20" : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"}`} title={isReady ? "Disable" : "Enable"}>{isReady ? <Square size={14} /> : <Play size={14} />}</button>
             <button onClick={() => onDelete(agent.id)} data-testid={`delete-agent-${agent.id}`} className="p-2 rounded-lg bg-red-500/5 t-text-dim hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Delete"><Trash2 size={14} /></button>
           </div>
@@ -181,7 +181,7 @@ function AgentModal({ mode, agent, onClose, onSubmit, templates }) {
       <div
         data-testid="agent-modal"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl max-h-[90vh] rounded-2xl overflow-hidden flex flex-col"
+        className="w-full max-w-2xl max-h-[90vh] rounded-sm overflow-hidden flex flex-col"
         style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
       >
         {/* Header */}
@@ -200,7 +200,7 @@ function AgentModal({ mode, agent, onClose, onSubmit, templates }) {
                 <textarea
                   value={inputData} onChange={(e) => setInputData(e.target.value)}
                   data-testid="run-input-textarea"
-                  className="w-full h-28 t-input rounded-xl px-4 py-3 text-[13px] font-mono focus:outline-none focus:border-[#8B5CF6]/50 resize-none"
+                  className="w-full h-28 t-input rounded-xl px-4 py-3 text-[13px] font-mono focus:outline-none focus:border-cyan-400/50 resize-none"
                   style={{ border: '1px solid var(--input-border)' }}
                   placeholder='{"key": "value"}'
                 />
@@ -241,7 +241,7 @@ function AgentModal({ mode, agent, onClose, onSubmit, templates }) {
                   <p className="text-[12px] t-text-sub mb-2">Quick Start Templates</p>
                   <div className="flex flex-wrap gap-2">
                     {templates.map((t, i) => (
-                      <button key={i} onClick={() => loadTemplate(t)} data-testid={`template-${i}`} className="px-3 py-1.5 text-[11px] t-text-mute rounded-lg hover:border-[#8B5CF6]/30 hover:t-text transition-all" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+                      <button key={i} onClick={() => loadTemplate(t)} data-testid={`template-${i}`} className="px-3 py-1.5 text-[11px] t-text-mute rounded-lg hover:border-cyan-400/30 hover:t-text transition-all" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
                         {t.name}
                       </button>
                     ))}
@@ -252,11 +252,11 @@ function AgentModal({ mode, agent, onClose, onSubmit, templates }) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[12px] t-text-sub mb-2">Name</label>
-                  <input value={name} onChange={(e) => setName(e.target.value)} data-testid="agent-name-input" placeholder="My Agent" className="w-full t-input rounded-xl px-4 py-3 text-[13px] focus:outline-none focus:border-[#8B5CF6]/50" style={{ border: '1px solid var(--input-border)' }} />
+                  <input value={name} onChange={(e) => setName(e.target.value)} data-testid="agent-name-input" placeholder="My Agent" className="w-full t-input rounded-xl px-4 py-3 text-[13px] focus:outline-none focus:border-cyan-400/50" style={{ border: '1px solid var(--input-border)' }} />
                 </div>
                 <div>
                   <label className="block text-[12px] t-text-sub mb-2">Trigger</label>
-                  <select value={triggerType} onChange={(e) => setTriggerType(e.target.value)} data-testid="agent-trigger-select" className="w-full t-input rounded-xl px-4 py-3 text-[13px] focus:outline-none focus:border-[#8B5CF6]/50 appearance-none" style={{ border: '1px solid var(--input-border)' }}>
+                  <select value={triggerType} onChange={(e) => setTriggerType(e.target.value)} data-testid="agent-trigger-select" className="w-full t-input rounded-xl px-4 py-3 text-[13px] focus:outline-none focus:border-cyan-400/50 appearance-none" style={{ border: '1px solid var(--input-border)' }}>
                     <option value="manual">Manual Only</option>
                     <option value="webhook">Webhook Only</option>
                     <option value="both">Manual + Webhook</option>
@@ -266,7 +266,7 @@ function AgentModal({ mode, agent, onClose, onSubmit, templates }) {
 
               <div>
                 <label className="block text-[12px] t-text-sub mb-2">Description</label>
-                <input value={description} onChange={(e) => setDescription(e.target.value)} data-testid="agent-desc-input" placeholder="What does this agent do?" className="w-full t-input rounded-xl px-4 py-3 text-[13px] focus:outline-none focus:border-[#8B5CF6]/50" style={{ border: '1px solid var(--input-border)' }} />
+                <input value={description} onChange={(e) => setDescription(e.target.value)} data-testid="agent-desc-input" placeholder="What does this agent do?" className="w-full t-input rounded-xl px-4 py-3 text-[13px] focus:outline-none focus:border-cyan-400/50" style={{ border: '1px solid var(--input-border)' }} />
               </div>
 
               <div>
@@ -274,7 +274,7 @@ function AgentModal({ mode, agent, onClose, onSubmit, templates }) {
                 <textarea
                   value={code} onChange={(e) => setCode(e.target.value)}
                   data-testid="agent-code-textarea"
-                  className="w-full h-48 rounded-xl px-4 py-3 text-[12px] text-emerald-300 font-mono focus:outline-none focus:border-[#8B5CF6]/50 resize-none leading-relaxed"
+                  className="w-full h-48 rounded-xl px-4 py-3 text-[12px] text-emerald-300 font-mono focus:outline-none focus:border-cyan-400/50 resize-none leading-relaxed"
                   style={{ background: '#0d0d0f', border: '1px solid var(--border)', color: '#6ee7b7' }}
                   spellCheck={false}
                 />
@@ -288,14 +288,14 @@ function AgentModal({ mode, agent, onClose, onSubmit, templates }) {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-[12px] t-text-sub">Environment Variables</label>
-                  <button onClick={() => setEnvVars([...envVars, { k: "", v: "" }])} className="text-[11px] text-[#A78BFA] hover:text-[#C084FC] transition-colors flex items-center gap-1">
+                  <button onClick={() => setEnvVars([...envVars, { k: "", v: "" }])} className="text-[11px] text-cyan-300 hover:text-[#C084FC] transition-colors flex items-center gap-1">
                     <Plus size={10} /> Add
                   </button>
                 </div>
                 {envVars.map((pair, i) => (
                   <div key={i} className="flex gap-2 mb-2">
-                    <input value={pair.k} onChange={(e) => { const arr = [...envVars]; arr[i].k = e.target.value; setEnvVars(arr); }} placeholder="KEY" className="flex-1 t-input rounded-lg px-3 py-2 text-[12px] font-mono focus:outline-none focus:border-[#8B5CF6]/50" style={{ border: '1px solid var(--input-border)' }} />
-                    <input value={pair.v} onChange={(e) => { const arr = [...envVars]; arr[i].v = e.target.value; setEnvVars(arr); }} placeholder="value" className="flex-1 t-input rounded-lg px-3 py-2 text-[12px] font-mono focus:outline-none focus:border-[#8B5CF6]/50" style={{ border: '1px solid var(--input-border)' }} />
+                    <input value={pair.k} onChange={(e) => { const arr = [...envVars]; arr[i].k = e.target.value; setEnvVars(arr); }} placeholder="KEY" className="flex-1 t-input rounded-lg px-3 py-2 text-[12px] font-mono focus:outline-none focus:border-cyan-400/50" style={{ border: '1px solid var(--input-border)' }} />
+                    <input value={pair.v} onChange={(e) => { const arr = [...envVars]; arr[i].v = e.target.value; setEnvVars(arr); }} placeholder="value" className="flex-1 t-input rounded-lg px-3 py-2 text-[12px] font-mono focus:outline-none focus:border-cyan-400/50" style={{ border: '1px solid var(--input-border)' }} />
                     <button onClick={() => setEnvVars(envVars.filter((_, j) => j !== i))} className="p-2 t-text-dim hover:text-red-400"><Trash2 size={12} /></button>
                   </div>
                 ))}
@@ -311,7 +311,7 @@ function AgentModal({ mode, agent, onClose, onSubmit, templates }) {
             onClick={handleSubmit}
             data-testid={isRun ? "execute-agent-btn" : "deploy-agent-btn"}
             disabled={submitting}
-            className="px-6 py-2.5 bg-[#8B5CF6] text-white text-[13px] font-medium rounded-full hover:bg-[#A78BFA] transition-all shadow-[0_0_15px_rgba(139,92,246,0.2)] disabled:opacity-50 flex items-center gap-2"
+            className="px-6 py-2.5 bg-cyan-400 text-white text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all shadow-[0_0_15px_rgba(139,92,246,0.2)] disabled:opacity-50 flex items-center gap-2"
           >
             {submitting ? <Loader2 size={13} className="animate-spin" /> : isRun ? <Play size={13} /> : <Zap size={13} />}
             {isRun ? "Execute" : agent ? "Update" : "Deploy Agent"}
@@ -444,7 +444,7 @@ export default function Dashboard() {
 
   if (loading) return (
     <div className="min-h-[calc(100vh-60px)] flex items-center justify-center">
-      <Loader2 size={24} className="text-[#8B5CF6] animate-spin" />
+      <Loader2 size={24} className="text-cyan-400 animate-spin" />
     </div>
   );
 
@@ -463,7 +463,7 @@ export default function Dashboard() {
             onClick={() => { setModalAgent(null); setModalMode("create"); }}
             data-testid="create-agent-btn"
             disabled={stats && stats.agent_count >= stats.agent_limit}
-            className="px-5 py-2.5 bg-[#8B5CF6] text-white text-[13px] font-medium rounded-full hover:bg-[#A78BFA] transition-all shadow-[0_0_15px_rgba(139,92,246,0.2)] flex items-center gap-2 disabled:opacity-50"
+            className="px-5 py-2.5 bg-cyan-400 text-white text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all shadow-[0_0_15px_rgba(139,92,246,0.2)] flex items-center gap-2 disabled:opacity-50"
           >
             <Plus size={14} /> Deploy Agent
           </button>
@@ -471,28 +471,28 @@ export default function Dashboard() {
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
-          <StatCard label="Agents" value={stats?.agent_count || 0} max={stats?.agent_limit || 3} icon={Package} color="#8B5CF6" />
-          <StatCard label="Total Runs" value={stats?.total_runs || 0} icon={Play} color="#A78BFA" />
-          <StatCard label="Purchased" value={stats?.purchased_agents || 0} icon={ArrowUpRight} color="#7C3AED" />
-          <StatCard label="Tier" value={stats?.tier?.toUpperCase() || "FREE"} icon={Shield} color={stats?.tier === "pro" ? "#A78BFA" : "#6B7280"} />
+          <StatCard label="Agents" value={stats?.agent_count || 0} max={stats?.agent_limit || 3} icon={Package} color="#22d3ee" />
+          <StatCard label="Total Runs" value={stats?.total_runs || 0} icon={Play} color="#06b6d4" />
+          <StatCard label="Purchased" value={stats?.purchased_agents || 0} icon={ArrowUpRight} color="#0e7490" />
+          <StatCard label="Tier" value={stats?.tier?.toUpperCase() || "FREE"} icon={Shield} color={stats?.tier === "pro" ? "#06b6d4" : "#6B7280"} />
         </div>
 
         {/* Upgrade banner */}
         {stats && stats.agent_count >= stats.agent_limit && stats.tier === "free" && (
-          <div data-testid="upgrade-banner" className="mb-6 bg-gradient-to-r from-[#8B5CF6]/10 to-[#6D28D9]/10 border border-[#8B5CF6]/20 rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-            <AlertTriangle size={18} className="text-[#A78BFA] shrink-0" />
+          <div data-testid="upgrade-banner" className="mb-6 bg-gradient-to-r from-[#22d3ee]/10 to-[#0891b2]/10 border border-cyan-400/20 rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+            <AlertTriangle size={18} className="text-cyan-300 shrink-0" />
             <div className="flex-1">
               <p className="text-[13px] text-white font-medium">Agent limit reached ({stats.agent_count}/{stats.agent_limit})</p>
               <p className="text-[12px] text-zinc-500 mt-0.5">Upgrade to Pro for unlimited agents, priority execution, and advanced analytics.</p>
             </div>
-            <button className="px-5 py-2 bg-[#8B5CF6] text-white text-[12px] font-medium rounded-full hover:bg-[#A78BFA] transition-all whitespace-nowrap">
+            <button className="px-5 py-2 bg-cyan-400 text-white text-[12px] font-medium rounded-sm hover:bg-cyan-300 transition-all whitespace-nowrap">
               Upgrade to Pro
             </button>
           </div>
         )}
 
         {/* Tab toggle */}
-        <div className="flex items-center gap-1 mb-6 bg-white/[0.03] border border-white/[0.07] rounded-full p-1 w-fit">
+        <div className="flex items-center gap-1 mb-6 bg-white/[0.03] border border-white/[0.07] rounded-sm p-1 w-fit">
           {[
             { id: "agents", label: "My Agents", icon: Code },
             { id: "purchased", label: "Purchased", icon: Package },
@@ -501,8 +501,8 @@ export default function Dashboard() {
               key={t.id}
               onClick={() => setActiveTab(t.id)}
               data-testid={`tab-${t.id}`}
-              className={`flex items-center gap-1.5 px-4 py-2 text-[12px] rounded-full transition-all ${
-                activeTab === t.id ? "bg-[#8B5CF6] text-white" : "text-zinc-500 hover:text-zinc-300"
+              className={`flex items-center gap-1.5 px-4 py-2 text-[12px] rounded-sm transition-all ${
+                activeTab === t.id ? "bg-cyan-400 text-white" : "text-zinc-500 hover:text-zinc-300"
               }`}
             >
               <t.icon size={12} /> {t.label}
@@ -514,13 +514,13 @@ export default function Dashboard() {
         {activeTab === "agents" && (
           <div className="space-y-4">
             {agents.length === 0 ? (
-              <div className="text-center py-16 rounded-2xl" style={{ border: '1px dashed var(--border)' }}>
+              <div className="text-center py-16 rounded-sm" style={{ border: '1px dashed var(--border)' }}>
                 <Zap size={32} className="t-text-dim mx-auto mb-3" />
                 <p className="text-[14px] t-text-sub mb-1">No agents deployed yet</p>
                 <p className="text-[12px] t-text-dim mb-4">Deploy your first custom AI agent to get started.</p>
                 <button
                   onClick={() => { setModalAgent(null); setModalMode("create"); }}
-                  className="px-5 py-2.5 bg-[#8B5CF6] text-white text-[13px] font-medium rounded-full hover:bg-[#A78BFA] transition-all"
+                  className="px-5 py-2.5 bg-cyan-400 text-white text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all"
                 >
                   Deploy Agent
                 </button>
@@ -553,7 +553,7 @@ export default function Dashboard() {
         {activeTab === "purchased" && (
           <div className="space-y-4">
             {purchased.length === 0 ? (
-              <div className="text-center py-16 rounded-2xl" style={{ border: '1px dashed var(--border)' }}>
+              <div className="text-center py-16 rounded-sm" style={{ border: '1px dashed var(--border)' }}>
                 <Package size={32} className="t-text-dim mx-auto mb-3" />
                 <p className="text-[14px] t-text-sub">No purchased agents yet</p>
                 <p className="text-[12px] t-text-dim mt-1">Browse the marketplace to find agents for your needs.</p>
@@ -562,8 +562,8 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {purchased.map((tx) => (
                   <div key={tx.id} className="rounded-xl p-4 sm:p-5 flex items-center gap-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                    <div className="w-10 h-10 rounded-lg bg-[#8B5CF6]/10 flex items-center justify-center shrink-0">
-                      <Package size={16} className="text-[#8B5CF6]" />
+                    <div className="w-10 h-10 rounded-lg bg-cyan-400/10 flex items-center justify-center shrink-0">
+                      <Package size={16} className="text-cyan-400" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-medium t-text truncate">{tx.agent_name}</p>

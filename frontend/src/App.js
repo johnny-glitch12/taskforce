@@ -121,9 +121,9 @@ function App() {
                   backdropFilter: 'blur(12px)',
                   border: '1px solid var(--border)',
                   color: 'var(--toast-text)',
-                  fontFamily: "'IBM Plex Sans', sans-serif",
-                  borderRadius: '12px',
-                  fontSize: '13px',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  borderRadius: '2px',
+                  fontSize: '12px',
                 },
               }}
             />
@@ -133,10 +133,19 @@ function App() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/academy" element={<Academy />} />
                 <Route path="/pricing" element={<Pricing />} />
+                <Route path="/exchange" element={<Marketplace />} />
                 <Route path="/marketplace" element={<Marketplace />} />
                 <Route path="/agent/:id" element={<AgentDetail />} />
                 <Route path="/creator/:id" element={<CreatorProfile />} />
                 <Route path="/payment/success" element={<PaymentSuccess />} />
+                <Route
+                  path="/armory"
+                  element={
+                    <ProtectedRoute>
+                      <Studio />
+                    </ProtectedRoute>
+                  }
+                />
                 <Route
                   path="/studio"
                   element={

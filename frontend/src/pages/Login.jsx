@@ -18,7 +18,7 @@ export default function Login() {
   useEffect(() => {
     if (user) {
       if (user.client_id === "csdrop") navigate("/dashboard/csdrop", { replace: true });
-      else navigate("/studio", { replace: true });
+      else navigate("/armory", { replace: true });
     }
   }, [user, navigate]);
 
@@ -29,7 +29,7 @@ export default function Login() {
       const u = await login(email, password);
       toast.success(`Welcome back${u.name ? ", " + u.name : ""}.`);
       if (u.client_id === "csdrop") navigate("/dashboard/csdrop");
-      else navigate("/studio");
+      else navigate("/armory");
     } catch (err) {
       toast.error(err.message || "Login failed.");
     }
@@ -43,7 +43,7 @@ export default function Login() {
     try {
       const u = await register(email, password, name);
       toast.success(`Welcome, ${u.name}! Account created.`);
-      navigate("/studio");
+      navigate("/armory");
     } catch (err) {
       toast.error(err.message || "Registration failed.");
     }
@@ -72,27 +72,27 @@ export default function Login() {
 
   if (user) return null;
 
-  const inputCls = "w-full t-input focus:outline-none focus:border-[#8B5CF6]/50 transition-all py-3 px-4 text-[15px] rounded-xl";
+  const inputCls = "w-full t-input focus:outline-none focus:border-cyan-400/50 transition-all py-3 px-4 text-[15px] rounded-xl";
 
   return (
     <div className="min-h-[calc(100vh-60px)] flex items-center justify-center px-6">
-      <div className="fixed top-[20%] left-1/2 -translate-x-1/2 w-[400px] h-[400px] rounded-full bg-[#8B5CF6]/[0.06] blur-[100px] pointer-events-none t-orb" />
+      <div className="fixed top-[20%] left-1/2 -translate-x-1/2 w-[400px] h-[400px] rounded-sm bg-cyan-400/[0.06] blur-[100px] pointer-events-none t-orb" />
 
       <div
         data-testid="auth-card"
-        className="relative w-full max-w-sm rounded-2xl p-8 md:p-9 animate-fade-in-up backdrop-blur-sm"
+        className="relative w-full max-w-sm rounded-sm p-8 md:p-9 animate-fade-in-up backdrop-blur-sm"
         style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', animationFillMode: "forwards" }}
       >
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-11 h-11 bg-[#8B5CF6]/10 rounded-xl flex items-center justify-center mx-auto mb-4">
-            {mode === "signup" ? <UserPlus size={18} className="text-[#8B5CF6]" /> : <Lock size={18} className="text-[#8B5CF6]" />}
+          <div className="w-11 h-11 bg-cyan-400/10 rounded-xl flex items-center justify-center mx-auto mb-4">
+            {mode === "signup" ? <UserPlus size={18} className="text-cyan-400" /> : <Lock size={18} className="text-cyan-400" />}
           </div>
           <h2 data-testid="auth-title" className="text-xl font-semibold t-text tracking-tight" style={{ fontFamily: "'Outfit', sans-serif" }}>
             {mode === "login" ? "Sign in" : mode === "signup" ? "Create account" : "Reset password"}
           </h2>
           <p className="text-[13px] t-text-sub mt-1">
-            {mode === "login" ? "Welcome back to Nova" : mode === "signup" ? "Join the AI agent economy" : "Enter your email to get a reset link"}
+            {mode === "login" ? "Welcome back, operative." : mode === "signup" ? "Join the AI execution economy." : "Enter your email to get a reset link."}
           </p>
         </div>
 
@@ -107,11 +107,11 @@ export default function Login() {
               <label htmlFor="password" className="block text-[13px] t-text-sub mb-2">Password</label>
               <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} data-testid="login-password-input" placeholder="Enter password" className={inputCls} style={{ border: '1px solid var(--input-border)' }} required />
             </div>
-            <button type="submit" data-testid="login-submit-btn" className="mt-2 w-full py-3.5 bg-[#8B5CF6] text-white text-[14px] font-medium rounded-full hover:bg-[#A78BFA] transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_35px_rgba(139,92,246,0.4)] disabled:opacity-50" disabled={submitting}>
+            <button type="submit" data-testid="login-submit-btn" className="mt-2 w-full py-3.5 bg-cyan-400 text-white text-[14px] font-medium rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_35px_rgba(139,92,246,0.4)] disabled:opacity-50" disabled={submitting}>
               {submitting ? "Signing in..." : "Sign in"}
             </button>
             <div className="flex items-center justify-between mt-1">
-              <button type="button" data-testid="switch-to-signup-btn" onClick={() => { setMode("signup"); setResetToken(null); }} className="text-[12px] text-[#A78BFA] hover:text-[#C084FC] transition-colors">Create account</button>
+              <button type="button" data-testid="switch-to-signup-btn" onClick={() => { setMode("signup"); setResetToken(null); }} className="text-[12px] text-cyan-300 hover:text-[#C084FC] transition-colors">Create account</button>
               <button type="button" data-testid="switch-to-forgot-btn" onClick={() => { setMode("forgot"); setResetToken(null); }} className="text-[12px] t-text-sub hover:t-text transition-colors">Forgot password?</button>
             </div>
           </form>
@@ -132,7 +132,7 @@ export default function Login() {
               <label htmlFor="s-password" className="block text-[13px] t-text-sub mb-2">Password</label>
               <input id="s-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} data-testid="signup-password-input" placeholder="Min 6 characters" className={inputCls} style={{ border: '1px solid var(--input-border)' }} required minLength={6} />
             </div>
-            <button type="submit" data-testid="signup-submit-btn" className="mt-2 w-full py-3.5 bg-[#8B5CF6] text-white text-[14px] font-medium rounded-full hover:bg-[#A78BFA] transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_35px_rgba(139,92,246,0.4)] disabled:opacity-50" disabled={submitting}>
+            <button type="submit" data-testid="signup-submit-btn" className="mt-2 w-full py-3.5 bg-cyan-400 text-white text-[14px] font-medium rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_35px_rgba(139,92,246,0.4)] disabled:opacity-50" disabled={submitting}>
               {submitting ? "Creating account..." : "Create account"}
             </button>
             <button type="button" data-testid="switch-to-login-btn" onClick={() => setMode("login")} className="flex items-center justify-center gap-1.5 text-[12px] t-text-sub hover:t-text transition-colors mt-1">
@@ -150,7 +150,7 @@ export default function Login() {
                   <label htmlFor="f-email" className="block text-[13px] t-text-sub mb-2">Email</label>
                   <input id="f-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="forgot-email-input" placeholder="your@email.com" className={inputCls} style={{ border: '1px solid var(--input-border)' }} required />
                 </div>
-                <button type="submit" data-testid="forgot-submit-btn" className="mt-2 w-full py-3.5 bg-[#8B5CF6] text-white text-[14px] font-medium rounded-full hover:bg-[#A78BFA] transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_35px_rgba(139,92,246,0.4)] disabled:opacity-50" disabled={submitting}>
+                <button type="submit" data-testid="forgot-submit-btn" className="mt-2 w-full py-3.5 bg-cyan-400 text-white text-[14px] font-medium rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_35px_rgba(139,92,246,0.4)] disabled:opacity-50" disabled={submitting}>
                   {submitting ? "Sending..." : "Send reset link"}
                 </button>
                 <button type="button" onClick={() => setMode("login")} className="flex items-center justify-center gap-1.5 text-[12px] t-text-sub hover:t-text transition-colors mt-1">
@@ -189,15 +189,15 @@ function ResetPasswordForm({ token, API, onSuccess }) {
 
   return (
     <form onSubmit={handleReset} data-testid="reset-form" className="flex flex-col gap-5">
-      <div className="bg-[#8B5CF6]/5 border border-[#8B5CF6]/20 rounded-xl p-3">
-        <p className="text-[11px] text-[#A78BFA] mb-1">Reset Token (demo)</p>
+      <div className="bg-cyan-400/5 border border-cyan-400/20 rounded-xl p-3">
+        <p className="text-[11px] text-cyan-300 mb-1">Reset Token (demo)</p>
         <p className="text-[12px] t-text-mute font-mono break-all">{token}</p>
       </div>
       <div>
         <label htmlFor="new-password" className="block text-[13px] t-text-sub mb-2">New Password</label>
-        <input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} data-testid="reset-password-input" placeholder="Min 6 characters" className="w-full t-input focus:outline-none focus:border-[#8B5CF6]/50 transition-all py-3 px-4 text-[15px] rounded-xl" style={{ border: '1px solid var(--input-border)' }} required minLength={6} />
+        <input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} data-testid="reset-password-input" placeholder="Min 6 characters" className="w-full t-input focus:outline-none focus:border-cyan-400/50 transition-all py-3 px-4 text-[15px] rounded-xl" style={{ border: '1px solid var(--input-border)' }} required minLength={6} />
       </div>
-      <button type="submit" data-testid="reset-submit-btn" className="mt-2 w-full py-3.5 bg-[#8B5CF6] text-white text-[14px] font-medium rounded-full hover:bg-[#A78BFA] transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_35px_rgba(139,92,246,0.4)] disabled:opacity-50" disabled={submitting}>
+      <button type="submit" data-testid="reset-submit-btn" className="mt-2 w-full py-3.5 bg-cyan-400 text-white text-[14px] font-medium rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_35px_rgba(139,92,246,0.4)] disabled:opacity-50" disabled={submitting}>
         {submitting ? "Resetting..." : "Set new password"}
       </button>
     </form>

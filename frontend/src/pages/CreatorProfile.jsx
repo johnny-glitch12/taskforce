@@ -33,7 +33,7 @@ export default function CreatorProfile() {
 
   return (
     <div data-testid="creator-profile-page" className="min-h-[calc(100vh-60px)] px-6 lg:px-8 py-12 relative">
-      <div className="absolute top-0 left-[20%] w-[350px] h-[350px] rounded-full bg-[#8B5CF6]/[0.03] blur-[120px] pointer-events-none" />
+      <div className="absolute top-0 left-[20%] w-[350px] h-[350px] rounded-sm bg-cyan-400/[0.03] blur-[120px] pointer-events-none" />
 
       <div className="max-w-4xl mx-auto relative">
         {/* Back link */}
@@ -46,9 +46,9 @@ export default function CreatorProfile() {
         </Link>
 
         {/* Profile Header */}
-        <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-6 md:p-8 mb-8">
+        <div className="bg-white/[0.03] border border-white/[0.07] rounded-sm p-6 md:p-8 mb-8">
           <div className="flex flex-col sm:flex-row items-start gap-5">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-2xl font-bold flex-shrink-0" style={{ background: creator.color }}>
+            <div className="w-16 h-16 rounded-sm flex items-center justify-center text-white text-2xl font-bold flex-shrink-0" style={{ background: creator.color }}>
               {creator.initial}
             </div>
             <div className="flex-1">
@@ -56,12 +56,12 @@ export default function CreatorProfile() {
                 <h1 className="text-2xl font-bold text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>
                   {creator.name}
                 </h1>
-                {creator.verified && <BadgeCheck size={18} className="text-[#8B5CF6]" />}
+                {creator.verified && <BadgeCheck size={18} className="text-cyan-400" />}
               </div>
               <p className="text-[14px] text-zinc-500 mb-3">{creator.username}</p>
               <p className="text-[14px] text-zinc-400 leading-relaxed mb-4">{creator.bio}</p>
               <div className="flex flex-wrap items-center gap-3">
-                <span className="text-[11px] bg-[#8B5CF6]/15 text-[#A78BFA] px-3 py-1 rounded-full font-medium">Supernova</span>
+                <span className="text-[11px] bg-cyan-400/15 text-cyan-300 px-3 py-1 rounded-sm font-medium">Supernova</span>
                 <span className="flex items-center gap-1 text-[12px] text-zinc-400"><Shield size={12} className="text-emerald-500" /> Trust Score: {creator.trustScore}</span>
                 <span className="flex items-center gap-1 text-[12px] text-zinc-400"><Star size={12} className="fill-amber-400 text-amber-400" /> {avgRating} avg rating</span>
               </div>
@@ -101,7 +101,7 @@ export default function CreatorProfile() {
               to={`/agent/${agent.id}`}
               key={agent.id}
               data-testid={`portfolio-agent-${agent.id}`}
-              className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-5 transition-all duration-300 hover:border-[#8B5CF6]/25 hover:shadow-[0_0_25px_rgba(139,92,246,0.06)]"
+              className="bg-white/[0.03] border border-white/[0.07] rounded-sm p-5 transition-all duration-300 hover:border-cyan-400/25 hover:shadow-[0_0_25px_rgba(139,92,246,0.06)]"
             >
               <h3 className="text-[15px] font-medium text-white mb-2" style={{ fontFamily: "'Outfit', sans-serif" }}>
                 {agent.shortTitle || agent.title}
@@ -116,7 +116,7 @@ export default function CreatorProfile() {
               </div>
               <div className="flex items-center justify-between pt-3 border-t border-white/[0.05]">
                 <span className="text-[14px] font-semibold text-white">${agent.price}<span className="text-[11px] text-zinc-500 font-normal">/mo</span></span>
-                <span className="text-[12px] text-[#8B5CF6] flex items-center gap-1">View <ExternalLink size={10} /></span>
+                <span className="text-[12px] text-cyan-400 flex items-center gap-1">View <ExternalLink size={10} /></span>
               </div>
             </Link>
           ))}

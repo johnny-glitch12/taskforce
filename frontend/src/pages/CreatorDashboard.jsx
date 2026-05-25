@@ -47,8 +47,8 @@ function AgentRow({ agent, onDelete, token }) {
   return (
     <div data-testid={`creator-agent-${agent.agent_id}`} style={{ borderBottom: '1px solid var(--border)' }}>
       <div className="px-4 lg:px-5 py-4 flex items-center gap-4 cursor-pointer" onClick={loadDetail}>
-        <div className="w-9 h-9 rounded-lg bg-[#8B5CF6]/10 flex items-center justify-center shrink-0">
-          <Package size={16} className="text-[#8B5CF6]" />
+        <div className="w-9 h-9 rounded-lg bg-cyan-400/10 flex items-center justify-center shrink-0">
+          <Package size={16} className="text-cyan-400" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-[14px] t-text font-medium truncate">{agent.name}</p>
@@ -58,7 +58,7 @@ function AgentRow({ agent, onDelete, token }) {
             <span className="flex items-center gap-1"><Shield size={10} /> {agent.trust_score}</span>
           </div>
         </div>
-        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${style.bg} ${style.color}`}>
+        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-sm ${style.bg} ${style.color}`}>
           {style.label}
         </span>
         <span className="text-[12px] t-text-dim hidden sm:inline">{new Date(agent.updated_at).toLocaleDateString()}</span>
@@ -140,7 +140,7 @@ export default function CreatorDashboard() {
   if (loading) {
     return (
       <div className="min-h-[calc(100vh-60px)] flex items-center justify-center">
-        <Loader2 size={24} className="text-[#8B5CF6] animate-spin" />
+        <Loader2 size={24} className="text-cyan-400 animate-spin" />
       </div>
     );
   }
@@ -154,7 +154,7 @@ export default function CreatorDashboard() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold t-text tracking-tight flex items-center gap-3" style={{ fontFamily: "'Outfit', sans-serif" }}>
-              <BarChart3 size={24} className="text-[#8B5CF6]" /> Creator Dashboard
+              <BarChart3 size={24} className="text-cyan-400" /> Creator Dashboard
             </h1>
             <p className="text-[13px] t-text-sub mt-1">Manage your published agents and track performance</p>
           </div>
@@ -162,7 +162,7 @@ export default function CreatorDashboard() {
             <button
               onClick={fetchData}
               data-testid="refresh-creator-btn"
-              className="px-4 py-2 rounded-full text-[13px] font-medium flex items-center gap-2 t-text-sub hover:t-text transition-colors"
+              className="px-4 py-2 rounded-sm text-[13px] font-medium flex items-center gap-2 t-text-sub hover:t-text transition-colors"
               style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
             >
               <RefreshCw size={13} /> Refresh
@@ -170,7 +170,7 @@ export default function CreatorDashboard() {
             <Link
               to="/studio"
               data-testid="goto-studio-btn"
-              className="px-4 py-2 bg-[#8B5CF6] text-white text-[13px] font-medium rounded-full hover:bg-[#A78BFA] transition-all shadow-[0_0_15px_rgba(139,92,246,0.2)] flex items-center gap-2"
+              className="px-4 py-2 bg-cyan-400 text-white text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all shadow-[0_0_15px_rgba(139,92,246,0.2)] flex items-center gap-2"
             >
               <Plus size={13} /> Build Agent
             </Link>
@@ -179,8 +179,8 @@ export default function CreatorDashboard() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-          <StatCard label="Total Agents" value={stats.total_agents} icon={Package} color="#8B5CF6" sub={`${stats.published} published, ${stats.drafts} drafts`} />
-          <StatCard label="Total Executions" value={stats.total_executions} icon={Zap} color="#A78BFA" />
+          <StatCard label="Total Agents" value={stats.total_agents} icon={Package} color="#22d3ee" sub={`${stats.published} published, ${stats.drafts} drafts`} />
+          <StatCard label="Total Executions" value={stats.total_executions} icon={Zap} color="#06b6d4" />
           <StatCard label="Avg Trust Score" value={stats.avg_trust_score} icon={Shield} color="#34d399" />
           <StatCard label="Total Versions" value={stats.total_versions} icon={GitBranch} color="#60a5fa" sub="Across all agents" />
         </div>
@@ -189,7 +189,7 @@ export default function CreatorDashboard() {
         <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
           <div className="px-4 lg:px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
             <div className="flex items-center gap-2">
-              <Package size={13} className="text-[#8B5CF6]" />
+              <Package size={13} className="text-cyan-400" />
               <span className="text-[12px] t-text-sub font-medium">Your Agents</span>
             </div>
             <span className="text-[11px] t-text-dim">{stats.agents.length} total</span>
@@ -199,10 +199,10 @@ export default function CreatorDashboard() {
             <div className="text-center py-16 px-4">
               <Package size={32} className="t-text-dim mx-auto mb-3" />
               <p className="text-[14px] t-text-sub mb-1">No published agents yet</p>
-              <p className="text-[12px] t-text-dim mb-4">Build your first agent in Nova Studio and publish it to the marketplace.</p>
+              <p className="text-[12px] t-text-dim mb-4">Build your first agent in The Armory and publish it to the marketplace.</p>
               <Link
                 to="/studio"
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#8B5CF6] text-white text-[13px] font-medium rounded-full hover:bg-[#A78BFA] transition-all"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-cyan-400 text-white text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all"
               >
                 <Plus size={14} /> Go to Studio
               </Link>

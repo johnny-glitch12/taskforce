@@ -39,12 +39,12 @@ function EventRow({ event }) {
     >
       <div className="px-4 py-3 flex items-center gap-3 cursor-pointer" onClick={() => setExpanded(!expanded)}>
         <VerdictIcon size={14} className={style.color} />
-        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${style.bg} ${style.color}`}>
+        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-sm ${style.bg} ${style.color}`}>
           {event.verdict}
         </span>
         <span className="text-[12px] t-text-sub truncate flex-1">{event.executor_id}</span>
         {event.blocked && (
-          <span className="text-[10px] bg-red-500/10 text-red-400 px-2 py-0.5 rounded-full font-medium">BLOCKED</span>
+          <span className="text-[10px] bg-red-500/10 text-red-400 px-2 py-0.5 rounded-sm font-medium">BLOCKED</span>
         )}
         <span className="text-[11px] t-text-dim flex items-center gap-1 shrink-0">
           <Clock size={10} /> {time}
@@ -94,7 +94,7 @@ export default function SecurityDashboard() {
   if (loading) {
     return (
       <div className="min-h-[calc(100vh-60px)] flex items-center justify-center">
-        <Loader2 size={24} className="text-[#8B5CF6] animate-spin" />
+        <Loader2 size={24} className="text-cyan-400 animate-spin" />
       </div>
     );
   }
@@ -106,14 +106,14 @@ export default function SecurityDashboard() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold t-text tracking-tight flex items-center gap-3" style={{ fontFamily: "'Outfit', sans-serif" }}>
-              <Shield size={24} className="text-[#8B5CF6]" /> Security Audit Log
+              <Shield size={24} className="text-cyan-400" /> Security Audit Log
             </h1>
             <p className="text-[13px] t-text-sub mt-1">Monitor firewall verdicts and blocked prompt injection attempts</p>
           </div>
           <button
             onClick={fetchData}
             data-testid="refresh-security-btn"
-            className="px-4 py-2 rounded-full text-[13px] font-medium flex items-center gap-2 t-text-sub hover:t-text transition-colors"
+            className="px-4 py-2 rounded-sm text-[13px] font-medium flex items-center gap-2 t-text-sub hover:t-text transition-colors"
             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
           >
             <RefreshCw size={13} /> Refresh
@@ -123,7 +123,7 @@ export default function SecurityDashboard() {
         {/* Stats */}
         {stats && (
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
-            <StatBox label="Total Audits" value={stats.total_audits} color="#8B5CF6" icon={Shield} />
+            <StatBox label="Total Audits" value={stats.total_audits} color="#22d3ee" icon={Shield} />
             <StatBox label="Safe" value={stats.safe} color="#34d399" icon={CheckCircle2} />
             <StatBox label="Suspicious" value={stats.suspicious} color="#fbbf24" icon={AlertTriangle} />
             <StatBox label="Unsafe" value={stats.unsafe} color="#f87171" icon={XCircle} />
@@ -139,8 +139,8 @@ export default function SecurityDashboard() {
               key={f}
               onClick={() => setFilter(f)}
               data-testid={`filter-${f.toLowerCase()}`}
-              className={`px-3 py-1.5 text-[12px] rounded-full transition-all ${
-                filter === f ? "bg-[#8B5CF6] text-white" : "t-text-sub"
+              className={`px-3 py-1.5 text-[12px] rounded-sm transition-all ${
+                filter === f ? "bg-cyan-400 text-white" : "t-text-sub"
               }`}
               style={filter !== f ? { background: 'var(--bg-card)', border: '1px solid var(--border)' } : {}}
             >
@@ -152,7 +152,7 @@ export default function SecurityDashboard() {
         {/* Events List */}
         <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
           <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid var(--border)' }}>
-            <Shield size={13} className="text-[#8B5CF6]" />
+            <Shield size={13} className="text-cyan-400" />
             <span className="text-[12px] t-text-sub font-medium">Audit Events</span>
             <span className="ml-auto text-[11px] t-text-dim">{events.length} events</span>
           </div>
