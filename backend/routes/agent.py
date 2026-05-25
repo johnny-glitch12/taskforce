@@ -13,6 +13,7 @@ from supabase import create_client
 
 from lib.firewall import audit_prompt
 from lib.rate_limiter import check_rate_limit, check_concurrent_cap, mark_execution_active, mark_execution_done
+from routes.security import log_security_event
 
 load_dotenv()
 
@@ -76,6 +77,14 @@ async def run_agent(
     # ── Gate 3: Semantic Firewall (LLM prompt audit) ──
     try:
         audit = await audit_prompt(req.user_message, req.system_prompt)
+        # Log the firewall verdict to security_events
+        log_security_event(
+            executor_id=executor_id,
+            verdict=audit["verdict"],
+            prompt_snippet=req.user_message,
+            blocked=not audit["allowed"],
+            metadata={"system_prompt_len": len(req.system_prompt), "agent_id": req.agent_id},
+        )
         if not audit["allowed"]:
             mark_execution_done(executor_id)
             raise HTTPException(

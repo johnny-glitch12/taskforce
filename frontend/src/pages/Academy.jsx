@@ -158,7 +158,7 @@ function CodePlayground() {
         <div className="pl-4"><span className="text-amber-300">tools</span>=[<span className="text-emerald-400">Tool</span>.<span className="text-white">web_search</span>()],</div>
         <div>)</div>
         <div className="mt-2"><span className="text-[#A78BFA]">result</span> = <span className="text-white">agent</span>.<span className="text-amber-300">run</span>(<span className="text-emerald-300">"Find latest AI news"</span>)</div>
-        <div className="mt-1 text-zinc-500"># Output: {"headline": "..."}</div>
+        <div className="mt-1 text-zinc-500">{`# Output: {"headline": "..."}`}</div>
       </div>
     </div>
   );

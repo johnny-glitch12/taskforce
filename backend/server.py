@@ -1983,6 +1983,10 @@ app.include_router(api_router)
 from routes.agent import router as agent_router
 app.include_router(agent_router, prefix="/api")
 
+# Include security audit log router
+from routes.security import router as security_router
+app.include_router(security_router, prefix="/api")
+
 # Mount static files for live bot screenshots
 STATIC_DIR = Path(__file__).parent / "static"
 STATIC_DIR.mkdir(exist_ok=True)
