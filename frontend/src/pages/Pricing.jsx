@@ -1,15 +1,20 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/App";
+import { toast } from "sonner";
 import {
   Check, Zap, GraduationCap, Shield, Terminal,
   Crown, Users, Server, Globe, Key, Lock,
-  Headphones, ArrowRight, BadgeCheck, Sparkles,
+  Headphones, ArrowRight, BadgeCheck, Loader2,
 } from "lucide-react";
+
+const API = process.env.REACT_APP_BACKEND_URL;
 
 const TIERS = [
   {
     id: "recruit",
     name: "RECRUIT",
+    backendTier: null,
     tagline: "Start building and learning the basics.",
     monthlyPrice: 0,
     cta: "Get Started Free",
@@ -25,6 +30,7 @@ const TIERS = [
   {
     id: "cadet",
     name: "CADET",
+    backendTier: "cadet",
     tagline: "Ad-free advanced learning and expanded testing.",
     monthlyPrice: 19,
     cta: "Start 7-Day Trial",
@@ -40,6 +46,7 @@ const TIERS = [
   {
     id: "operator",
     name: "OPERATOR",
+    backendTier: "operator",
     tagline: "For serious builders engineering complex logic.",
     monthlyPrice: 99,
     popular: true,
@@ -56,6 +63,7 @@ const TIERS = [
   {
     id: "command",
     name: "COMMAND",
+    backendTier: null,
     tagline: "High-volume infrastructure for agencies.",
     monthlyPrice: null,
     cta: "Contact Sales",
@@ -92,9 +100,16 @@ function BillingToggle({ annual, setAnnual }) {
   );
 }
 
-function PricingCard({ tier, annual }) {
+function PricingCard({ tier, annual, onSubscribe, subscribing }) {
   const isPopular = tier.popular;
   const price = tier.monthlyPrice === null ? null : annual ? Math.round(tier.monthlyPrice * 0.8) : tier.monthlyPrice;
+  const isLoading = subscribing === tier.id;
+
+  const handleClick = () => {
+    if (tier.backendTier) {
+      onSubscribe(tier.id, tier.backendTier);
+    }
+  };
 
   return (
     <div
@@ -116,7 +131,6 @@ function PricingCard({ tier, annual }) {
       )}
 
       <div className={`h-full rounded-sm p-6 flex flex-col ${isPopular ? "pt-8" : ""}`} style={{ background: isPopular ? "var(--bg-primary)" : "var(--bg-card)", border: isPopular ? "none" : "1px solid var(--border)" }}>
-        {/* Tier */}
         <div className="flex items-center gap-3 mb-3">
           <div className="w-9 h-9 rounded-sm flex items-center justify-center" style={{ background: isPopular ? "rgba(34,211,238,0.1)" : "var(--bg-card-hover)" }}>
             <tier.icon size={16} className={isPopular ? "text-cyan-400" : "t-text-mute"} />
@@ -126,7 +140,6 @@ function PricingCard({ tier, annual }) {
 
         <p className="text-[12px] t-text-sub leading-relaxed mb-5 min-h-[36px]">{tier.tagline}</p>
 
-        {/* Price */}
         <div className="mb-5">
           {price === null ? (
             <span className="text-2xl font-bold t-text font-mono">Custom</span>
@@ -145,15 +158,28 @@ function PricingCard({ tier, annual }) {
           )}
         </div>
 
-        {/* CTA */}
+        {/* CTA — wired to Stripe */}
         {tier.ctaStyle === "primary" ? (
-          <Link to="/login" data-testid={`cta-${tier.id}`} className="w-full py-3 text-[13px] font-bold tracking-wide uppercase rounded-sm transition-all flex items-center justify-center gap-2 mb-6 text-black bg-cyan-400 hover:bg-cyan-300 shadow-[0_0_20px_rgba(34,211,238,0.2)]">
-            <Zap size={14} /> {tier.cta}
-          </Link>
+          <button
+            onClick={handleClick}
+            data-testid={`cta-${tier.id}`}
+            disabled={isLoading}
+            className="w-full py-3 text-[13px] font-bold tracking-wide uppercase rounded-sm transition-all flex items-center justify-center gap-2 mb-6 text-black bg-cyan-400 hover:bg-cyan-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50"
+          >
+            {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+            {isLoading ? "Processing..." : tier.cta}
+          </button>
         ) : (
-          <Link to={tier.monthlyPrice === null ? "#" : "/login"} data-testid={`cta-${tier.id}`} className="w-full py-3 text-[13px] font-bold tracking-wide uppercase rounded-sm transition-all flex items-center justify-center gap-2 mb-6 t-text hover:text-cyan-400 hover:border-cyan-400/40" style={{ background: "transparent", border: "1px solid var(--border)" }}>
-            {tier.monthlyPrice === null ? <ArrowRight size={14} /> : <Zap size={14} />} {tier.cta}
-          </Link>
+          <button
+            onClick={tier.backendTier ? handleClick : undefined}
+            data-testid={`cta-${tier.id}`}
+            disabled={isLoading}
+            className="w-full py-3 text-[13px] font-bold tracking-wide uppercase rounded-sm transition-all flex items-center justify-center gap-2 mb-6 t-text hover:text-cyan-400 hover:border-cyan-400/40 disabled:opacity-50"
+            style={{ background: "transparent", border: "1px solid var(--border)" }}
+          >
+            {isLoading ? <Loader2 size={14} className="animate-spin" /> : tier.monthlyPrice === null ? <ArrowRight size={14} /> : <Zap size={14} />}
+            {isLoading ? "Processing..." : tier.cta}
+          </button>
         )}
 
         <div className="h-px mb-5" style={{ background: "var(--border)" }} />
@@ -173,6 +199,33 @@ function PricingCard({ tier, annual }) {
 
 export default function Pricing() {
   const [annual, setAnnual] = useState(false);
+  const [subscribing, setSubscribing] = useState(null);
+  const { user, token } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSubscribe = async (tierId, backendTier) => {
+    if (!user) {
+      toast.error("Please sign in first.");
+      navigate("/login");
+      return;
+    }
+    setSubscribing(tierId);
+    try {
+      const res = await fetch(`${API}/api/subscriptions/checkout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ tier: backendTier, origin_url: window.location.origin }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        window.location.href = data.url;
+      } else {
+        const err = await res.json();
+        toast.error(err.detail || "Checkout failed.");
+      }
+    } catch { toast.error("Network error."); }
+    setSubscribing(null);
+  };
 
   return (
     <div data-testid="pricing-page" className="min-h-[calc(100vh-56px)] px-6 lg:px-8 py-16 md:py-20 relative overflow-hidden">
@@ -195,7 +248,9 @@ export default function Pricing() {
         <BillingToggle annual={annual} setAnnual={setAnnual} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-16 items-start">
-          {TIERS.map((tier) => <PricingCard key={tier.id} tier={tier} annual={annual} />)}
+          {TIERS.map((tier) => (
+            <PricingCard key={tier.id} tier={tier} annual={annual} onSubscribe={handleSubscribe} subscribing={subscribing} />
+          ))}
         </div>
 
         {/* Trust bar */}

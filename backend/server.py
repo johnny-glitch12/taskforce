@@ -805,6 +805,13 @@ async def seed_database():
     await db.agent_executions.create_index("agent_id")
     await db.agent_executions.create_index("user_id")
     await db.payment_transactions.create_index("session_id")
+    await db.subscriptions.create_index("user_id")
+    await db.subscriptions.create_index([("user_id", 1), ("status", 1)])
+    await db.referral_codes.create_index("user_id", unique=True)
+    await db.referral_codes.create_index("code", unique=True)
+    await db.referrals.create_index("referrer_id")
+    await db.referrals.create_index("referred_id", unique=True)
+    await db.referral_credits.create_index("user_id")
 
     # Run initial supernova evaluation
     await evaluate_supernovas()
@@ -1965,6 +1972,38 @@ async def stripe_webhook(request: Request):
                     }},
                 )
                 logger.info(f"Payment confirmed for session {event.session_id}")
+
+                # Auto-activate subscription if this is a subscription payment
+                if tx.get("type") == "subscription" and not tx.get("activated"):
+                    from routes.subscriptions import TIERS
+                    tier = tx.get("tier")
+                    tier_info = TIERS.get(tier, {})
+                    now = datetime.now(timezone.utc).isoformat()
+                    await db.subscriptions.update_many(
+                        {"user_id": tx["user_id"], "status": "active"},
+                        {"$set": {"status": "superseded", "updated_at": now}},
+                    )
+                    await db.subscriptions.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "user_id": tx["user_id"],
+                        "tier": tier,
+                        "status": "active",
+                        "payment_id": tx["id"],
+                        "session_id": event.session_id,
+                        "amount": tx["amount"],
+                        "created_at": now,
+                        "updated_at": now,
+                    })
+                    await db.users.update_one(
+                        {"id": tx["user_id"]},
+                        {"$set": {"tier": tier, "agent_limit": tier_info.get("agent_limit", 3)}},
+                    )
+                    await db.payment_transactions.update_one(
+                        {"session_id": event.session_id},
+                        {"$set": {"activated": True}},
+                    )
+                    logger.info(f"Subscription activated: {tier} for user {tx['user_id']}")
+
         return {"status": "ok"}
     except Exception as e:
         logger.error(f"Webhook error: {e}")
@@ -1990,6 +2029,10 @@ app.include_router(security_router, prefix="/api")
 # Include published agents + creator analytics router
 from routes.published import router as published_router
 app.include_router(published_router, prefix="/api")
+
+# Include subscriptions + referrals router
+from routes.subscriptions import router as subscriptions_router
+app.include_router(subscriptions_router, prefix="/api")
 
 # Mount static files for live bot screenshots
 STATIC_DIR = Path(__file__).parent / "static"

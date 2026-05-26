@@ -1,0 +1,33 @@
+{
+  "summary": "Tested Stripe Subscription + Referral Credit system. All 16 backend pytest tests passed (subscriptions: status, checkout cadet/operator/invalid, cancel, auth gates; referrals: my-code format TF-XXXXXX, idempotency, apply invalid/own code, credits, auth gates). Frontend Pricing page tested: all 4 tier cards render with proper CTAs, RECRUIT CTA is no-op, CADET CTA when unauthenticated redirects to /login, CADET CTA when logged in as admin successfully redirects to real Stripe checkout (checkout.stripe.com/c/pay/cs_test_...), annual billing toggle applies 20% discount ($19 -> $15).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_subscriptions_referrals.py",
+    "/app/test_reports/pytest/pytest_subs_referrals.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "subscriptions.py cancel endpoint downgrades user immediately by setting tier='free' and agent_limit=3, contradicting the response message 'downgrades to Recruit at period end'. Either rename to immediate cancel or defer the user-tier update until period end.",
+    "activate_subscription_from_payment marks referral credit used by querying credits.find_one({user_id, used:False}) when credit_id is missing — could mark the wrong credit if multiple credits exist. Prefer matching by stored credit_id which is already in metadata.",
+    "TIERS are duplicated server-side (subscriptions.py) vs frontend (Pricing.jsx). Acceptable since server validates, but consider exposing a GET /api/subscriptions/tiers to avoid drift.",
+    "Pricing.jsx final price calc using max(1.00, price - discount) silently floors instead of communicating the floor to the user; cosmetic only."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_subscriptions_referrals.py (new)"
+  ],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "100%"},
+  "test_credentials": "admin@nova.ai / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created one fresh user per test run via /api/auth/register (TEST_referee_<uuid>@example.com) for free-tier and apply-referral tests.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Subscription/referral endpoints all live under /api/subscriptions/* and /api/referrals/*. Stripe is in test mode (sk_test_emergent) and creates real checkout sessions at checkout.stripe.com — verified via redirect. Admin user has a persistent referral code generated. To test referral apply success path end-to-end, register a new user and POST /api/referrals/apply with admin's code; this will create $10 credit for both parties (verified logic, not tested in this run to avoid mutating admin's credit state).",
+  "rca of the issue": "No issues found."
+}
