@@ -171,7 +171,7 @@ async def cancel_subscription(user=Depends(get_current_user())):
         {"$set": {"tier": "free", "agent_limit": 3}},
     )
 
-    return {"success": True, "message": "Subscription cancelled. You've been downgraded to Recruit."}
+    return {"success": True, "message": "Subscription cancelled immediately. Downgraded to Recruit."}
 
 
 @router.post("/subscriptions/activate")

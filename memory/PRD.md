@@ -112,6 +112,23 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 - Replaced video placeholder with actual auto-playing looping video in hero section
 - Video URL: customer-assets CDN (uploaded by user)
 
+### Stripe Subscriptions (Phase 23 - May 26, 2026)
+- POST /api/subscriptions/checkout — Creates Stripe checkout for Cadet ($19) or Operator ($99)
+- GET /api/subscriptions/status — Returns user's current tier (recruit/cadet/operator)
+- POST /api/subscriptions/cancel — Immediately cancels and downgrades to Recruit
+- POST /api/subscriptions/activate — Manual activation from payment success page
+- Webhook auto-activates subscription on Stripe payment confirmation
+- MongoDB: subscriptions collection with user_id, tier, status, payment tracking
+- Pricing page CTAs wired to real Stripe checkout (test mode)
+- Referral credit discounts applied automatically at checkout
+
+### Referral Credit System (Phase 23 - May 26, 2026)
+- GET /api/referrals/my-code — Generates unique TF-XXXXXX referral code per user
+- POST /api/referrals/apply — Apply referral code, $10 credit to both referrer + referred
+- GET /api/referrals/credits — List available and used credits
+- Credits auto-deducted from next subscription checkout
+- MongoDB: referral_codes, referrals, referral_credits collections with indexes
+
 ## Prioritized Backlog
 - **P3**: Hosted execution runtime (Celery + Redis)
 - **P3**: Pro tier Stripe subscription
