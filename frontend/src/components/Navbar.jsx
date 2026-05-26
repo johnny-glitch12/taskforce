@@ -1,8 +1,8 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/App";
 import { useTheme } from "@/lib/theme";
-import { Menu, X, Sun, Moon } from "lucide-react";
-import { useState } from "react";
+import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, Palette, LogOut } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
 
 const CENTER_LINKS = [
   { to: "/exchange", label: "The Exchange" },
@@ -10,6 +10,88 @@ const CENTER_LINKS = [
   { to: "/academy", label: "Academy" },
   { to: "/pricing", label: "Pricing" },
 ];
+
+function UserMenu({ user, logout, navigate }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const isAdmin = user?.role === "admin";
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const menuItems = [
+    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/creator", label: "Creator Hub", icon: Palette },
+    ...(isAdmin ? [
+      { to: "/overwatch", label: "Overwatch", icon: BarChart3, accent: true },
+      { to: "/security", label: "Security", icon: Shield },
+    ] : []),
+  ];
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        data-testid="user-menu-btn"
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-sm text-[11px] font-mono tracking-[0.08em] uppercase transition-all text-zinc-400 hover:text-cyan-400"
+        style={{ border: '1px solid transparent' }}
+      >
+        <div className="w-6 h-6 rounded-sm bg-cyan-400/10 flex items-center justify-center text-[10px] font-bold text-cyan-400">
+          {(user.name || user.email || "U")[0].toUpperCase()}
+        </div>
+        <span className="hidden lg:inline">{(user.name || user.email || "").split("@")[0]}</span>
+        <ChevronDown size={12} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div
+          data-testid="user-dropdown"
+          className="absolute right-0 top-full mt-2 w-52 rounded-sm py-1.5 shadow-2xl z-50 animate-fade-in"
+          style={{ background: "#0a0a0c", border: "1px solid #1a1a1e" }}
+        >
+          {/* User info */}
+          <div className="px-3.5 py-2.5 mb-1" style={{ borderBottom: "1px solid #1a1a1e" }}>
+            <p className="text-[11px] font-mono text-zinc-300 truncate">{user.name || "Operator"}</p>
+            <p className="text-[10px] font-mono text-zinc-600 truncate">{user.email}</p>
+          </div>
+
+          {/* Menu items */}
+          {menuItems.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              onClick={() => setOpen(false)}
+              data-testid={`menu-${item.label.toLowerCase().replace(/\s/g, "-")}`}
+              className={`flex items-center gap-2.5 px-3.5 py-2 text-[11px] font-mono tracking-wide transition-all ${
+                item.accent
+                  ? "text-cyan-400 hover:bg-cyan-400/5"
+                  : "text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03]"
+              }`}
+            >
+              <item.icon size={13} />
+              {item.label}
+            </Link>
+          ))}
+
+          {/* Sign out */}
+          <div style={{ borderTop: "1px solid #1a1a1e", marginTop: "4px", paddingTop: "4px" }}>
+            <button
+              data-testid="dropdown-logout-btn"
+              onClick={() => { logout(); navigate("/"); setOpen(false); }}
+              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[11px] font-mono tracking-wide text-zinc-600 hover:text-red-400 hover:bg-red-500/5 transition-all"
+            >
+              <LogOut size={13} />
+              Sign Out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -19,6 +101,15 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const isArmory = location.pathname === "/armory";
+
+  const MOBILE_DASHBOARD_LINKS = [
+    { to: "/dashboard", label: "Dashboard" },
+    { to: "/creator", label: "Creator Hub" },
+    ...(user?.role === "admin" ? [
+      { to: "/overwatch", label: "Overwatch" },
+      { to: "/security", label: "Security" },
+    ] : []),
+  ];
 
   return (
     <nav
@@ -37,27 +128,22 @@ export default function Navbar() {
 
         {/* ── Center Links (Desktop) ── */}
         <div className="hidden md:flex items-center gap-0.5 absolute left-1/2 -translate-x-1/2">
-          {CENTER_LINKS.map((link) => {
-            const isActive = location.pathname === link.to;
-            return (
-              <Link
-                key={link.to}
-                to={link.to}
-                data-testid={`nav-link-${link.label.toLowerCase().replace(/\s/g, "-")}`}
-                className={`px-3.5 py-1.5 text-[11px] tracking-[0.1em] uppercase font-medium font-mono transition-all duration-200 ${
-                  isActive
-                    ? "text-cyan-400"
-                    : "text-zinc-500 hover:text-cyan-400"
-                }`}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
+          {CENTER_LINKS.map((link) => (
+            <Link
+              key={link.to}
+              to={link.to}
+              data-testid={`nav-link-${link.label.toLowerCase().replace(/\s/g, "-")}`}
+              className={`px-3.5 py-1.5 text-[11px] tracking-[0.1em] uppercase font-medium font-mono transition-all duration-200 ${
+                location.pathname === link.to ? "text-cyan-400" : "text-zinc-500 hover:text-cyan-400"
+              }`}
+            >
+              {link.label}
+            </Link>
+          ))}
         </div>
 
         {/* ── Right Side (Desktop) ── */}
-        <div className="hidden md:flex items-center gap-4 shrink-0">
+        <div className="hidden md:flex items-center gap-3 shrink-0">
           <button
             data-testid="theme-toggle-btn"
             onClick={toggle}
@@ -68,13 +154,7 @@ export default function Navbar() {
           </button>
 
           {user ? (
-            <button
-              data-testid="logout-btn"
-              onClick={() => { logout(); navigate("/"); }}
-              className="text-[11px] tracking-[0.08em] uppercase font-mono text-zinc-500 hover:text-cyan-400 transition-colors"
-            >
-              Sign Out
-            </button>
+            <UserMenu user={user} logout={logout} navigate={navigate} />
           ) : (
             <>
               <Link
@@ -123,18 +203,32 @@ export default function Navbar() {
           style={{ backgroundColor: "var(--bg-nav)", borderTop: "1px solid var(--border)" }}
         >
           {CENTER_LINKS.map((link) => (
-            <Link
-              key={link.to}
-              to={link.to}
-              onClick={() => setMobileOpen(false)}
+            <Link key={link.to} to={link.to} onClick={() => setMobileOpen(false)}
               className={`py-2.5 px-3 text-[12px] tracking-[0.1em] uppercase font-mono font-medium rounded-sm transition-all ${
                 location.pathname === link.to ? "text-cyan-400 bg-cyan-400/5" : "text-zinc-500"
-              }`}
-            >
+              }`}>
               {link.label}
             </Link>
           ))}
-          <div className="mt-3 pt-3 flex flex-col gap-2" style={{ borderTop: "1px solid var(--border)" }}>
+
+          {/* Dashboard links for logged-in mobile users */}
+          {user && (
+            <>
+              <div className="mt-2 pt-2" style={{ borderTop: "1px solid var(--border)" }}>
+                <p className="text-[9px] font-mono tracking-[0.2em] uppercase text-zinc-600 px-3 mb-1">Command Center</p>
+              </div>
+              {MOBILE_DASHBOARD_LINKS.map((link) => (
+                <Link key={link.to} to={link.to} onClick={() => setMobileOpen(false)}
+                  className={`py-2.5 px-3 text-[12px] tracking-[0.1em] uppercase font-mono font-medium rounded-sm transition-all ${
+                    location.pathname === link.to ? "text-cyan-400 bg-cyan-400/5" : "text-zinc-500"
+                  }`}>
+                  {link.label}
+                </Link>
+              ))}
+            </>
+          )}
+
+          <div className="mt-2 pt-3 flex flex-col gap-2" style={{ borderTop: "1px solid var(--border)" }}>
             {user ? (
               <button
                 data-testid="mobile-logout-btn"
@@ -145,16 +239,8 @@ export default function Navbar() {
               </button>
             ) : (
               <>
-                <Link to="/login" onClick={() => setMobileOpen(false)} className="text-[12px] tracking-[0.08em] uppercase font-mono text-zinc-500 py-2 px-3">
-                  Sign In
-                </Link>
-                <Link
-                  to="/login"
-                  onClick={() => setMobileOpen(false)}
-                  className="text-center py-2.5 bg-cyan-400 text-black text-[11px] font-bold tracking-[0.1em] uppercase font-mono rounded-sm mt-1"
-                >
-                  Deploy Now
-                </Link>
+                <Link to="/login" onClick={() => setMobileOpen(false)} className="text-[12px] tracking-[0.08em] uppercase font-mono text-zinc-500 py-2 px-3">Sign In</Link>
+                <Link to="/login" onClick={() => setMobileOpen(false)} className="text-center py-2.5 bg-cyan-400 text-black text-[11px] font-bold tracking-[0.1em] uppercase font-mono rounded-sm mt-1">Deploy Now</Link>
               </>
             )}
           </div>
