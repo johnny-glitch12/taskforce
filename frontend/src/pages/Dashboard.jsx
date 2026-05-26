@@ -5,10 +5,120 @@ import {
   Plus, Play, Square, Trash2, Copy, ExternalLink, Clock,
   CheckCircle2, XCircle, ChevronDown, ChevronUp, Zap, Shield,
   Code, Globe, Terminal, RotateCw, Loader2, ArrowUpRight,
-  Package, Webhook, Settings, AlertTriangle,
+  Package, Webhook, Settings, AlertTriangle, GitBranch, FileText, Eye,
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
+
+/* ─── Published Agents Tab (merged Creator Hub) ─── */
+function PublishedAgentsTab({ token }) {
+  const [analytics, setAnalytics] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState(null);
+  const [details, setDetails] = useState({});
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/api/creator/analytics`, { headers });
+      if (res.ok) setAnalytics(await res.json());
+    } catch {}
+    setLoading(false);
+  }, [token]);
+
+  useEffect(() => { if (token) fetchData(); }, [token, fetchData]);
+
+  const loadDetail = async (agentId) => {
+    if (expandedId === agentId) { setExpandedId(null); return; }
+    if (details[agentId]) { setExpandedId(agentId); return; }
+    try {
+      const res = await fetch(`${API}/api/published-agents/${agentId}`, { headers });
+      if (res.ok) { const data = await res.json(); setDetails(prev => ({ ...prev, [agentId]: data })); setExpandedId(agentId); }
+    } catch {}
+  };
+
+  const deleteAgent = async (agentId) => {
+    try {
+      const res = await fetch(`${API}/api/published-agents/${agentId}`, { method: "DELETE", headers });
+      if (res.ok) { toast.success("Agent removed."); fetchData(); }
+    } catch { toast.error("Failed to delete."); }
+  };
+
+  if (loading) return <div className="py-16 text-center"><Loader2 size={20} className="text-cyan-400 animate-spin mx-auto" /></div>;
+
+  const stats = analytics || { total_agents: 0, published: 0, drafts: 0, total_executions: 0, avg_trust_score: 0, total_versions: 0, agents: [] };
+
+  return (
+    <div className="space-y-4">
+      {/* Mini stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="rounded-sm p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <p className="text-[10px] font-mono tracking-widest uppercase t-text-mute mb-1">Published</p>
+          <p className="text-xl font-bold t-text font-mono">{stats.published}</p>
+        </div>
+        <div className="rounded-sm p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <p className="text-[10px] font-mono tracking-widest uppercase t-text-mute mb-1">Executions</p>
+          <p className="text-xl font-bold t-text font-mono">{stats.total_executions}</p>
+        </div>
+        <div className="rounded-sm p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <p className="text-[10px] font-mono tracking-widest uppercase t-text-mute mb-1">Avg Trust</p>
+          <p className="text-xl font-bold t-text font-mono">{stats.avg_trust_score}</p>
+        </div>
+        <div className="rounded-sm p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <p className="text-[10px] font-mono tracking-widest uppercase t-text-mute mb-1">Versions</p>
+          <p className="text-xl font-bold t-text font-mono">{stats.total_versions}</p>
+        </div>
+      </div>
+
+      {/* Agent list */}
+      {stats.agents.length === 0 ? (
+        <div className="text-center py-16 rounded-sm" style={{ border: '1px dashed var(--border)' }}>
+          <Globe size={32} className="t-text-dim mx-auto mb-3" />
+          <p className="text-[14px] t-text-sub mb-1">No published agents yet</p>
+          <p className="text-[12px] t-text-dim">Build an agent in The Armory and hit "Publish to Marketplace".</p>
+        </div>
+      ) : (
+        <div className="rounded-sm overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          {stats.agents.map((agent, i) => {
+            const detail = details[agent.agent_id];
+            const isExpanded = expandedId === agent.agent_id;
+            return (
+              <div key={agent.agent_id} style={i < stats.agents.length - 1 ? { borderBottom: '1px solid var(--border)' } : {}}>
+                <div className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-white/[0.02] transition-all" onClick={() => loadDetail(agent.agent_id)}>
+                  <Globe size={14} className="text-cyan-400 shrink-0" />
+                  <span className="text-[13px] t-text font-medium truncate flex-1">{agent.name}</span>
+                  <span className="text-[10px] font-mono t-text-mute flex items-center gap-1"><GitBranch size={10} /> v{agent.version}</span>
+                  <span className="text-[10px] font-mono t-text-mute flex items-center gap-1"><Zap size={10} /> {agent.execution_count}</span>
+                  <span className="text-[10px] font-mono t-text-mute flex items-center gap-1"><Shield size={10} /> {agent.trust_score}</span>
+                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-sm ${agent.status === "published" ? "text-emerald-400 bg-emerald-500/10" : "text-amber-400 bg-amber-500/10"}`}>{agent.status}</span>
+                  <Eye size={12} className="t-text-dim shrink-0" />
+                </div>
+                {isExpanded && detail && (
+                  <div className="px-4 pb-3 space-y-2">
+                    <div className="rounded-sm p-3 text-[11px] font-mono t-text-mute" style={{ background: 'var(--bg-secondary)' }}>
+                      {(detail.version_history || []).map((v, vi) => (
+                        <div key={vi} className="flex items-center gap-3 py-1">
+                          <span className="t-text font-semibold">v{v.version}</span>
+                          <span className="t-text-dim">{v.node_count} nodes, {v.edge_count} edges</span>
+                          <span className="ml-auto t-text-dim">{new Date(v.published_at).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={(e) => { e.stopPropagation(); deleteAgent(agent.agent_id); }} className="text-[10px] font-mono text-red-400 hover:bg-red-500/10 px-2 py-1 rounded-sm flex items-center gap-1" style={{ border: '1px solid rgba(239,68,68,0.2)' }}>
+                      <Trash2 size={10} /> Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 const SAMPLE_AGENTS = [
   {
@@ -455,9 +565,9 @@ export default function Dashboard() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold t-text tracking-tight" style={{ fontFamily: "'Outfit', sans-serif" }}>
-              Dashboard
+              Command Center
             </h1>
-            <p className="text-[13px] t-text-sub mt-1">Manage and monitor your deployed agents</p>
+            <p className="text-[13px] t-text-sub mt-1">Deploy, publish, and monitor your agents</p>
           </div>
           <button
             onClick={() => { setModalAgent(null); setModalMode("create"); }}
@@ -492,9 +602,10 @@ export default function Dashboard() {
         )}
 
         {/* Tab toggle */}
-        <div className="flex items-center gap-1 mb-6 bg-white/[0.03] border border-white/[0.07] rounded-sm p-1 w-fit">
+        <div className="flex items-center gap-1 mb-6 rounded-sm p-1 w-fit" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
           {[
-            { id: "agents", label: "My Agents", icon: Code },
+            { id: "agents", label: "Deployed", icon: Code },
+            { id: "published", label: "Published", icon: Globe },
             { id: "purchased", label: "Purchased", icon: Package },
           ].map((t) => (
             <button
@@ -502,7 +613,7 @@ export default function Dashboard() {
               onClick={() => setActiveTab(t.id)}
               data-testid={`tab-${t.id}`}
               className={`flex items-center gap-1.5 px-4 py-2 text-[12px] rounded-sm transition-all ${
-                activeTab === t.id ? "bg-cyan-400 text-white" : "text-zinc-500 hover:text-zinc-300"
+                activeTab === t.id ? "bg-cyan-400 text-black font-bold" : "t-text-mute hover:t-text"
               }`}
             >
               <t.icon size={12} /> {t.label}
@@ -556,13 +667,13 @@ export default function Dashboard() {
               <div className="text-center py-16 rounded-sm" style={{ border: '1px dashed var(--border)' }}>
                 <Package size={32} className="t-text-dim mx-auto mb-3" />
                 <p className="text-[14px] t-text-sub">No purchased agents yet</p>
-                <p className="text-[12px] t-text-dim mt-1">Browse the marketplace to find agents for your needs.</p>
+                <p className="text-[12px] t-text-dim mt-1">Browse The Exchange to find agents for your needs.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {purchased.map((tx) => (
-                  <div key={tx.id} className="rounded-xl p-4 sm:p-5 flex items-center gap-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                    <div className="w-10 h-10 rounded-lg bg-cyan-400/10 flex items-center justify-center shrink-0">
+                  <div key={tx.id} className="rounded-sm p-4 sm:p-5 flex items-center gap-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+                    <div className="w-10 h-10 rounded-sm bg-cyan-400/10 flex items-center justify-center shrink-0">
                       <Package size={16} className="text-cyan-400" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -575,6 +686,11 @@ export default function Dashboard() {
               </div>
             )}
           </div>
+        )}
+
+        {/* Published Tab (Creator Hub) */}
+        {activeTab === "published" && (
+          <PublishedAgentsTab token={token} />
         )}
       </div>
 

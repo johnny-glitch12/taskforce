@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/App";
 import { useTheme } from "@/lib/theme";
-import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, Palette, LogOut } from "lucide-react";
+import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, LogOut } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 const CENTER_LINKS = [
@@ -23,8 +23,7 @@ function UserMenu({ user, logout, navigate }) {
   }, []);
 
   const menuItems = [
-    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/creator", label: "Creator Hub", icon: Palette },
+    { to: "/dashboard", label: "Command Center", icon: LayoutDashboard },
     ...(isAdmin ? [
       { to: "/overwatch", label: "Overwatch", icon: BarChart3, accent: true },
       { to: "/security", label: "Security", icon: Shield },
@@ -103,8 +102,7 @@ export default function Navbar() {
   const isArmory = location.pathname === "/armory";
 
   const MOBILE_DASHBOARD_LINKS = [
-    { to: "/dashboard", label: "Dashboard" },
-    { to: "/creator", label: "Creator Hub" },
+    { to: "/dashboard", label: "Command Center" },
     ...(user?.role === "admin" ? [
       { to: "/overwatch", label: "Overwatch" },
       { to: "/security", label: "Security" },
