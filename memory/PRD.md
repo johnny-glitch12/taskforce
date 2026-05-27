@@ -23,6 +23,11 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 33 (Feb, 2026) — Node Catalog Expansion + Tabbed Code Editor
+- **127-node catalog** (`frontend/src/data/nodeCatalog.js`): Expanded from 8 generic types to 127 named integrations across 13 categories (Triggers, Core, AI/LLM, Communication, Productivity, CRM & Sales, Social, E-commerce, Database, Cloud & DevOps, Payments, Files & Storage, Utility). Each catalog entry maps to one of the 8 canonical executor types under the hood (`trigger/llm/condition/action/http_request/webhook/database/transform`) plus a `service` slug so per-service handlers can branch later. Add Node menu redesigned as 420×460 panel with category sidebar + live search filter (filters by label/service/desc/category).
+- **Tabbed BotProjectPanel** (`components/BotProjectPanel.jsx`): Replaced left file-tree with VS Code-style horizontal tab bar. One tab per OPEN file (close × per tab, dirty-indicator dot). `+` button opens the full file list as a dropdown — click any file to spawn a new tab. New "minimize" button collapses panel to a 28px vertical strip showing the project name; click strip to re-expand. Monaco editor still drives the code editing.
+- **Verified live**: "build me a URL shortener bot" → Gemini 2.5 Pro returns UrlShortener with main.py + requirements.txt + README.md, 3 canvas nodes wired with Lego edges, main.py opens as the active tab.
+
 ### Phase 32 (Feb, 2026) — Lego Edges + AI Bot Builder (Gemini 2.5 Pro)
 **P0 — User-reported polish (5 fixes):**
 - **Lego-style edge routing** (`Studio.jsx` ~line 393): Replaced cubic-bezier center→center with orthogonal right-port → vertical-elbow → left-port path. Edges now wrap around blocks instead of slicing through them. Active edges glow cyan (#22d3ee) with arrowhead.

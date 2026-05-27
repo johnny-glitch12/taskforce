@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/App";
 import { parseComputeLimit, ComputeLimitModal } from "../components/ComputeLimitModal";
@@ -8,30 +8,43 @@ import PublishToExchangeModal from "../components/PublishToExchangeModal";
 import NodeConfigPanel from "../components/NodeConfigPanel";
 import TraceViewer from "../components/TraceViewer";
 import BotProjectPanel from "../components/BotProjectPanel";
+import { NODE_CATALOG, CATEGORIES, findCatalogEntry } from "../data/nodeCatalog";
 import {
   Send, Rocket, Bot, Zap, Mail, Brain, FileText,
   MessageCircle, GitBranch, Sparkles, Plus, Save,
   Trash2, ChevronDown, Shield, AlertTriangle, Check,
   X, Copy, ZoomIn, ZoomOut, Maximize2, Move,
   Database, Globe, Filter, Code, Layers, Play,
+  Calendar, FileInput, Rss, FolderOpen, CreditCard, FunctionSquare,
+  PencilLine, Split, Combine, Repeat, Timer, Circle, Server, Atom,
+  BookOpen, Mic, Volume2, Image, Film, Hash, Users, Phone, Trello,
+  CheckSquare, Bug, Building2, Cloud, Headphones, Twitter, Linkedin,
+  Facebook, Instagram, Youtube, Video, AtSign, ShoppingBag, Flame,
+  Snowflake, Cog, Container, Activity, Bitcoin, FileDown, FileUp,
+  Archive, Table, ScanText, Languages, Smile, AlignLeft, Tags,
+  Braces, Lock, Binary, Clock, Calculator, Fingerprint, QrCode,
+  Github, Gitlab, MessageSquare, Search, ChevronRight,
 } from "lucide-react";
 
 import { useAgentTerminal } from "../hooks/useAgentTerminal";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-const NODE_TYPES = [
-  { type: "trigger", label: "Trigger", icon: "Mail", color: "#22d3ee" },
-  { type: "llm", label: "LLM", icon: "Brain", color: "#06b6d4" },
-  { type: "condition", label: "Condition", icon: "Filter", color: "#0891b2" },
-  { type: "action", label: "Action", icon: "FileText", color: "#0e7490" },
-  { type: "http_request", label: "HTTP Request", icon: "Globe", color: "#5B21B6" },
-  { type: "webhook", label: "Webhook", icon: "Zap", color: "#C084FC" },
-  { type: "database", label: "Database", icon: "Database", color: "#4C1D95" },
-  { type: "transform", label: "Transform", icon: "Code", color: "#9333EA" },
-];
-
-const ICON_MAP = { Mail, Brain, Zap, FileText, MessageCircle, GitBranch, Database, Globe, Filter, Code, Layers };
+// Bridge from catalog `icon` string → real lucide component
+const ICON_MAP = {
+  Mail, Brain, Zap, FileText, MessageCircle, GitBranch, Database, Globe,
+  Filter, Code, Layers, Play, Calendar, FileInput, Rss, FolderOpen,
+  CreditCard, FunctionSquare, PencilLine, Split, Combine, Repeat, Timer,
+  Circle, Sparkles, Server, Bot, Atom, BookOpen, Mic, Volume2, Image, Film,
+  Send, Hash, Users, Phone, MessageSquare, Table, FileDown, FileUp, Trello,
+  CheckSquare, Bug, Building2, Cloud, Headphones, Twitter, Linkedin,
+  Facebook, Instagram, Youtube, Video, AtSign, ShoppingBag, Flame,
+  Snowflake, Cog, Container, Activity, AlertTriangle, Bitcoin, Archive,
+  ScanText, Languages, Smile, AlignLeft, Tags, Braces, Lock, Binary, Clock,
+  Calculator, Fingerprint, QrCode, Github, Gitlab,
+  // Aliases the catalog might reference that map to something we already have:
+  Lemon: ShoppingBag, HardDrive: Server,
+};
 function getIcon(name) { return ICON_MAP[name] || Zap; }
 
 /* ─── Mode Toggle ─── */
@@ -202,6 +215,8 @@ function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNo
   const [dragging, setDragging] = useState(null); // { nodeId, startX, startY, nodeStartX, nodeStartY }
   const [panning, setPanning] = useState(null); // { startX, startY, panStartX, panStartY }
   const [showNodeMenu, setShowNodeMenu] = useState(false);
+  const [nodeMenuSearch, setNodeMenuSearch] = useState("");
+  const [nodeMenuCategory, setNodeMenuCategory] = useState("ALL");
   const [connecting, setConnecting] = useState(null); // { fromId, mouseX, mouseY }
 
   const NODE_W = 200;
@@ -297,24 +312,41 @@ function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNo
     return () => el.removeEventListener("wheel", handleWheel);
   }, []);
 
-  const handleAddNode = (type) => {
+  const handleAddNode = (entry) => {
     // Place new node in center of visible viewport
     const rect = canvasRef.current?.getBoundingClientRect();
     const cx = rect ? (rect.width / 2 - pan.x) / scale : 300;
     const cy = rect ? (rect.height / 2 - pan.y - HEADER_H) / scale : 200;
     const newNode = {
       id: `node_${Date.now()}`,
-      type: type.type,
-      label: type.label,
-      sub: "Configure me",
-      icon: type.icon,
+      type: entry.type,                      // canonical executor type
+      service: entry.service,                // n8n-style integration slug
+      label: entry.label,
+      sub: entry.desc || "Configure me",
+      icon: entry.icon,
       x: cx - NODE_W / 2,
       y: cy - NODE_H / 2,
-      data: {},
+      data: { ...(entry.data || {}) },
     };
     onAddNode(newNode);
     setShowNodeMenu(false);
+    setNodeMenuSearch("");
   };
+
+  // Filtered + grouped catalog for the searchable add-node menu
+  const filteredCatalog = useMemo(() => {
+    const q = nodeMenuSearch.trim().toLowerCase();
+    return NODE_CATALOG.filter((n) => {
+      if (nodeMenuCategory !== "ALL" && n.category !== nodeMenuCategory) return false;
+      if (!q) return true;
+      return (
+        n.label.toLowerCase().includes(q) ||
+        n.service.toLowerCase().includes(q) ||
+        (n.desc || "").toLowerCase().includes(q) ||
+        n.category.toLowerCase().includes(q)
+      );
+    });
+  }, [nodeMenuSearch, nodeMenuCategory]);
 
   const resetView = () => {
     setPan({ x: 0, y: 0 });
@@ -378,18 +410,63 @@ function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNo
               <Plus size={12} /> <span className="hidden sm:inline">Add Node</span>
             </button>
             {showNodeMenu && (
-              <div data-testid="node-type-menu" className="absolute right-0 top-full mt-1 w-52 rounded-xl p-1.5 z-50 shadow-xl max-h-[320px] overflow-y-auto" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
-                {NODE_TYPES.map((nt) => {
-                  const Icon = getIcon(nt.icon);
-                  return (
-                    <button key={nt.type} data-testid={`add-node-${nt.type}`} onClick={() => handleAddNode(nt)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] t-text hover:bg-[var(--bg-card-hover)] rounded-lg transition-colors">
-                      <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: `${nt.color}15` }}>
-                        <Icon size={12} style={{ color: nt.color }} />
-                      </div>
-                      {nt.label}
+              <div data-testid="node-type-menu" className="absolute right-0 top-full mt-1 w-[420px] rounded-xl z-50 shadow-2xl flex" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', height: 460 }}>
+                {/* Category sidebar */}
+                <div className="w-[130px] shrink-0 overflow-y-auto py-1.5" style={{ borderRight: '1px solid var(--border)' }}>
+                  {["ALL", ...CATEGORIES].map((cat) => (
+                    <button
+                      key={cat}
+                      data-testid={`node-cat-${cat.replace(/[^a-z]/gi,'')}`}
+                      onClick={() => setNodeMenuCategory(cat)}
+                      className={`w-full text-left px-3 py-1.5 text-[11px] transition-colors ${
+                        nodeMenuCategory === cat ? "bg-cyan-400/10 text-cyan-300" : "t-text-mute hover:t-text"
+                      }`}
+                    >
+                      {cat}
                     </button>
-                  );
-                })}
+                  ))}
+                </div>
+                {/* Search + list */}
+                <div className="flex-1 flex flex-col min-w-0">
+                  <div className="px-2.5 py-2 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+                    <div className="relative">
+                      <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 t-text-dim" />
+                      <input
+                        data-testid="node-search-input"
+                        value={nodeMenuSearch}
+                        onChange={(e) => setNodeMenuSearch(e.target.value)}
+                        placeholder={`Search ${NODE_CATALOG.length} nodes...`}
+                        autoFocus
+                        className="w-full pl-7 pr-2 py-1.5 text-[11px] rounded-sm focus:outline-none"
+                        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text)' }}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-1">
+                    {filteredCatalog.length === 0 && (
+                      <div className="text-center py-8 t-text-dim text-[11px]">No nodes match.</div>
+                    )}
+                    {filteredCatalog.map((nt) => {
+                      const Icon = getIcon(nt.icon);
+                      return (
+                        <button
+                          key={nt.service}
+                          data-testid={`add-node-${nt.service}`}
+                          onClick={() => handleAddNode(nt)}
+                          className="w-full flex items-start gap-2.5 px-2.5 py-2 text-left rounded-sm hover:bg-[var(--bg-card-hover)] transition-colors"
+                        >
+                          <div className="w-6 h-6 rounded-sm flex items-center justify-center shrink-0 mt-0.5" style={{ background: `${nt.color}15` }}>
+                            <Icon size={12} style={{ color: nt.color }} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[12px] t-text truncate">{nt.label}</div>
+                            <div className="text-[9px] t-text-dim truncate">{nt.desc}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -449,8 +526,8 @@ function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNo
         {nodes.map((node) => {
           const Icon = getIcon(node.icon);
           const isActive = node.id === activeNode;
-          const nodeType = NODE_TYPES.find((nt) => nt.type === node.type);
-          const color = nodeType?.color || "#22d3ee";
+          const nodeMeta = findCatalogEntry(node.service) || NODE_CATALOG.find((c) => c.type === node.type);
+          const color = nodeMeta?.color || node.color || "#22d3ee";
           return (
             <div
               key={node.id}
