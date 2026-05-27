@@ -1958,7 +1958,8 @@ async def startup():
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    scheduler.shutdown(wait=False)
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
     client.close()
 
 # ─── Health ───
@@ -2123,5 +2124,6 @@ async def startup():
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    scheduler.shutdown(wait=False)
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
     client.close()

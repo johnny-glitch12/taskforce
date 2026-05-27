@@ -23,6 +23,16 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 29 (May 27, 2026) — Backlog Cleanup II: Encryption + Pydantic + Pagination + Job Module
+- **BYOK encryption at rest** (`lib/byok_crypto.py`): Fernet (AES-128-CBC+HMAC) with SHA-256-derived key from `BYOK_MASTER_KEY` env. Stored with `enc:v1:` prefix for migration. Legacy plaintext rows pass through transparently. Handler decrypts on use.
+- **Pydantic models** in `routes/workflow_executor.py`: `BYOKCreate` (Literal service whitelist, `min_length=1 max_length=4096`, `extra: Dict`) and `SaveCanvasRequest` (`min_length=1` + custom non-whitespace validator). Validation errors now return 422 with structured field-level detail.
+- **Pagination + projection on runs**: `GET /api/workflows/{id}/runs?skip=X&limit=Y` returns `{runs, total, limit, skip}`. `node_results` stripped (lean). `limit` clamped 1-100. NEW `GET /api/workflows/{id}/runs/{run_id}` returns full run with `node_results`.
+- **Async job extraction** (`lib/workflow_jobs.py`): `schedule_async_job()` + `_run_async_job()` + `mark_stale_jobs_failed(db, max_age_seconds=600)`. Backend `@on_event("startup")` now sweeps orphaned `queued`/`running` jobs >10min old → marks `failed` with reason `worker_restart`.
+- **Stripe payments extraction** (`routes/stripe_payments.py`): `/payments/checkout`, `/payments/status/{id}`, `/webhook/stripe` moved from server.py (~165 lines). Webhook still triggers subscription activation via `routes.subscriptions.TIERS`.
+- **Bulk template ingestion**: 291 templates from `enescingoz/awesome-n8n-templates` (was 19). Round-robin across 20 categories.
+- **Scheduler guards**: `scheduler.start()` wrapped with `if not scheduler.running` (eliminates pre-existing duplicate-startup race). `scheduler.shutdown()` mirrored guard.
+- **Tests**: iteration_29 → **89/89 backend tests pass** (33+31+25 across 3 test files), 0 production bugs. Auto-update 2 prior tests to match Pydantic 422 contract change.
+
 ### Phase 28 (May 27, 2026) — Full Backlog Cleanup + BYOK + Async Runtime
 - **P2 — Deep-merge PATCH**: `/api/workflows/{id}/nodes/{node_id}` now recursively merges nested dicts (e.g., patching `headers.Authorization` preserves `headers.X-Other`). 50KB payload cap.
 - **P2 — `studio_workflow_id` validation**: `POST /api/workflows/save` requires non-empty studio_workflow_id (prevents duplicate stub inserts on retry).
@@ -116,12 +126,10 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 - compute_usage (Mongo): user_id + period (YYYY-MM) + count
 
 ## Prioritized Backlog
-- **P2**: Encryption-at-rest for BYOK api_keys (Fernet + KMS-managed key)
-- **P2**: Pagination/projection on `/workflows/{id}/runs` (currently returns full node_results blob)
-- **P3**: Extract async dispatch into `lib/workflow_jobs.py`; startup hook to mark stale `running` jobs as `failed` after worker restart
-- **P3**: Bulk ingest all 280 templates via `scripts/ingest_templates.py --all`
-- **P3**: CSDROP routes (28) extraction from server.py
-- **P3**: Stripe /payments/* routes extraction from server.py
-- **P3**: Pydantic models for BYOK credential payloads
-- **P3**: Celery + Redis HA async runtime (replaces in-process asyncio.create_task)
-- **P3**: Real-time websocket feed for Overwatch execution table
+- **P2**: KMS-managed BYOK key (currently env-bound; rotate to AWS KMS / GCP KMS / Vault)
+- **P3**: Consolidate duplicate `@app.on_event("startup")` functions in server.py
+- **P3**: CSDROP routes extraction (28 routes) — **deprioritized per user**
+- **P3**: Pydantic models for `PATCH /nodes/{node_id}` (still uses request.json()→400 instead of 422)
+- **P3**: Celery + Redis HA async runtime (replaces in-process asyncio worker)
+- **P3**: Real-time websocket feed for Overwatch live execution table
+- **P3**: Token-refresh OAuth flow for Gmail BYOK (currently manual access-token refresh)
