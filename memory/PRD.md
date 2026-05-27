@@ -129,6 +129,15 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 - Credits auto-deducted from next subscription checkout
 - MongoDB: referral_codes, referrals, referral_credits collections with indexes
 
+### Compute Credits Kill Switch (Phase 24 - May 26, 2026)
+- Middleware checks compute_credits BEFORE every agent execution
+- Applied to all 3 execution paths: /api/run-agent (LLM), /api/dashboard/agents/{id}/run (sandbox), /api/webhook/agent/{key}
+- Tier limits: Recruit=100/mo, Cadet=500/mo, Operator=2000/mo, Admin=unlimited
+- 403 response with structured detail: error code, message, used/limit counts, tier, upgrade_url, upgrade_prompt
+- Monthly rollover via YYYY-MM period tracking in compute_usage collection
+- Dispatch-based billing: credit consumed on queue, not completion
+- GET /api/subscriptions/status returns compute block (used, limit, remaining, period, unlimited)
+
 ## Prioritized Backlog
 - **P3**: Hosted execution runtime (Celery + Redis)
 - **P3**: Pro tier Stripe subscription

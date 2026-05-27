@@ -96,11 +96,13 @@ async def get_compute_status(db, user: dict):
     user_id = user.get("id", user.get("email", "unknown"))
     tier = user.get("tier", "free")
     role = user.get("role", "user")
+    # Normalize "free" to "recruit" for consistency
+    display_tier = "recruit" if tier == "free" else tier
     limit = TIER_LIMITS.get(tier, 100)
     period = _current_period()
 
     if role == "admin" or tier in ("pro", "admin"):
-        return {"used": 0, "limit": 999999, "remaining": 999999, "tier": tier, "period": period, "unlimited": True}
+        return {"used": 0, "limit": 999999, "remaining": 999999, "tier": display_tier, "period": period, "unlimited": True}
 
     usage = await db.compute_usage.find_one({"user_id": user_id, "period": period})
     used = usage["count"] if usage else 0
@@ -109,7 +111,7 @@ async def get_compute_status(db, user: dict):
         "used": used,
         "limit": limit,
         "remaining": max(0, limit - used),
-        "tier": tier,
+        "tier": display_tier,
         "period": period,
         "unlimited": False,
     }
