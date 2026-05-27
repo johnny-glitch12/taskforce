@@ -1808,160 +1808,7 @@ async def csdrop_run_agent(agent_id: str, data: AgentRunRequest, user=Depends(ge
 
 AGENT_PACKAGES = {}  # populated dynamically from DB
 
-@api_router.post("/payments/checkout")
-async def create_checkout(request: Request, data: dict, user=Depends(get_current_user)):
-    agent_id = data.get("agent_id")
-    plan = data.get("plan", "rent")  # "rent" or "buy"
-    origin_url = data.get("origin_url", "")
-
-    if not origin_url:
-        raise HTTPException(status_code=400, detail="origin_url is required")
-
-    agent = await db.agents.find_one({"id": agent_id}, {"_id": 0})
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-
-    # Price from server-side only
-    amount = float(agent["price"]) if plan == "rent" else float(agent["buyPrice"])
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Invalid price")
-
-    success_url = f"{origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = f"{origin_url}/agent/{agent_id}"
-
-    stripe_key = os.environ.get("STRIPE_API_KEY")
-    host_url = str(request.base_url).rstrip("/")
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    stripe_checkout = StripeCheckout(api_key=stripe_key, webhook_url=webhook_url)
-
-    checkout_req = CheckoutSessionRequest(
-        amount=amount,
-        currency="usd",
-        success_url=success_url,
-        cancel_url=cancel_url,
-        metadata={
-            "agent_id": str(agent_id),
-            "agent_name": agent["shortTitle"],
-            "plan": plan,
-            "user_id": user["id"],
-            "user_email": user["email"],
-        },
-    )
-    session = await stripe_checkout.create_checkout_session(checkout_req)
-
-    # Create payment transaction record
-    tx_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
-    await db.payment_transactions.insert_one({
-        "id": tx_id,
-        "session_id": session.session_id,
-        "user_id": user["id"],
-        "user_email": user["email"],
-        "agent_id": agent_id,
-        "agent_name": agent["shortTitle"],
-        "plan": plan,
-        "amount": amount,
-        "currency": "usd",
-        "payment_status": "pending",
-        "created_at": now,
-        "updated_at": now,
-    })
-
-    return {"url": session.url, "session_id": session.session_id}
-
-@api_router.get("/payments/status/{session_id}")
-async def get_payment_status(session_id: str, request: Request):
-    tx = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
-    if not tx:
-        raise HTTPException(status_code=404, detail="Transaction not found")
-
-    stripe_key = os.environ.get("STRIPE_API_KEY")
-    host_url = str(request.base_url).rstrip("/")
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    stripe_checkout = StripeCheckout(api_key=stripe_key, webhook_url=webhook_url)
-
-    status = await stripe_checkout.get_checkout_status(session_id)
-
-    if status.payment_status != tx.get("payment_status"):
-        await db.payment_transactions.update_one(
-            {"session_id": session_id},
-            {"$set": {
-                "payment_status": status.payment_status,
-                "status": status.status,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-            }},
-        )
-
-    return {
-        "session_id": session_id,
-        "status": status.status,
-        "payment_status": status.payment_status,
-        "amount": status.amount_total,
-        "currency": status.currency,
-        "agent_id": tx.get("agent_id"),
-        "agent_name": tx.get("agent_name"),
-        "plan": tx.get("plan"),
-    }
-
-@api_router.post("/webhook/stripe")
-async def stripe_webhook(request: Request):
-    body = await request.body()
-    sig = request.headers.get("Stripe-Signature", "")
-    stripe_key = os.environ.get("STRIPE_API_KEY")
-    host_url = str(request.base_url).rstrip("/")
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    stripe_checkout = StripeCheckout(api_key=stripe_key, webhook_url=webhook_url)
-
-    try:
-        event = await stripe_checkout.handle_webhook(body, sig)
-        if event.payment_status == "paid" and event.session_id:
-            tx = await db.payment_transactions.find_one({"session_id": event.session_id})
-            if tx and tx.get("payment_status") != "paid":
-                await db.payment_transactions.update_one(
-                    {"session_id": event.session_id},
-                    {"$set": {
-                        "payment_status": "paid",
-                        "status": "complete",
-                        "updated_at": datetime.now(timezone.utc).isoformat(),
-                    }},
-                )
-                logger.info(f"Payment confirmed for session {event.session_id}")
-
-                # Auto-activate subscription if this is a subscription payment
-                if tx.get("type") == "subscription" and not tx.get("activated"):
-                    from routes.subscriptions import TIERS
-                    tier = tx.get("tier")
-                    tier_info = TIERS.get(tier, {})
-                    now = datetime.now(timezone.utc).isoformat()
-                    await db.subscriptions.update_many(
-                        {"user_id": tx["user_id"], "status": "active"},
-                        {"$set": {"status": "superseded", "updated_at": now}},
-                    )
-                    await db.subscriptions.insert_one({
-                        "id": str(uuid.uuid4()),
-                        "user_id": tx["user_id"],
-                        "tier": tier,
-                        "status": "active",
-                        "payment_id": tx["id"],
-                        "session_id": event.session_id,
-                        "amount": tx["amount"],
-                        "created_at": now,
-                        "updated_at": now,
-                    })
-                    await db.users.update_one(
-                        {"id": tx["user_id"]},
-                        {"$set": {"tier": tier, "agent_limit": tier_info.get("agent_limit", 3)}},
-                    )
-                    await db.payment_transactions.update_one(
-                        {"session_id": event.session_id},
-                        {"$set": {"activated": True}},
-                    )
-                    logger.info(f"Subscription activated: {tier} for user {tx['user_id']}")
-
-        return {"status": "ok"}
-    except Exception as e:
-        logger.error(f"Webhook error: {e}")
-        return {"status": "error"}
+# ─── Stripe Payment Routes — Extracted to routes/stripe_payments.py ───
 
 # ─── Health ───
 
@@ -2045,8 +1892,9 @@ async def startup():
 
     # Start Supernova scheduler (runs daily at midnight)
     scheduler.add_job(evaluate_supernovas, 'interval', hours=24, id='supernova_eval', replace_existing=True)
-    scheduler.start()
-    logger.info("Supernova scheduler started")
+    if not scheduler.running:
+        scheduler.start()
+        logger.info("Supernova scheduler started")
 
     # Run initial evaluation
     await evaluate_supernovas()
@@ -2107,6 +1955,171 @@ async def startup():
         threading.Thread(target=_startup_repair, daemon=True).start()
     else:
         logger.info("All dependencies OK. No repair needed.")
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    scheduler.shutdown(wait=False)
+    client.close()
+
+# ─── Health ───
+
+@api_router.get("/")
+async def root():
+    return {"message": "Nova AI API", "status": "ok"}
+
+# Include router
+app.include_router(api_router)
+
+# Include agent execution router (nidoai architecture)
+from routes.agent import router as agent_router
+app.include_router(agent_router, prefix="/api")
+
+# Include security audit log router
+from routes.security import router as security_router
+app.include_router(security_router, prefix="/api")
+
+# Include published agents + creator analytics router
+from routes.published import router as published_router
+app.include_router(published_router, prefix="/api")
+
+# Include subscriptions + referrals router
+from routes.subscriptions import router as subscriptions_router
+app.include_router(subscriptions_router, prefix="/api")
+
+# Include native workflow executor router (replaces n8n proxy)
+from routes.workflow_executor import router as workflow_router
+app.include_router(workflow_router, prefix="/api")
+
+# Include extracted auth router
+from routes.auth import router as auth_router
+app.include_router(auth_router, prefix="/api")
+
+# Include extracted Stripe payments router
+from routes.stripe_payments import router as stripe_router
+app.include_router(stripe_router, prefix="/api")
+
+# Mount static files for live bot screenshots
+STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.on_event("startup")
+async def startup():
+    # Auto-seed on startup
+    count = await db.agents.count_documents({})
+    if count == 0:
+        logger.info("No data found, seeding database...")
+        await seed_database()
+    admin = await db.users.find_one({"email": "admin@nova.ai"})
+    if not admin:
+        admin_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        await db.users.insert_one({
+            "id": admin_id, "email": "admin@nova.ai",
+            "password_hash": hash_password("admin123"),
+            "name": "Task Force Admin", "role": "admin", "created_at": now,
+        })
+        logger.info("Admin user created")
+
+    # Seed CSDROP client user
+    csdrop_user = await db.users.find_one({"client_id": "csdrop"})
+    if not csdrop_user:
+        csdrop_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        await db.users.insert_one({
+            "id": csdrop_id, "email": "admin@csdrop.com",
+            "password_hash": hash_password("nova_csdrop_2026"),
+            "name": "CSDROP", "role": "client", "client_id": "csdrop",
+            "tier": "pro", "created_at": now,
+        })
+        logger.info("CSDROP client user created")
+
+    # Ensure csdrop_executions collection index
+    await db.csdrop_executions.create_index("user_id")
+
+    # Start Supernova scheduler (runs daily at midnight)
+    scheduler.add_job(evaluate_supernovas, 'interval', hours=24, id='supernova_eval', replace_existing=True)
+    if not scheduler.running:
+        scheduler.start()
+        logger.info("Supernova scheduler started")
+
+    # Run initial evaluation
+    await evaluate_supernovas()
+
+    # ─── Startup Health Check + Auto-Repair ───
+    logger.info("Running environment health check...")
+    missing_modules = []
+    for mod_name, import_name in [("playwright", "playwright"), ("playwright_stealth", "playwright_stealth"), ("RestrictedPython", "RestrictedPython")]:
+        if _check_module(import_name):
+            logger.info(f"  [OK] {mod_name}")
+        else:
+            logger.warning(f"  [MISSING] {mod_name}")
+            missing_modules.append(mod_name)
+
+    chromium_ok = _check_chromium()
+    if chromium_ok:
+        logger.info("  [OK] chromium")
+    else:
+        logger.warning("  [MISSING] chromium")
+        missing_modules.append("chromium")
+
+    logger.info(f"Python executable: {sys.executable}")
+
+    if missing_modules:
+        logger.info(f"Auto-repair triggered for: {', '.join(missing_modules)}")
+
+        def _startup_repair():
+            global _repair_status
+            _repair_status = {"running": True, "last_result": None, "logs": []}
+            def _ts():
+                return datetime.now(timezone.utc).strftime('%H:%M:%S')
+
+            _repair_status["logs"].append(f"[{_ts()}] Auto-repair on startup...")
+            logger.info("Startup auto-repair: installing dependencies...")
+
+            req_file = CSDROP_BOT_DIR / "requirements.txt"
+            if req_file.exists():
+                pip_result = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "-r", str(req_file)],
+                    capture_output=True, text=True, timeout=120,
+                )
+                _repair_status["logs"].append(f"[{_ts()}] Pip: {'OK' if pip_result.returncode == 0 else 'FAIL'}")
+
+            if not chromium_ok:
+                chromium_result = subprocess.run(
+                    [sys.executable, "-m", "playwright", "install", "chromium"],
+                    capture_output=True, text=True, timeout=300,
+                )
+                _repair_status["logs"].append(f"[{_ts()}] Chromium: {'OK' if chromium_result.returncode == 0 else 'FAIL'}")
+
+            all_ok = all(_check_module(m) for m in ["playwright", "playwright_stealth", "RestrictedPython"])
+            _repair_status["logs"].append(f"[{_ts()}] Auto-repair complete. All OK: {all_ok}")
+            _repair_status["running"] = False
+            _repair_status["last_result"] = "success" if all_ok else "partial"
+            logger.info(f"Startup auto-repair finished. All OK: {all_ok}")
+
+        import threading
+        threading.Thread(target=_startup_repair, daemon=True).start()
+    else:
+        logger.info("All dependencies OK. No repair needed.")
+
+    # Sweep stale workflow_jobs orphaned by previous worker
+    try:
+        from lib.workflow_jobs import mark_stale_jobs_failed
+        swept = await mark_stale_jobs_failed(db, max_age_seconds=600)
+        if swept:
+            logger.info(f"[startup] Marked {swept} stale workflow_jobs as failed.")
+    except Exception as e:
+        logger.warning(f"[startup] Stale-job sweep failed: {e}")
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

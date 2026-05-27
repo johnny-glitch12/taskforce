@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 29 backend regression + new-feature coverage complete. 89/89 tests pass (33 from test_workflow_routes.py + 31 from test_workflow_iter28.py + 25 NEW in test_workflow_iter29.py). All 27 review-request items verified green. Two pre-existing iter28 tests were updated (not bugs — contract changes): (a) test_save_non_list_nodes_rejected now accepts 400|422 because Pydantic SaveCanvasRequest returns 422 list_type; (b) test_save_credential_is_idempotent now asserts via API (encrypted:true + masked-last-4) instead of expecting plaintext in db.byok_credentials. No production bugs found this iteration.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "shutdown hook", "issue": "apscheduler SchedulerNotRunningError raised during reload because scheduler.shutdown() is not guarded with the same `if scheduler.running` check that scheduler.start() now uses. Cosmetic — only appears on hot-reload, doesn't affect requests."},
+      {"endpoint": "/api/webhook/stripe", "issue": "Bogus webhook payload logs ERROR-level 'Unexpected error processing webhook: data' instead of WARNING. Functional behaviour (return 200 with status:error) is correct."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_workflow_iter29.py",
+    "/app/backend/tests/test_workflow_iter28.py",
+    "/app/backend/tests/test_workflow_routes.py",
+    "/app/test_reports/pytest/iter29_full.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Guard scheduler.shutdown() with `if scheduler.running:` to silence the SchedulerNotRunningError stack trace on uvicorn reloads (cosmetic).",
+    "OPTIONAL: Cleanup of duplicate startup functions in server.py (lines 1859 & 2013) — flagged P3 by main agent, both guarded now, no functional issue."
+  ],
+  "critical_code_review_comments": [
+    "BYOK encryption is solid: enc:v1: prefix scheme allows legacy plaintext fallthrough → both round-trip correctly. SHA256-derived Fernet key from BYOK_MASTER_KEY env is acceptable for v1; recommend KMS-managed key + per-row salt for v2 (already in CHANGELOG).",
+    "Action handler now correctly decrypts the credential before use — verified end-to-end: Slack handler with an encrypted bogus webhook URL returned 'Slack post → 302' (handler dispatched HTTP) instead of the previous 'BYOK not configured' (which would have indicated decryption-failed empty-key).",
+    "Pydantic validation surface for BYOKCreate + SaveCanvasRequest is clean — Literal['slack','sendgrid','gmail'] + Field(min_length, max_length) + a custom @field_validator for whitespace-only studio_workflow_id. Returns 422 with structured detail array as expected.",
+    "Pagination /workflows/{id}/runs correctly: returns {runs,total,limit,skip}, strips node_results in list, honors skip+limit, clamps limit to 100. Detail endpoint /runs/{run_id} returns full doc and 404s for other-user runs. Good defence in depth.",
+    "Stripe routes successfully extracted to routes/stripe_payments.py — /payments/checkout (404 'Agent not found' for bogus agent_id), /payments/status/{id} (404 'Transaction not found'), /webhook/stripe (200 with status:error for bad signature) — all wired and reachable.",
+    "Stale-job sweeper works as advertised: inserted a synthetic 'running' job 15min old, called mark_stale_jobs_failed(db, 600), job transitioned to 'failed' with error 'worker_restart …', visible via /workflows/jobs/{id}.",
+    "Bulk templates verified: engine/status.templates_available = 291; /workflows/templates?limit=200 returns 200 templates.",
+    "scheduler.start() guard works — no 'scheduler already running' on startup. However scheduler.shutdown() is NOT similarly guarded → spurious SchedulerNotRunningError trace on reload. Suggest mirroring the guard.",
+    "Two duplicate @app.on_event('startup') functions still exist in server.py (lines ~1859 & 2013) — pre-existing technical debt; both are now safe due to the `if not scheduler.running` guard but should be consolidated in a future cleanup PR (P3)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_workflow_iter28.py (relaxed 2 tests to accept 400|422; idempotency test now uses API not direct DB)",
+    "/app/backend/tests/test_workflow_routes.py (relaxed test_save_non_list_nodes_rejected to accept 400|422)",
+    "/app/backend/tests/test_workflow_iter29.py (NEW — 25 tests)"
+  ],
+  "success_rate": {"backend": "100% (89/89)", "frontend": "skipped per request"},
+  "test_credentials": "admin@nova.ai/admin123 (admin), freeuser@test.com/test123 (recruit, autouse fixture seeds to 100/100 for current period)",
+  "seed_data_creation": "TestBYOKEncryption fixture wipes admin's byok_credentials before/after each test. TestStaleJobSweeper inserts one TEST_stale_* row in workflow_jobs and cleans up. All TEST_-prefixed user_workflows are deleted at end of each test. No production data mutated.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Three test files cover the workflow executor + iter29 surface: test_workflow_routes.py (33), test_workflow_iter28.py (31), test_workflow_iter29.py (25). When testing post-iter29 features, extend test_workflow_iter29.py or create test_workflow_iter30.py. Note: validation errors are now 422 (Pydantic) for /workflows/credentials and /workflows/save; remaining endpoints (PATCH /nodes/{id}, etc.) still use request.json() and return 400. BYOK keys are encrypted at rest with enc:v1: prefix — direct DB inspection will see ciphertext, use the API. pytest-asyncio is now installed (1.4.0) for async unit tests like the stale-job sweeper. BYOK_MASTER_KEY is set in backend/.env and must remain stable — rotating it will break decryption of existing rows.",
+  "rca of the issue": "No production bugs found. Two pre-existing test assertions were updated to match intentional contract changes (Pydantic 422 + at-rest encryption) — these are TEST updates, not code fixes. Backend logs show one cosmetic stack trace (apscheduler SchedulerNotRunningError on shutdown) — non-fatal, fix is a 1-line guard on scheduler.shutdown() symmetrical to the scheduler.start() guard already added in this iteration."
+}

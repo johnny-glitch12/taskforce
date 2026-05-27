@@ -440,8 +440,10 @@ class TestSaveEndpoint:
                 "edges": [],
             },
         )
-        assert r.status_code == 400, r.text
-        assert "must be arrays" in r.text.lower()
+        # iter29: now Pydantic returns 422 instead of 400
+        assert r.status_code in (400, 422), r.text
+        body = r.text.lower()
+        assert "must be arrays" in body or "list_type" in body or "list" in body
 
     def test_save_empty_workflow_allowed_then_execute_no_keyerror(
         self, base_url, admin_client

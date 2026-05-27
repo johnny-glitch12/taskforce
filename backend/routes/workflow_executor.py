@@ -14,28 +14,29 @@ Routes:
         POST   /api/workflows/save                       upsert canvas → runtime
         PATCH  /api/workflows/{id}/nodes/{node_id}       deep-merge node data
         POST   /api/workflows/{id}/execute               sync execute (compute-gated)
+        GET    /api/workflows/{id}/runs                  recent runs (paginated/lean)
+        GET    /api/workflows/{id}/runs/{run_id}         single run detail (full node_results)
     Async dispatch (long-running):
         POST   /api/workflows/{id}/dispatch              enqueue, returns job_id
         GET    /api/workflows/jobs/{job_id}              poll job status
     BYOK credentials:
-        GET    /api/workflows/credentials                list user's BYOK
+        GET    /api/workflows/credentials                list user's BYOK (encrypted-at-rest)
         POST   /api/workflows/credentials                upsert {service, api_key, extra}
         DELETE /api/workflows/credentials/{service}      remove
     Engine:
         GET    /api/workflows/engine/status
-
-All execute paths protected by compute-credit gate (returns 200 with allowed:false
-body — k8s strips 403 bodies, do NOT change). RestrictedPython sandbox enforces
-30s timeout + blocked imports + SSRF guards.
 """
 import asyncio
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field, field_validator
 
 from lib.compute_credits import check_compute_credits, increment_compute_usage
 from lib.workflow_handlers import HANDLERS, SUPPORTED_BYOK_SERVICES
+from lib.byok_crypto import encrypt_key, decrypt_key
+from lib.workflow_jobs import schedule_async_job
 
 router = APIRouter()
 
@@ -50,6 +51,30 @@ def get_current_user():
 def get_db():
     from server import db
     return db
+
+
+# ─────────────────────────────────────────────────────────────
+# Pydantic models
+# ─────────────────────────────────────────────────────────────
+class BYOKCreate(BaseModel):
+    service: Literal["slack", "sendgrid", "gmail"]
+    api_key: str = Field(min_length=1, max_length=4096)
+    extra: Dict[str, Any] = Field(default_factory=dict)
+
+
+class SaveCanvasRequest(BaseModel):
+    studio_workflow_id: str = Field(min_length=1, max_length=128)
+    name: str = Field(default="Untitled Workflow", max_length=200)
+    nodes: List[Dict[str, Any]] = Field(default_factory=list)
+    edges: List[Dict[str, Any]] = Field(default_factory=list)
+    source_template: Optional[str] = None
+
+    @field_validator("studio_workflow_id")
+    @classmethod
+    def _non_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("studio_workflow_id is required and must be non-empty.")
+        return v
 
 
 # ─────────────────────────────────────────────────────────────
@@ -260,42 +285,33 @@ async def list_credentials(user=Depends(get_current_user())):
     creds = await db.byok_credentials.find({"user_id": user_id}, {"_id": 0}).to_list(50)
     masked = []
     for c in creds:
-        k = c.get("api_key", "")
-        c["api_key_masked"] = ("•" * 8 + k[-4:]) if len(k) > 4 else "•" * len(k)
+        # Decrypt only the last 4 chars for masking; keep encrypted at rest
+        stored = c.get("api_key", "")
+        plain = decrypt_key(stored)
+        c["api_key_masked"] = ("•" * 8 + plain[-4:]) if len(plain) > 4 else "•" * max(len(plain), 1)
+        c["encrypted"] = stored.startswith("enc:v1:")
         c.pop("api_key", None)
         masked.append(c)
     return {"credentials": masked, "supported_services": SUPPORTED_BYOK_SERVICES}
 
 
 @router.post("/workflows/credentials")
-async def save_credential(request: Request, user=Depends(get_current_user())):
-    body = await request.json()
-    service = (body.get("service") or "").lower().strip()
-    api_key = body.get("api_key", "")
-    extra = body.get("extra", {})
-
-    if not service:
-        raise HTTPException(status_code=400, detail="service is required.")
-    if service not in SUPPORTED_BYOK_SERVICES:
-        raise HTTPException(status_code=400, detail=f"Service '{service}' not supported. Allowed: {SUPPORTED_BYOK_SERVICES}")
-    if not api_key or not isinstance(api_key, str):
-        raise HTTPException(status_code=400, detail="api_key is required.")
-    if not isinstance(extra, dict):
-        raise HTTPException(status_code=400, detail="extra must be an object.")
-
+async def save_credential(req: BYOKCreate, user=Depends(get_current_user())):
     db = get_db()
     user_id = str(user.get("id", user.get("email")))
     now = datetime.now(timezone.utc).isoformat()
 
+    encrypted = encrypt_key(req.api_key)
+
     await db.byok_credentials.update_one(
-        {"user_id": user_id, "service": service},
+        {"user_id": user_id, "service": req.service},
         {
-            "$set": {"api_key": api_key, "extra": extra, "updated_at": now},
+            "$set": {"api_key": encrypted, "extra": req.extra, "updated_at": now},
             "$setOnInsert": {"created_at": now},
         },
         upsert=True,
     )
-    return {"success": True, "service": service}
+    return {"success": True, "service": req.service}
 
 
 @router.delete("/workflows/credentials/{service}")
@@ -355,43 +371,32 @@ async def delete_user_workflow(workflow_id: str, user=Depends(get_current_user()
 
 
 @router.post("/workflows/save")
-async def save_canvas_to_runtime(request: Request, user=Depends(get_current_user())):
+async def save_canvas_to_runtime(req: SaveCanvasRequest, user=Depends(get_current_user())):
     """Idempotent upsert of canvas state into user_workflows, keyed by studio_workflow_id."""
-    body = await request.json()
-    studio_id = body.get("studio_workflow_id")
-    name = body.get("name", "Untitled Workflow")
-    nodes = body.get("nodes", [])
-    edges = body.get("edges", [])
-    source_template = body.get("source_template")
-
-    if not studio_id or not isinstance(studio_id, str) or not studio_id.strip():
-        raise HTTPException(status_code=400, detail="studio_workflow_id is required and must be non-empty.")
-    if not isinstance(nodes, list) or not isinstance(edges, list):
-        raise HTTPException(status_code=400, detail="nodes and edges must be arrays.")
-    if len(nodes) > MAX_NODES_PER_RUN:
+    if len(req.nodes) > MAX_NODES_PER_RUN:
         raise HTTPException(status_code=400, detail=f"Workflow exceeds {MAX_NODES_PER_RUN} node limit.")
 
     db = get_db()
     user_id = str(user.get("id", user.get("email")))
     now = datetime.now(timezone.utc).isoformat()
 
-    existing = await db.user_workflows.find_one({"user_id": user_id, "studio_workflow_id": studio_id})
+    existing = await db.user_workflows.find_one({"user_id": user_id, "studio_workflow_id": req.studio_workflow_id})
 
     if existing:
         await db.user_workflows.update_one(
             {"_id": existing["_id"]},
             {"$set": {
-                "name": name, "nodes": nodes, "edges": edges,
-                "source_template": source_template, "updated_at": now,
+                "name": req.name, "nodes": req.nodes, "edges": req.edges,
+                "source_template": req.source_template, "updated_at": now,
             }},
         )
         wf_id = existing["id"]
     else:
         wf_id = uuid.uuid4().hex
         await db.user_workflows.insert_one({
-            "id": wf_id, "user_id": user_id, "studio_workflow_id": studio_id,
-            "name": name, "nodes": nodes, "edges": edges,
-            "source_template": source_template,
+            "id": wf_id, "user_id": user_id, "studio_workflow_id": req.studio_workflow_id,
+            "name": req.name, "nodes": req.nodes, "edges": req.edges,
+            "source_template": req.source_template,
             "created_at": now, "updated_at": now,
         })
 
@@ -492,44 +497,8 @@ async def execute_template_route(template_id: str, request: Request, user=Depend
 
 
 # ─────────────────────────────────────────────────────────────
-# Routes — Async Dispatch (lightweight asyncio task queue)
-# Long workflows return job_id immediately; client polls /jobs/{id}.
+# Routes — Async Dispatch (in-process asyncio worker via lib/workflow_jobs)
 # ─────────────────────────────────────────────────────────────
-async def _run_async_job(job_id: str, workflow_id: str, user: Dict):
-    """Background worker — executes the workflow and updates db.workflow_jobs."""
-    db = get_db()
-    user_id = str(user.get("id", user.get("email")))
-    try:
-        wf = await db.user_workflows.find_one({"id": workflow_id, "user_id": user_id}, {"_id": 0})
-        if not wf:
-            await db.workflow_jobs.update_one(
-                {"id": job_id},
-                {"$set": {"status": "failed", "error": "Workflow not found", "finished_at": datetime.now(timezone.utc).isoformat()}},
-            )
-            return
-
-        await db.workflow_jobs.update_one({"id": job_id}, {"$set": {"status": "running"}})
-        ctx = _build_ctx(db, user)
-        result = await execute_workflow_dag(wf, ctx)
-        await increment_compute_usage(db, user)
-        run_id = await _log_run(db, user_id, workflow_id, "async", result)
-
-        await db.workflow_jobs.update_one(
-            {"id": job_id},
-            {"$set": {
-                "status": "succeeded" if result["success"] else "failed",
-                "result": result,
-                "run_id": run_id,
-                "finished_at": datetime.now(timezone.utc).isoformat(),
-            }},
-        )
-    except Exception as e:
-        await db.workflow_jobs.update_one(
-            {"id": job_id},
-            {"$set": {"status": "failed", "error": str(e)[:300], "finished_at": datetime.now(timezone.utc).isoformat()}},
-        )
-
-
 @router.post("/workflows/{workflow_id}/dispatch")
 async def dispatch_workflow_async(workflow_id: str, user=Depends(get_current_user())):
     """Enqueue async execution. Returns job_id immediately. Compute gate enforced on enqueue."""
@@ -553,24 +522,45 @@ async def dispatch_workflow_async(workflow_id: str, user=Depends(get_current_use
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
 
-    # Fire-and-forget background task (asyncio in-process — Redis/Celery would replace this for HA)
-    asyncio.create_task(_run_async_job(job_id, workflow_id, user))
-
+    schedule_async_job(job_id, workflow_id, user)
     return {"success": True, "job_id": job_id, "status": "queued"}
 
 
 @router.get("/workflows/{workflow_id}/runs")
-async def list_workflow_runs(workflow_id: str, limit: int = 20, user=Depends(get_current_user())):
-    """List recent execution runs for a user's workflow."""
+async def list_workflow_runs(
+    workflow_id: str,
+    limit: int = 20,
+    skip: int = 0,
+    user=Depends(get_current_user()),
+):
+    """List recent execution runs (LEAN — node_results stripped). Use /runs/{run_id} for full detail."""
+    limit = max(1, min(limit, 100))
+    skip = max(0, skip)
     db = get_db()
     user_id = str(user.get("id", user.get("email")))
-    # Verify ownership
     wf = await db.user_workflows.find_one({"id": workflow_id, "user_id": user_id}, {"_id": 0, "id": 1})
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found.")
+
+    projection = {"_id": 0, "node_results": 0}  # strip heavy field
     cursor = db.workflow_runs.find(
         {"user_id": user_id, "workflow_id": workflow_id},
-        {"_id": 0},
-    ).sort("created_at", -1).limit(limit)
+        projection,
+    ).sort("created_at", -1).skip(skip).limit(limit)
     runs = await cursor.to_list(limit)
-    return {"runs": runs}
+    total = await db.workflow_runs.count_documents({"user_id": user_id, "workflow_id": workflow_id})
+    return {"runs": runs, "total": total, "limit": limit, "skip": skip}
+
+
+@router.get("/workflows/{workflow_id}/runs/{run_id}")
+async def get_workflow_run(workflow_id: str, run_id: str, user=Depends(get_current_user())):
+    """Return full single run (includes node_results)."""
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    run = await db.workflow_runs.find_one(
+        {"id": run_id, "workflow_id": workflow_id, "user_id": user_id},
+        {"_id": 0},
+    )
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    return run

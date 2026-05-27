@@ -188,6 +188,10 @@ async def _load_byok(ctx: Dict, service: str) -> Dict | None:
     if db is None or not user_id:
         return None
     cred = await db.byok_credentials.find_one({"user_id": user_id, "service": service})
+    if cred and cred.get("api_key"):
+        # Decrypt stored credential (handles both encrypted and legacy plaintext)
+        from lib.byok_crypto import decrypt_key
+        cred["api_key"] = decrypt_key(cred["api_key"])
     return cred
 
 
