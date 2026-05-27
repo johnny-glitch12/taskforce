@@ -1,0 +1,46 @@
+{
+  "summary": "Iteration 30 backend regression + new-feature coverage complete. 116/116 tests pass (33 workflow_routes + 31 iter28 + 25 iter29 + 27 NEW iter30). All review-request items verified green. One pre-existing iter28 test relaxed (400→400|422) to honor the new PATCH /nodes/{id} Pydantic contract. One real production bug surfaced: /api/auth/register accepts empty email+password and returns 200+JWT (reported, not blocking).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "/api/auth/register", "issue": "Accepts empty email and password — returns 200 with valid JWT and creates user with email=\"\". Should return 422/400 via Pydantic EmailStr/min_length validation.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "shutdown hook", "issue": "Pre-existing apscheduler SchedulerNotRunningError on reload (cosmetic, unchanged from iter29)."},
+      {"endpoint": "/api/workflows/credentials/gmail/exchange", "issue": "When GOOGLE_CLIENT_ID/SECRET unset, returns 500 (RuntimeError). Acceptable for env-gated config but a 503 'service not configured' or 501 might communicate intent better."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_workflow_iter30.py",
+    "/app/backend/tests/test_workflow_iter29.py",
+    "/app/backend/tests/test_workflow_iter28.py",
+    "/app/backend/tests/test_workflow_routes.py",
+    "/app/test_reports/pytest/iter30_full.xml"
+  ],
+  "action_items": [
+    "HIGH: Tighten /api/auth/register Pydantic schema — require EmailStr + password min_length>=6. Currently empty credentials succeed.",
+    "OPTIONAL: Guard scheduler.shutdown() with `if scheduler.running:` to silence the SchedulerNotRunningError trace on reload (carried from iter29).",
+    "OPTIONAL: Consider returning 503 (not 500) from /credentials/gmail/exchange when GOOGLE_CLIENT_ID/SECRET unset, to differentiate config-missing from genuine runtime errors."
+  ],
+  "critical_code_review_comments": [
+    "PATCH /workflows/{id}/nodes/{node_id} now uses NodePatchRequest (Pydantic): list/string data → 422; >50KB → 422 with 'exceeds 50KB limit'; deep-merge contract preserved; unknown node still returns 404. Clean migration.",
+    "byok_crypto refactor solid: provider_info() exposes {provider, supported, version_prefix}; default 'local' yields enc:v1: prefix; existing rows still round-trip via /credentials (no data migration needed). Stubs for aws|gcp|vault raise with clear migration guidance.",
+    "Gmail OAuth endpoints correctly env-gated — /exchange returns 500 with 'not configured' when GOOGLE_CLIENT_ID/SECRET unset; Pydantic GmailExchangeRequest rejects empty code (string_too_short) and missing redirect_uri (Field required). /refresh returns 404 'Gmail credential not found' or 400 'No refresh_token stored' as designed. Refresh_token is encrypted at rest in extra.refresh_token — verified via direct DB inspection.",
+    "Marketplace seed disabled — db.agents=0, db.creators=0; GET /api/agents and /api/creators return []. Auto-seed gated with `if False`, so backend restarts will not re-pollute. Code-level grep confirmed only ONE @app.on_event('startup') and ONE shutdown hook in server.py (duplicate block removed as advertised).",
+    "Single startup hook verified — /var/log/supervisor/backend.err.log shows NO 'scheduler already running' across recent reloads. The `if not scheduler.running` guard does its job after the duplicate block deletion.",
+    "BUG (HIGH): /api/auth/register passes Pydantic validation with email='' and password=''. Returns 200 + JWT. Likely the register endpoint accepts `email: str` (not EmailStr) with no min_length. This is a real auth-surface regression — recommend EmailStr + Field(min_length=8) on password.",
+    "Code-organization: routes/workflow_executor.py is now ~663 lines and mixes BYOK CRUD + executor + Gmail OAuth + provider-diagnostic. Approaching the 700-line threshold flagged in the guidelines — consider splitting Gmail OAuth into its own router (routes/gmail_oauth.py) in a future PR.",
+    "lib/byok_crypto.py provider_info() is the right shape for diagnostics, but consider gating it behind an admin/superuser check rather than any authenticated user — discloses platform infra (currently 200 for any logged-in user)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_workflow_iter30.py (NEW — 27 tests)",
+    "/app/backend/tests/test_workflow_iter28.py (1 test relaxed: PATCH oversize 400→400|422 for iter30 contract)"
+  ],
+  "success_rate": {"backend": "100% (116/116)", "frontend": "skipped per request"},
+  "test_credentials": "admin@nova.ai/admin123 (admin), freeuser@test.com/test123 (recruit). Verified present and login-functional.",
+  "seed_data_creation": "iter30 fixtures wipe/restore admin's byok_credentials for gmail+slack services around each test; PATCH tests create+delete TEST_i30_* user_workflows. No production data mutated.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Four test files cover the workflow executor surface end-to-end: test_workflow_routes.py (33), test_workflow_iter28.py (31), test_workflow_iter29.py (25), test_workflow_iter30.py (27) = 116 tests. PATCH /nodes/{id} now returns 422 (not 400) for validation errors. BYOK provider info available at GET /api/workflows/credentials/_provider — returns 'local' by default; set BYOK_KMS_PROVIDER=aws|gcp|vault in backend/.env to switch (stubs will raise on encrypt/decrypt). Gmail OAuth endpoints require GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET in backend/.env to function; absent → 500 with 'not configured'. Marketplace agents+creators are intentionally empty — do not assume seed data exists. /api/auth/register currently has weak validation — a flagged HIGH bug; do not rely on it for negative test cases until fixed. enc:v1: prefix is the on-disk format for the local provider.",
+  "rca of the issue": "One real bug found: /api/auth/register accepts empty email/password and returns 200 + signed JWT. RCA: register's Pydantic model uses plain `str` for email and password without min_length or EmailStr constraints. Reproduction: POST /api/auth/register with {email:'', password:''} → 200 with token claims sub=<uuid>, email=''. Mitigation: change RegisterRequest fields to email: EmailStr and password: str = Field(min_length=8). No other production bugs — duplicate startup block removal, PATCH Pydantic migration, BYOK KMS abstraction, Gmail OAuth endpoints, and marketplace seed disable are all verified working."
+}

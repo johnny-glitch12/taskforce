@@ -258,15 +258,42 @@ async def _action_sendgrid(node_data: Dict, prev_output: Any, ctx: Dict) -> Dict
 
 async def _action_gmail(node_data: Dict, prev_output: Any, ctx: Dict) -> Dict[str, Any]:
     """
-    Gmail via OAuth requires full flow we don't have in v1.
-    Accept a service-account Bearer token stored in BYOK (api_key = OAuth access token).
-    User refreshes manually; v1.1 will add refresh-token flow.
+    Gmail action — sends email via Gmail API. Auto-refreshes access_token if expired
+    when a refresh_token + GOOGLE_CLIENT_ID/SECRET are available.
     """
     cred = await _load_byok(ctx, "gmail")
     if not cred or not cred.get("api_key"):
-        return {"status": "error", "output": None, "log": "Gmail BYOK not configured. Add an OAuth access token in /credentials (v1: manual refresh)."}
+        return {"status": "error", "output": None, "log": "Gmail BYOK not configured. POST /api/workflows/credentials/gmail/exchange to authorize."}
 
-    access_token = cred["api_key"]
+    access_token = cred["api_key"]  # already decrypted by _load_byok
+
+    # Try a proactive refresh if expires_at is in the past
+    extra = cred.get("extra") or {}
+    import time as _t
+    if extra.get("expires_at") and int(extra["expires_at"]) < int(_t.time()):
+        enc_refresh = extra.get("refresh_token", "")
+        if enc_refresh and os.environ.get("GOOGLE_CLIENT_ID") and os.environ.get("GOOGLE_CLIENT_SECRET"):
+            try:
+                from lib.byok_crypto import decrypt_key, encrypt_key
+                from lib.gmail_oauth import refresh_access_token
+                refresh_tok = decrypt_key(enc_refresh)
+                if refresh_tok:
+                    tok = await refresh_access_token(refresh_tok)
+                    access_token = tok["access_token"]
+                    db = ctx.get("db")
+                    user_id = ctx.get("user_id")
+                    if db is not None and user_id:
+                        await db.byok_credentials.update_one(
+                            {"user_id": user_id, "service": "gmail"},
+                            {"$set": {
+                                "api_key": encrypt_key(access_token),
+                                "extra.expires_at": tok.get("expires_at"),
+                            }},
+                        )
+            except Exception:
+                # Fall through with the (likely expired) token; Gmail will 401
+                pass
+
     to = node_data.get("to")
     subject = node_data.get("subject", "Workflow notification")
     body_text = node_data.get("body") or (json.dumps(prev_output)[:5000] if prev_output else "")
@@ -274,7 +301,6 @@ async def _action_gmail(node_data: Dict, prev_output: Any, ctx: Dict) -> Dict[st
     if not to:
         return {"status": "error", "output": None, "log": "Missing 'to' in node config."}
 
-    # Build raw RFC 2822 email
     import base64
     raw_msg = f"To: {to}\r\nSubject: {subject}\r\n\r\n{body_text}".encode("utf-8")
     encoded = base64.urlsafe_b64encode(raw_msg).decode().rstrip("=")

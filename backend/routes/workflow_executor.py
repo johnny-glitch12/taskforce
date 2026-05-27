@@ -28,6 +28,7 @@ Routes:
 """
 import asyncio
 import uuid
+import httpx
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -60,6 +61,17 @@ class BYOKCreate(BaseModel):
     service: Literal["slack", "sendgrid", "gmail"]
     api_key: str = Field(min_length=1, max_length=4096)
     extra: Dict[str, Any] = Field(default_factory=dict)
+
+
+class NodePatchRequest(BaseModel):
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("data")
+    @classmethod
+    def _bound_size(cls, v: Dict[str, Any]) -> Dict[str, Any]:
+        if len(str(v)) > 50_000:
+            raise ValueError("data payload exceeds 50KB limit.")
+        return v
 
 
 class SaveCanvasRequest(BaseModel):
@@ -324,6 +336,95 @@ async def delete_credential(service: str, user=Depends(get_current_user())):
     return {"success": True}
 
 
+# ─────────────────────────────────────────────────────────────
+# Gmail OAuth — exchange + refresh
+# ─────────────────────────────────────────────────────────────
+class GmailExchangeRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=2048)
+    redirect_uri: str = Field(min_length=1, max_length=512)
+
+
+@router.post("/workflows/credentials/gmail/exchange")
+async def gmail_exchange(req: GmailExchangeRequest, user=Depends(get_current_user())):
+    """Exchange a Google OAuth code → stores access+refresh tokens encrypted."""
+    from lib.gmail_oauth import exchange_code_for_tokens
+    try:
+        tok = await exchange_code_for_tokens(req.code, req.redirect_uri)
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=400, detail=f"OAuth exchange failed: {e.response.text[:200]}")
+
+    if not tok.get("access_token"):
+        raise HTTPException(status_code=400, detail="No access_token returned from Google.")
+
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    now = datetime.now(timezone.utc).isoformat()
+
+    await db.byok_credentials.update_one(
+        {"user_id": user_id, "service": "gmail"},
+        {
+            "$set": {
+                "api_key": encrypt_key(tok["access_token"]),
+                "extra": {
+                    "refresh_token": encrypt_key(tok.get("refresh_token") or ""),
+                    "expires_at": tok.get("expires_at"),
+                    "scope": tok.get("scope"),
+                },
+                "updated_at": now,
+            },
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+    return {"success": True, "service": "gmail", "expires_at": tok.get("expires_at")}
+
+
+@router.post("/workflows/credentials/gmail/refresh")
+async def gmail_refresh(user=Depends(get_current_user())):
+    """Refresh the user's Gmail access_token using the stored refresh_token."""
+    from lib.gmail_oauth import refresh_access_token
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    cred = await db.byok_credentials.find_one({"user_id": user_id, "service": "gmail"})
+    if not cred:
+        raise HTTPException(status_code=404, detail="Gmail credential not found.")
+
+    extra = cred.get("extra", {}) or {}
+    enc_refresh = extra.get("refresh_token", "")
+    refresh_tok = decrypt_key(enc_refresh) if enc_refresh else ""
+    if not refresh_tok:
+        raise HTTPException(status_code=400, detail="No refresh_token stored. Re-run /gmail/exchange.")
+
+    try:
+        tok = await refresh_access_token(refresh_tok)
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=400, detail=f"OAuth refresh failed: {e.response.text[:200]}")
+
+    await db.byok_credentials.update_one(
+        {"_id": cred["_id"]},
+        {"$set": {
+            "api_key": encrypt_key(tok["access_token"]),
+            "extra.expires_at": tok.get("expires_at"),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    return {"success": True, "expires_at": tok.get("expires_at")}
+
+
+# ─────────────────────────────────────────────────────────────
+# BYOK provider info (KMS abstraction)
+# ─────────────────────────────────────────────────────────────
+@router.get("/workflows/credentials/_provider")
+async def get_byok_provider(user=Depends(get_current_user())):
+    """Diagnostic — returns active BYOK encryption backend."""
+    from lib.byok_crypto import provider_info
+    return provider_info()
+
+
 @router.get("/workflows/jobs/{job_id}")
 async def get_job_status(job_id: str, user=Depends(get_current_user())):
     db = get_db()
@@ -404,14 +505,9 @@ async def save_canvas_to_runtime(req: SaveCanvasRequest, user=Depends(get_curren
 
 
 @router.patch("/workflows/{workflow_id}/nodes/{node_id}")
-async def update_node_data(workflow_id: str, node_id: str, request: Request, user=Depends(get_current_user())):
-    """Deep-merge update of a single node's data dict."""
-    body = await request.json()
-    new_data = body.get("data", {})
-    if not isinstance(new_data, dict):
-        raise HTTPException(status_code=400, detail="data must be an object.")
-    if len(str(new_data)) > 50_000:
-        raise HTTPException(status_code=400, detail="data payload exceeds 50KB limit.")
+async def update_node_data(workflow_id: str, node_id: str, req: NodePatchRequest, user=Depends(get_current_user())):
+    """Deep-merge update of a single node's data dict. Returns 422 on bad input."""
+    new_data = req.data
 
     db = get_db()
     user_id = str(user.get("id", user.get("email")))

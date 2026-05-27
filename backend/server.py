@@ -1856,111 +1856,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.on_event("startup")
-async def startup():
-    # Auto-seed on startup
-    count = await db.agents.count_documents({})
-    if count == 0:
-        logger.info("No data found, seeding database...")
-        await seed_database()
-    admin = await db.users.find_one({"email": "admin@nova.ai"})
-    if not admin:
-        admin_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
-        await db.users.insert_one({
-            "id": admin_id, "email": "admin@nova.ai",
-            "password_hash": hash_password("admin123"),
-            "name": "Task Force Admin", "role": "admin", "created_at": now,
-        })
-        logger.info("Admin user created")
-
-    # Seed CSDROP client user
-    csdrop_user = await db.users.find_one({"client_id": "csdrop"})
-    if not csdrop_user:
-        csdrop_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
-        await db.users.insert_one({
-            "id": csdrop_id, "email": "admin@csdrop.com",
-            "password_hash": hash_password("nova_csdrop_2026"),
-            "name": "CSDROP", "role": "client", "client_id": "csdrop",
-            "tier": "pro", "created_at": now,
-        })
-        logger.info("CSDROP client user created")
-
-    # Ensure csdrop_executions collection index
-    await db.csdrop_executions.create_index("user_id")
-
-    # Start Supernova scheduler (runs daily at midnight)
-    scheduler.add_job(evaluate_supernovas, 'interval', hours=24, id='supernova_eval', replace_existing=True)
-    if not scheduler.running:
-        scheduler.start()
-        logger.info("Supernova scheduler started")
-
-    # Run initial evaluation
-    await evaluate_supernovas()
-
-    # ─── Startup Health Check + Auto-Repair ───
-    logger.info("Running environment health check...")
-    missing_modules = []
-    for mod_name, import_name in [("playwright", "playwright"), ("playwright_stealth", "playwright_stealth"), ("RestrictedPython", "RestrictedPython")]:
-        if _check_module(import_name):
-            logger.info(f"  [OK] {mod_name}")
-        else:
-            logger.warning(f"  [MISSING] {mod_name}")
-            missing_modules.append(mod_name)
-
-    chromium_ok = _check_chromium()
-    if chromium_ok:
-        logger.info("  [OK] chromium")
-    else:
-        logger.warning("  [MISSING] chromium")
-        missing_modules.append("chromium")
-
-    logger.info(f"Python executable: {sys.executable}")
-
-    if missing_modules:
-        logger.info(f"Auto-repair triggered for: {', '.join(missing_modules)}")
-
-        def _startup_repair():
-            global _repair_status
-            _repair_status = {"running": True, "last_result": None, "logs": []}
-            def _ts():
-                return datetime.now(timezone.utc).strftime('%H:%M:%S')
-
-            _repair_status["logs"].append(f"[{_ts()}] Auto-repair on startup...")
-            logger.info("Startup auto-repair: installing dependencies...")
-
-            req_file = CSDROP_BOT_DIR / "requirements.txt"
-            if req_file.exists():
-                pip_result = subprocess.run(
-                    [sys.executable, "-m", "pip", "install", "-r", str(req_file)],
-                    capture_output=True, text=True, timeout=120,
-                )
-                _repair_status["logs"].append(f"[{_ts()}] Pip: {'OK' if pip_result.returncode == 0 else 'FAIL'}")
-
-            if not chromium_ok:
-                chromium_result = subprocess.run(
-                    [sys.executable, "-m", "playwright", "install", "chromium"],
-                    capture_output=True, text=True, timeout=300,
-                )
-                _repair_status["logs"].append(f"[{_ts()}] Chromium: {'OK' if chromium_result.returncode == 0 else 'FAIL'}")
-
-            all_ok = all(_check_module(m) for m in ["playwright", "playwright_stealth", "RestrictedPython"])
-            _repair_status["logs"].append(f"[{_ts()}] Auto-repair complete. All OK: {all_ok}")
-            _repair_status["running"] = False
-            _repair_status["last_result"] = "success" if all_ok else "partial"
-            logger.info(f"Startup auto-repair finished. All OK: {all_ok}")
-
-        import threading
-        threading.Thread(target=_startup_repair, daemon=True).start()
-    else:
-        logger.info("All dependencies OK. No repair needed.")
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    if scheduler.running:
-        scheduler.shutdown(wait=False)
-    client.close()
 
 # ─── Health ───
 
@@ -2015,8 +1910,10 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup():
     # Auto-seed on startup
+    # Marketplace intentionally starts EMPTY (user adds real agents)
+    # — Disabled auto-seed of mock agents.
     count = await db.agents.count_documents({})
-    if count == 0:
+    if False and count == 0:
         logger.info("No data found, seeding database...")
         await seed_database()
     admin = await db.users.find_one({"email": "admin@nova.ai"})

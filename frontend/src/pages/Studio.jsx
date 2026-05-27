@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/App";
 import { parseComputeLimit, ComputeLimitModal } from "../components/ComputeLimitModal";
 import WorkflowTemplatesGrid from "../components/WorkflowTemplatesGrid";
+import MyWorkflowsGrid from "../components/MyWorkflowsGrid";
 import NodeConfigPanel from "../components/NodeConfigPanel";
 import TraceViewer from "../components/TraceViewer";
 import {
@@ -199,6 +200,14 @@ function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNo
 
   function getNodeCenter(node) {
     return { x: node.x + NODE_W / 2, y: node.y + NODE_H / 2 };
+  }
+  // Connection ports: right edge (source) and left edge (target) — keeps edges
+  // off node bodies so the line never appears to pierce a block.
+  function getNodeRightPort(node) {
+    return { x: node.x + NODE_W, y: node.y + NODE_H / 2 };
+  }
+  function getNodeLeftPort(node) {
+    return { x: node.x, y: node.y + NODE_H / 2 };
   }
 
   // Mouse/Touch handlers for dragging nodes
@@ -857,6 +866,26 @@ export default function Studio() {
     setSourceTemplate(template.source_hash);
     setRuntimeWorkflowId(null);
     setTrace(null);
+    toast.success(`Loaded "${template.name}" — ${tNodes.length} nodes`);
+  };
+
+  // Load one of the user's OWN runtime workflows back into the canvas
+  const loadRuntimeWorkflowIntoCanvas = (wf) => {
+    if (!wf) return;
+    const tNodes = (wf.nodes || []).map((n) => ({
+      id: n.id, type: n.type,
+      label: n.label || n.type, sub: n.sub || "Node",
+      icon: n.icon || "Zap",
+      x: n.x ?? 60, y: n.y ?? 100, data: n.data || {},
+    }));
+    const tEdges = (wf.edges || []).map((e) => ({ from: e.from || e.source, to: e.to || e.target }));
+    setNodes(tNodes);
+    setEdges(tEdges);
+    setCodeJson(generateCodeJson(tNodes, tEdges));
+    setActiveNode(null);
+    setRuntimeWorkflowId(wf.id);
+    setSourceTemplate(wf.source_template || null);
+    setTrace(null);
   };
 
   // Save current canvas to the runtime user_workflows collection
@@ -1026,7 +1055,12 @@ export default function Studio() {
 
         {!isMobile && mode === "node" && (
           <>
-            <WorkflowTemplatesGrid visible={true} onLoadTemplate={loadTemplateIntoCanvas} />
+            <MyWorkflowsGrid
+              visible={true}
+              onLoadWorkflow={loadRuntimeWorkflowIntoCanvas}
+              onLoadTemplate={loadTemplateIntoCanvas}
+              currentRuntimeId={runtimeWorkflowId}
+            />
             <div className="flex-1 relative flex flex-col overflow-hidden">
               <div className="flex-1 relative flex overflow-hidden">
                 <CanvasPane

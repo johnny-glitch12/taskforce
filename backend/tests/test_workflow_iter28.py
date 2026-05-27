@@ -186,7 +186,8 @@ class TestDeepMergePatch:
                          [{"id": "t1", "type": "trigger"}], [])
         big = {"data": {"code": "x" * 60_000}}
         r = admin_client.patch(f"{base_url}/api/workflows/{wf_id}/nodes/t1", json=big)
-        assert r.status_code == 400, r.text
+        # iter30 contract change: PATCH now uses Pydantic NodePatchRequest → returns 422 (not 400)
+        assert r.status_code in (400, 422), r.text
         assert "50kb" in r.text.lower() or "exceed" in r.text.lower()
         admin_client.delete(f"{base_url}/api/workflows/{wf_id}")
 
