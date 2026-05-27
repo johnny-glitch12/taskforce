@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/App";
+import { parseComputeLimit, ComputeLimitModal } from "../components/ComputeLimitModal";
+import ArmoryEditor from "../components/ArmoryEditor";
 import {
   Send, Rocket, Bot, Zap, Mail, Brain, FileText,
   MessageCircle, GitBranch, Sparkles, Plus, Save,
@@ -10,7 +12,6 @@ import {
 } from "lucide-react";
 
 import { useAgentTerminal } from "../hooks/useAgentTerminal";
-import { parseComputeLimit, ComputeLimitModal } from "../components/ComputeLimitModal";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -46,7 +47,7 @@ function ModeToggle({ mode, setMode, isMobile }) {
           {m === "vibe" && <MessageCircle size={13} />}
           {m === "node" && <GitBranch size={13} />}
           {m === "code" && <Code size={13} />}
-          <span className="hidden sm:inline">{m === "vibe" ? "Command" : m === "node" ? "Node" : "Code"}</span>
+          <span className="hidden sm:inline">{m === "vibe" ? "Command" : m === "node" ? "Workflows" : "Code"}</span>
         </button>
       ))}
     </div>
@@ -870,16 +871,13 @@ export default function Studio() {
         {!isMobile && mode === "vibe" && <CodePane visible={true} codeJson={codeJson} onDeploy={handleDeploy} onPublish={handlePublish} linterResult={linterResult} onRunLinter={runLinter} saving={saving} publishing={publishing} />}
 
         {!isMobile && mode === "node" && (
-          <>
-            <CanvasPane visible={true} nodes={nodes} edges={edges} activeNode={activeNode} setActiveNode={setActiveNode} onMoveNode={moveNode} onAddNode={addNode} onDeleteNode={deleteNode} onAddEdge={addEdge} />
-            <CodePane visible={true} codeJson={codeJson} onDeploy={handleDeploy} onPublish={handlePublish} linterResult={linterResult} onRunLinter={runLinter} saving={saving} publishing={publishing} />
-          </>
+          <ArmoryEditor visible={true} />
         )}
 
         {/* Mobile: Single pane */}
-        {isMobile && <ChatPane messages={messages} onSend={handleChatSend} visible={showChat} agentStatus={agentStatus} terminalHistory={terminalHistory} />}
-        {isMobile && <CanvasPane visible={showCanvas} nodes={nodes} edges={edges} activeNode={activeNode} setActiveNode={setActiveNode} onMoveNode={moveNode} onAddNode={addNode} onDeleteNode={deleteNode} onAddEdge={addEdge} />}
-        {isMobile && <CodePane visible={showCode} codeJson={codeJson} onDeploy={handleDeploy} onPublish={handlePublish} linterResult={linterResult} onRunLinter={runLinter} saving={saving} publishing={publishing} />}
+        {isMobile && mode === "vibe" && <ChatPane messages={messages} onSend={handleChatSend} visible={true} agentStatus={agentStatus} terminalHistory={terminalHistory} />}
+        {isMobile && mode === "node" && <ArmoryEditor visible={true} />}
+        {isMobile && mode === "code" && <CodePane visible={true} codeJson={codeJson} onDeploy={handleDeploy} onPublish={handlePublish} linterResult={linterResult} onRunLinter={runLinter} saving={saving} publishing={publishing} />}
       </div>
 
       {/* Compute Limit Modal */}

@@ -138,6 +138,18 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 - Dispatch-based billing: credit consumed on queue, not completion
 - GET /api/subscriptions/status returns compute block (used, limit, remaining, period, unlimited)
 
+### n8n White-Label Integration — The Armory (Phase 25 - May 27, 2026)
+- Full reverse proxy architecture for self-hosted n8n behind Task Force auth
+- HTML/CSS/JS rewriting strips all n8n branding, injects tactical dark theme
+- Per-user workflow isolation: each user gets their own workflow copies
+- Workflow CRUD: import templates, execute (credit-gated), delete
+- BYOK Credential Vault: encrypted API key storage per user
+- Compute credits gate every workflow execution
+- Setup guide with Docker commands for Railway/Render/VPS deployment
+- Studio "Workflows" tab shows setup guide when offline, workflow manager when connected
+- Backend routes: /api/n8n/status, /api/n8n/workflows/*, /api/n8n/credentials/*, /api/n8n/editor/*
+- NOTE: n8n instance NOT yet deployed (user needs VPS). All architecture is ready to plug in.
+
 ## Prioritized Backlog
 - **P3**: Hosted execution runtime (Celery + Redis)
 - **P3**: Pro tier Stripe subscription

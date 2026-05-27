@@ -813,6 +813,10 @@ async def seed_database():
     await db.referrals.create_index("referred_id", unique=True)
     await db.referral_credits.create_index("user_id")
     await db.compute_usage.create_index([("user_id", 1), ("period", 1)], unique=True)
+    await db.n8n_workflow_map.create_index("user_id")
+    await db.n8n_workflow_map.create_index([("user_id", 1), ("n8n_workflow_id", 1)], unique=True)
+    await db.n8n_credentials.create_index([("user_id", 1), ("name", 1)], unique=True)
+    await db.n8n_executions.create_index("user_id")
 
     # Run initial supernova evaluation
     await evaluate_supernovas()
@@ -2056,6 +2060,10 @@ app.include_router(published_router, prefix="/api")
 # Include subscriptions + referrals router
 from routes.subscriptions import router as subscriptions_router
 app.include_router(subscriptions_router, prefix="/api")
+
+# Include n8n white-label proxy router
+from routes.n8n_proxy import router as n8n_router
+app.include_router(n8n_router, prefix="/api")
 
 # Mount static files for live bot screenshots
 STATIC_DIR = Path(__file__).parent / "static"
