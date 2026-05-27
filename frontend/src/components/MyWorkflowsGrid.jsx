@@ -140,21 +140,53 @@ export default function MyWorkflowsGrid({ visible, onLoadWorkflow, onLoadTemplat
 
 /* ────────────────────────────────────────── */
 function ImportTemplateModal({ onClose, onImport, token }) {
-  const [templates, setTemplates] = useState([]);
+  const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("ALL");
+  const [forking, setForking] = useState(null); // listing.id being forked
 
+  // Pull ONLY published Exchange listings (community-shared bots), not the
+  // raw 291-template catalog. Click → fork ONLY that one listing.
   useEffect(() => {
-    if (!token) return;
-    fetch(`${API}/api/workflows/templates?limit=400`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API}/api/exchange/listings?limit=100`)
       .then((r) => r.json())
-      .then((d) => { setTemplates(d.templates || []); setLoading(false); })
+      .then((d) => { setListings(d.listings || []); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [token]);
+  }, []);
 
-  const categories = ["ALL", ...new Set(templates.map((t) => t.category).filter(Boolean))];
-  const filtered = templates.filter((t) => {
+  const handleFork = async (listing) => {
+    if (forking) return;
+    setForking(listing.id);
+    try {
+      const res = await fetch(`${API}/api/exchange/listings/${listing.id}/fork`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.detail || "Fork failed.");
+        setForking(null);
+        return;
+      }
+      const data = await res.json();
+      // Hand the new runtime workflow back to the canvas loader.
+      onImport({
+        ...data.workflow,
+        source_hash: listing.id,
+        node_count: (data.workflow.nodes || []).length,
+        category: listing.category,
+        description: listing.description,
+      });
+      toast.success(`Forked "${listing.name}" into your workspace`);
+    } catch {
+      toast.error("Fork failed.");
+    }
+    setForking(null);
+  };
+
+  const categories = ["ALL", ...new Set(listings.map((t) => t.category).filter(Boolean))];
+  const filtered = listings.filter((t) => {
     const matchCat = category === "ALL" || t.category === category;
     const q = search.trim().toLowerCase();
     const matchSearch = !q || (t.name || "").toLowerCase().includes(q) || (t.category || "").toLowerCase().includes(q);
@@ -177,7 +209,7 @@ function ImportTemplateModal({ onClose, onImport, token }) {
         <div className="px-5 py-3 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
           <Download size={14} className="text-cyan-400" />
           <span className="text-[13px] tracking-wide t-text uppercase">Import from The Exchange</span>
-          <span className="text-[10px] t-text-dim ml-2">{templates.length} TEMPLATES</span>
+          <span className="text-[10px] t-text-dim ml-2">{listings.length} PUBLISHED BOTS</span>
           <button data-testid="close-import-modal" className="ml-auto p-1 t-text-mute hover:t-text" onClick={onClose}>
             <X size={14} />
           </button>
@@ -191,7 +223,7 @@ function ImportTemplateModal({ onClose, onImport, token }) {
               data-testid="import-search-input"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search templates..."
+              placeholder="Search published bots..."
               className="w-full pl-7 pr-2 py-1.5 text-[12px] rounded-sm focus:outline-none"
               style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}
             />
@@ -210,15 +242,22 @@ function ImportTemplateModal({ onClose, onImport, token }) {
         {/* Grid */}
         <div className="flex-1 overflow-y-auto p-3">
           {loading && <div className="text-center py-12"><Loader2 size={16} className="animate-spin text-cyan-400 inline" /></div>}
-          {!loading && (
+          {!loading && filtered.length === 0 && (
+            <div className="text-center py-16 t-text-dim text-[12px]">
+              <Workflow size={28} className="mx-auto mb-2 opacity-40" />
+              No published bots yet.<br />
+              <span className="text-[10px]">Bots appear here after creators publish them to The Exchange.</span>
+            </div>
+          )}
+          {!loading && filtered.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {filtered.map((tpl) => (
                 <div
-                  key={tpl.source_hash}
-                  data-testid={`import-card-${tpl.source_hash}`}
+                  key={tpl.id}
+                  data-testid={`import-card-${tpl.id}`}
                   className="rounded-sm p-3 cursor-pointer transition-colors group"
                   style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
-                  onClick={() => onImport(tpl)}
+                  onClick={() => handleFork(tpl)}
                 >
                   <div className="flex items-start gap-2">
                     <div className="w-8 h-8 rounded-sm flex items-center justify-center shrink-0" style={{ background: 'rgba(34,211,238,0.1)' }}>
@@ -229,14 +268,13 @@ function ImportTemplateModal({ onClose, onImport, token }) {
                       <div className="text-[10px] t-text-dim truncate mt-0.5">{tpl.description}</div>
                       <div className="flex items-center gap-2 mt-1 text-[9px] uppercase tracking-wider">
                         <span className="t-text-mute">{tpl.node_count} nodes</span>
-                        <span className="t-text-dim">·</span>
-                        <span className={tpl.complexity === 'high' ? 'text-amber-400' : tpl.complexity === 'med' ? 'text-cyan-400' : 'text-emerald-400'}>
-                          {tpl.complexity}
-                        </span>
+                        {tpl.creator_name && <><span className="t-text-dim">·</span><span className="text-cyan-400">by {tpl.creator_name}</span></>}
                         {tpl.category && <><span className="t-text-dim">·</span><span className="t-text-dim truncate">{tpl.category}</span></>}
                       </div>
                     </div>
-                    <ChevronRight size={11} className="t-text-dim group-hover:text-cyan-400 transition-colors shrink-0 mt-1.5" />
+                    {forking === tpl.id
+                      ? <Loader2 size={12} className="animate-spin text-cyan-400 shrink-0 mt-1.5" />
+                      : <ChevronRight size={11} className="t-text-dim group-hover:text-cyan-400 transition-colors shrink-0 mt-1.5" />}
                   </div>
                 </div>
               ))}

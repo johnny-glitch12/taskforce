@@ -312,3 +312,45 @@ async def my_listings(user=Depends(get_current_user())):
     ).sort("updated_at", -1)
     listings = await cursor.to_list(200)
     return {"listings": listings}
+
+
+# ── Fork a single listing into the caller's user_workflows ──
+@router.post("/exchange/listings/{listing_id}/fork")
+async def fork_listing(listing_id: str, user=Depends(get_current_user())):
+    """
+    Clone ONLY this specific published listing's node graph into the caller's
+    runtime user_workflows. Records forked_from lineage for the creator-revenue
+    share. Does NOT pull any other catalog items.
+    """
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    listing = await db.exchange_listings.find_one({"id": listing_id, "status": "published"})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Published listing not found.")
+
+    nodes = listing.get("nodes_snapshot") or []
+    edges = listing.get("edges_snapshot") or []
+    if not nodes:
+        raise HTTPException(status_code=400, detail="Listing has no node graph to fork.")
+
+    wf_id = uuid.uuid4().hex
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": wf_id,
+        "user_id": user_id,
+        "name": f"{listing['name']} (forked)",
+        "nodes": nodes,
+        "edges": edges,
+        "source_template": None,
+        "forked_from_listing": listing_id,
+        "forked_from_creator": listing.get("user_id"),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.user_workflows.insert_one(doc)
+    # Bump deploy_count on the listing for the creator dashboard.
+    await db.exchange_listings.update_one(
+        {"id": listing_id}, {"$inc": {"deploy_count": 1}}
+    )
+    doc.pop("_id", None)
+    return {"success": True, "workflow_id": wf_id, "workflow": doc}

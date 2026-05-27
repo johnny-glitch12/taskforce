@@ -7,6 +7,7 @@ import MyWorkflowsGrid from "../components/MyWorkflowsGrid";
 import PublishToExchangeModal from "../components/PublishToExchangeModal";
 import NodeConfigPanel from "../components/NodeConfigPanel";
 import TraceViewer from "../components/TraceViewer";
+import BotProjectPanel from "../components/BotProjectPanel";
 import {
   Send, Rocket, Bot, Zap, Mail, Brain, FileText,
   MessageCircle, GitBranch, Sparkles, Plus, Save,
@@ -79,6 +80,14 @@ function ChatPane({ messages, onSend, visible, agentStatus, terminalHistory }) {
     setInput("");
   };
 
+  // Strip markdown noise (**, __, leading #/-) from assistant output so titles stay clean.
+  const sanitize = (s) => String(s || "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^[\s-]*#{1,6}\s*/gm, "")
+    .trim();
+
   const isProcessing = agentStatus === "queued" || agentStatus === "processing";
 
   if (!visible) return null;
@@ -116,7 +125,7 @@ function ChatPane({ messages, onSend, visible, agentStatus, terminalHistory }) {
               msg.role === "user"
                 ? "bg-cyan-400/10 text-[var(--text-primary)] border border-cyan-400/20"
                 : "t-text-sub border"
-            }`} style={msg.role !== "user" ? { background: 'var(--bg-card)', borderColor: 'var(--border)' } : {}}>{msg.content}</div>
+            }`} style={msg.role !== "user" ? { background: 'var(--bg-card)', borderColor: 'var(--border)' } : {}}>{msg.role === "user" ? msg.content : sanitize(msg.content)}</div>
           </div>
         ))}
         {isProcessing && (
@@ -198,6 +207,13 @@ function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNo
   const NODE_W = 200;
   const NODE_H = 72;
   const HEADER_H = 48;
+
+  // Strip markdown noise (** __ `) from node titles/subtitles before rendering.
+  const cleanLabel = (s) => String(s || "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .trim();
 
   function getNodeCenter(node) {
     return { x: node.x + NODE_W / 2, y: node.y + NODE_H / 2 };
@@ -390,23 +406,41 @@ function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNo
           marginTop: HEADER_H,
         }}
       >
-        {/* SVG Edges */}
+        {/* SVG Edges — Lego-style orthogonal routing: right-port → out-stub → vertical → in-stub → left-port */}
         <svg className="absolute pointer-events-none" style={{ left: 0, top: 0, width: "5000px", height: "5000px", overflow: "visible" }}>
           {edges.map((edge, i) => {
             const fromNode = nodes.find((n) => n.id === (edge.from || edge.source));
             const toNode = nodes.find((n) => n.id === (edge.to || edge.target));
             if (!fromNode || !toNode) return null;
-            const from = getNodeCenter(fromNode);
-            const to = getNodeCenter(toNode);
+            const from = getNodeRightPort(fromNode);
+            const to = getNodeLeftPort(toNode);
             const isActive = (edge.from || edge.source) === activeNode || (edge.to || edge.target) === activeNode;
-            const dx = Math.abs(to.x - from.x) * 0.5;
+            const STUB = 24;
+            // If target is to the right of source → standard right-down-left elbow.
+            // If target is to the left of (or overlapping) source → route OUT past the source, around, and IN to target.
+            let d;
+            if (to.x - from.x > STUB * 2) {
+              const midX = (from.x + to.x) / 2;
+              d = `M ${from.x} ${from.y} L ${midX} ${from.y} L ${midX} ${to.y} L ${to.x} ${to.y}`;
+            } else {
+              const outX = from.x + STUB;
+              const inX = to.x - STUB;
+              const aboveY = Math.min(from.y, to.y) - (NODE_H / 2 + STUB);
+              d = `M ${from.x} ${from.y} L ${outX} ${from.y} L ${outX} ${aboveY} L ${inX} ${aboveY} L ${inX} ${to.y} L ${to.x} ${to.y}`;
+            }
             return (
-              <path key={i}
-                d={`M ${from.x} ${from.y} C ${from.x + dx} ${from.y}, ${to.x - dx} ${to.y}, ${to.x} ${to.y}`}
-                className={`fill-none ${isActive ? "stroke-[#22d3ee]" : "stroke-zinc-800"}`}
-                strokeWidth={isActive ? 2 : 1.5}
-                style={{ filter: isActive ? "drop-shadow(0 0 6px rgba(139,92,246,0.4))" : "none" }}
-              />
+              <g key={i}>
+                <path d={d}
+                  className="fill-none"
+                  stroke={isActive ? "#22d3ee" : "#3f3f46"}
+                  strokeWidth={isActive ? 2 : 1.5}
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  style={{ filter: isActive ? "drop-shadow(0 0 6px rgba(34,211,238,0.45))" : "none" }}
+                />
+                {/* arrowhead */}
+                <circle cx={to.x} cy={to.y} r={3} fill={isActive ? "#22d3ee" : "#52525b"} />
+              </g>
             );
           })}
         </svg>
@@ -440,8 +474,8 @@ function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNo
                   <Icon size={16} style={{ color }} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] tracking-widest uppercase" style={{ color }}>{node.label}</p>
-                  <p className="text-[13px] t-text font-medium truncate">{node.sub}</p>
+                  <p className="text-[10px] tracking-widest uppercase" style={{ color }}>{cleanLabel(node.label)}</p>
+                  <p className="text-[13px] t-text font-medium truncate">{cleanLabel(node.sub)}</p>
                 </div>
                 <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
@@ -780,10 +814,62 @@ export default function Studio() {
   }, [agentStatus, outputResult]);
 
   const [computeLimit, setComputeLimit] = useState(null);
+  const [activeBotProject, setActiveBotProject] = useState(null);
+  const [buildingBot, setBuildingBot] = useState(false);
+
+  // Detect "build me a ..." style prompts → trigger native AI bot builder
+  // instead of the chat-only agent. This is the "stop chatting, just build it"
+  // pipeline (Gemini 2.5 Pro → React Flow + Python files).
+  const BUILD_TRIGGER_RX = /^\s*(build|create|make|generate|design)\s+(me\s+)?(a|an|the)?\s*/i;
+  const looksLikeBuildIntent = (text) => BUILD_TRIGGER_RX.test(text) && text.length > 12;
+
+  const buildBotFromPrompt = async (text) => {
+    setBuildingBot(true);
+    setMessages((prev) => [...prev, { role: "assistant", content: "Compiling your bot with Gemini 2.5 Pro... generating files and visual nodes." }]);
+    try {
+      const res = await fetch(`${API}/api/armory/build-bot`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ prompt: text }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      const limitData = parseComputeLimit(res.status, data);
+      if (limitData) { setComputeLimit(limitData); setBuildingBot(false); return; }
+
+      if (!res.ok || !data.success) {
+        setMessages((prev) => [...prev, { role: "assistant", content: `Build failed: ${data.detail || "unknown error"}` }]);
+        setBuildingBot(false);
+        return;
+      }
+
+      const p = data.project;
+      // Drop the generated nodes/edges onto the canvas + flip into node mode.
+      setNodes(p.nodes || []);
+      setEdges(p.edges || []);
+      setCodeJson(generateCodeJson(p.nodes || [], p.edges || []));
+      setActiveBotProject(p);
+      setMode("node");
+      setMessages((prev) => [...prev, {
+        role: "assistant",
+        content: `Built ${p.name} — ${p.files.length} files, ${p.nodes.length} nodes. Click any block or open the Files panel on the right to edit the source.`,
+      }]);
+      toast.success(`Bot compiled: ${p.name}`);
+    } catch (e) {
+      setMessages((prev) => [...prev, { role: "assistant", content: `Network error: ${e.message}` }]);
+    }
+    setBuildingBot(false);
+  };
 
   const handleChatSend = async (text) => {
     setMessages((prev) => [...prev, { role: "user", content: text }]);
     setActiveLogId(null);
+
+    // Route "build me X" prompts straight to the AI bot compiler.
+    if (looksLikeBuildIntent(text)) {
+      await buildBotFromPrompt(text);
+      return;
+    }
 
     try {
       const res = await fetch(`${API}/api/run-agent`, {
@@ -1089,12 +1175,24 @@ export default function Studio() {
                   onPublish={() => setShowPublish(true)}
                   canPublish={!!runtimeWorkflowId && nodes.length > 0}
                 />
-                {activeNode && (
+                {activeNode && !activeBotProject && (
                   <NodeConfigPanel
                     node={nodes.find((n) => n.id === activeNode)}
                     onUpdate={updateNodeData}
                     onClose={() => setActiveNode(null)}
                     runtimeWorkflowId={runtimeWorkflowId}
+                    token={token}
+                  />
+                )}
+                {activeBotProject && (
+                  <BotProjectPanel
+                    project={activeBotProject}
+                    onClose={() => setActiveBotProject(null)}
+                    onProjectUpdate={(p) => {
+                      setActiveBotProject(p);
+                      if (p?.nodes) setNodes(p.nodes);
+                      if (p?.edges) setEdges(p.edges);
+                    }}
                     token={token}
                   />
                 )}

@@ -1896,6 +1896,10 @@ app.include_router(exchange_router, prefix="/api")
 from routes.gmail_oauth_routes import router as gmail_oauth_router
 app.include_router(gmail_oauth_router, prefix="/api")
 
+# Include Armory AI Bot Builder (Gemini 2.5 Pro)
+from routes.armory_builder import router as armory_builder_router
+app.include_router(armory_builder_router, prefix="/api")
+
 # Mount uploads dir for exchange listing media (videos + photos)
 UPLOADS_DIR = Path(__file__).parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)

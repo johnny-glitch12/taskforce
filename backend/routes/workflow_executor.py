@@ -284,7 +284,9 @@ async def fork_template(template_id: str, user=Depends(get_current_user())):
 async def list_user_workflows(user=Depends(get_current_user())):
     db = get_db()
     user_id = str(user.get("id", user.get("email")))
-    cursor = db.user_workflows.find({"user_id": user_id}, {"_id": 0}).sort("updated_at", -1)
+    # Exclude TEST_* fixtures from the user-facing list (testing-agent pollution shield).
+    query = {"user_id": user_id, "name": {"$not": {"$regex": "^TEST_", "$options": "i"}}}
+    cursor = db.user_workflows.find(query, {"_id": 0}).sort("updated_at", -1)
     workflows = await cursor.to_list(200)
     return {"workflows": workflows}
 
