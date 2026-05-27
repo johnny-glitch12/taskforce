@@ -23,6 +23,18 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 36 (Feb, 2026) — BYOK "Test Connection" Probes
+- **15 sanity-probe handlers** (`/app/backend/lib/byok_probes.py`, NEW): One read-only API call per service to verify a stored credential is alive without writing data / charging / sending messages — Slack (POST empty payload, expects 400 'no_text'), SendGrid (`/v3/user/profile`), Gmail (`/users/me/profile`), Telegram (`/getMe`), Discord (`GET webhook`), Stripe (`/v1/balance`), Notion (`/users/me`), Google Sheets (`/oauth2/v1/tokeninfo`), Twilio (`/Accounts/{sid}.json`), GitHub (`/user`), OpenAI (`/v1/models`), Anthropic (1-token `/v1/messages` probe with claude-haiku), Instagram (`/me?fields=username`), Postgres (`SELECT version()` via asyncpg), MongoDB (`server_info()` via motor). Each returns `{ok, status_code, detail, latency_ms}`.
+- **NEW endpoint `POST /api/workflows/credentials/{service}/test`**: looks up the encrypted credential, decrypts, calls the matching probe, persists `last_probe` (ok/status_code/detail/latency_ms/checked_at) onto the credential doc, and returns the result.
+- **`GET /api/workflows/credentials`** now surfaces `last_probe` so the UI can render the LIVE/DEAD/UNTESTED badge without a second roundtrip.
+- **`CredentialsVault.jsx` rebuilt**:
+  - Per-row **TEST** button (cyan ⚡ icon) → on-click probe with toast and badge refresh
+  - **LIVE / DEAD / UNTESTED** status pill beside the service name, tooltip showing probe detail + latency + checked_at
+  - Service hint catalog expanded from 3 → 15 entries with exact API key formats (DSN for Postgres, OAuth scope for Sheets, etc.)
+  - Subtitle now reads "15 SERVICES" and lists them in the help text.
+- **UX polish**: Slack/Discord probes pre-check the URL starts with `https://` for a clearer error than the SSRF guard message.
+- **Verified live**: All 12 new probes return precise actionable errors when given fake credentials (`Stripe: Invalid API Key`, `Notion: API token is invalid`, `GitHub: Bad credentials`, `Postgres: Connection failed: invalid DSN`, etc.); ruff + eslint all green.
+
 ### Phase 35 (Feb, 2026) — 10 Real Integration Handlers + Exchange Direct-Upload
 - **10 real per-service handlers** (`/app/backend/lib/integration_handlers.py`, NEW): Instagram (post/DM via Graph v19), Stripe (charge/refund/subscription/customer), Telegram (sendMessage), Discord (webhook with SSRF guard), Notion (create/update/query, Notion-Version 2022-06-28), Google Sheets (values:append OAuth), Twilio SMS (Messages.json basic auth), GitHub (create_issue/comment/PR/list), OpenAI BYOK chat (gpt-5.4 default), Claude BYOK messages (claude-sonnet-4-6 default), Postgres asyncpg (SELECT-only unless allow_write=true), MongoDB motor (find/insert/update).
 - **Dispatcher rewire**: `workflow_handlers.handle_action` now branches by `data.service`; `handle_database` routes postgres/mongodb; `handle_llm` routes by `data.provider` with platform-Gemini fallback. Old "skipped / not_executed_v1=True" pass-through behavior is gone for the 12 wired services — they now return real `ok` or descriptive `error` status.

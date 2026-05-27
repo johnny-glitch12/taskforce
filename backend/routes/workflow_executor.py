@@ -309,6 +309,7 @@ async def list_credentials(user=Depends(get_current_user())):
         c["api_key_masked"] = ("•" * 8 + plain[-4:]) if len(plain) > 4 else "•" * max(len(plain), 1)
         c["encrypted"] = stored.startswith("enc:v1:")
         c.pop("api_key", None)
+        # `last_probe` (if any) is left intact for the frontend to surface.
         masked.append(c)
     return {"credentials": masked, "supported_services": SUPPORTED_BYOK_SERVICES}
 
@@ -340,6 +341,40 @@ async def delete_credential(service: str, user=Depends(get_current_user())):
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Credential not found.")
     return {"success": True}
+
+
+@router.post("/workflows/credentials/{service}/test")
+async def test_credential(service: str, user=Depends(get_current_user())):
+    """Fire a 1-call sanity probe against the stored credential and report alive/dead."""
+    from lib.byok_probes import PROBES
+    service = service.lower()
+    if service not in PROBES:
+        raise HTTPException(status_code=400, detail=f"No probe available for '{service}'.")
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    cred = await db.byok_credentials.find_one({"user_id": user_id, "service": service})
+    if not cred:
+        raise HTTPException(status_code=404, detail=f"No '{service}' credential stored.")
+    plaintext = decrypt_key(cred.get("api_key", ""))
+    extra = cred.get("extra") or {}
+    try:
+        result = await PROBES[service](plaintext, extra)
+    except Exception as e:
+        result = {"ok": False, "status_code": None, "detail": f"Probe crashed: {str(e)[:200]}", "latency_ms": 0}
+    # Persist last-probe result for the UI
+    await db.byok_credentials.update_one(
+        {"_id": cred["_id"]},
+        {"$set": {
+            "last_probe": {
+                "ok": bool(result.get("ok")),
+                "status_code": result.get("status_code"),
+                "detail": result.get("detail"),
+                "latency_ms": result.get("latency_ms"),
+                "checked_at": datetime.now(timezone.utc).isoformat(),
+            }
+        }},
+    )
+    return {"service": service, **result}
 
 
 # Gmail OAuth routes moved to routes/gmail_oauth_routes.py
