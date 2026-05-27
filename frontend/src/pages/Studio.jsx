@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { useAgentTerminal } from "../hooks/useAgentTerminal";
+import { parseComputeLimit, ComputeLimitModal } from "../components/ComputeLimitModal";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -707,9 +708,11 @@ export default function Studio() {
     }
   }, [agentStatus, outputResult]);
 
+  const [computeLimit, setComputeLimit] = useState(null);
+
   const handleChatSend = async (text) => {
     setMessages((prev) => [...prev, { role: "user", content: text }]);
-    setActiveLogId(null); // Reset to re-trigger hook
+    setActiveLogId(null);
 
     try {
       const res = await fetch(`${API}/api/run-agent`, {
@@ -720,19 +723,34 @@ export default function Studio() {
           system_prompt: "You are Task Force AI, an expert AI agent architect. Help the user design, build, and configure AI agents. Be concise but thorough. When describing agent configurations, use structured output with clear sections.",
         }),
       });
-      const data = await res.json();
-      if (data.success && data.logId) {
+
+      let data;
+      try {
+        const buf = await res.arrayBuffer();
+        data = JSON.parse(new TextDecoder().decode(buf));
+      } catch { data = {}; }
+
+      // Check for compute limit kill switch (200 with error flag)
+      const limitData = parseComputeLimit(res.status, data);
+      if (limitData) {
+        setComputeLimit(limitData);
+        setMessages((prev) => [...prev, { role: "assistant", content: `Execution blocked — you've used all ${limitData.limit} compute credits this month. Upgrade your plan to continue.` }]);
+        return;
+      }
+
+      if (res.ok && data.success && data.logId) {
         setActiveLogId(data.logId);
       } else if (res.status === 403) {
         setMessages((prev) => [...prev, { role: "assistant", content: `Blocked by security firewall. Your prompt was flagged as potentially unsafe. Try rephrasing.` }]);
       } else if (res.status === 429) {
-        setMessages((prev) => [...prev, { role: "assistant", content: `Rate limit hit. ${data.detail || "Slow down and try again in a minute."}` }]);
+        setMessages((prev) => [...prev, { role: "assistant", content: `Rate limit hit. ${typeof data.detail === 'string' ? data.detail : "Slow down and try again in a minute."}` }]);
       } else if (res.status === 409) {
         setMessages((prev) => [...prev, { role: "assistant", content: `An agent is already running. Wait for it to finish before sending another request.` }]);
       } else {
         setMessages((prev) => [...prev, { role: "assistant", content: `Failed to start agent: ${data.detail || data.message || "Unknown error"}` }]);
       }
-    } catch {
+    } catch (err) {
+      console.error("[CHAT SEND ERROR]", err);
       setMessages((prev) => [...prev, { role: "assistant", content: "Network error. Could not reach the agent API." }]);
     }
   };
@@ -863,6 +881,9 @@ export default function Studio() {
         {isMobile && <CanvasPane visible={showCanvas} nodes={nodes} edges={edges} activeNode={activeNode} setActiveNode={setActiveNode} onMoveNode={moveNode} onAddNode={addNode} onDeleteNode={deleteNode} onAddEdge={addEdge} />}
         {isMobile && <CodePane visible={showCode} codeJson={codeJson} onDeploy={handleDeploy} onPublish={handlePublish} linterResult={linterResult} onRunLinter={runLinter} saving={saving} publishing={publishing} />}
       </div>
+
+      {/* Compute Limit Modal */}
+      <ComputeLimitModal limitData={computeLimit} onClose={() => setComputeLimit(null)} />
     </div>
   );
 }

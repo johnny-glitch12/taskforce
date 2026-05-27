@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -60,7 +61,9 @@ async def run_agent(
 
     # ── Gate 0: Compute Credits Kill Switch ──
     db = get_db()
-    await check_compute_credits(db, user)
+    credit_check = await check_compute_credits(db, user)
+    if credit_check.get("allowed") is False:
+        return JSONResponse(status_code=200, content=credit_check)
 
     # ── Gate 1: Rate Limit (5 req/min per user) ──
     rate_check = check_rate_limit(executor_id)

@@ -55,18 +55,16 @@ async def check_compute_credits(db, user: dict):
 
     if used >= limit:
         tier_label = tier.upper() if tier != "free" else "RECRUIT"
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "error": "COMPUTE_LIMIT_REACHED",
-                "message": f"Execution limit reached ({used}/{limit} this month). Your {tier_label} plan allows {limit} executions/month.",
-                "used": used,
-                "limit": limit,
-                "tier": tier,
-                "upgrade_url": "/pricing",
-                "upgrade_prompt": "Upgrade your plan to unlock more executions.",
-            },
-        )
+        return {
+            "allowed": False,
+            "error": "COMPUTE_LIMIT_REACHED",
+            "message": f"Execution limit reached ({used}/{limit} this month). Your {tier_label} plan allows {limit} executions/month.",
+            "used": used,
+            "limit": limit,
+            "tier": tier,
+            "upgrade_url": "/pricing",
+            "upgrade_prompt": "Upgrade your plan to unlock more executions.",
+        }
 
     return {"allowed": True, "used": used, "limit": limit, "tier": tier}
 

@@ -995,7 +995,10 @@ async def delete_user_agent(agent_id: str, user=Depends(get_current_user)):
 async def run_user_agent(agent_id: str, data: AgentRunRequest, user=Depends(get_current_user)):
     # ── Compute Credits Kill Switch ──
     from lib.compute_credits import check_compute_credits, increment_compute_usage
-    await check_compute_credits(db, user)
+    credit_check = await check_compute_credits(db, user)
+    if credit_check.get("allowed") is False:
+        from fastapi.responses import JSONResponse as JR
+        return JR(status_code=200, content=credit_check)
 
     agent = await db.user_agents.find_one(
         {"id": agent_id, "user_id": user["id"]}, {"_id": 0}
@@ -1091,7 +1094,10 @@ async def webhook_trigger_agent(webhook_key: str, request: Request):
     from lib.compute_credits import check_compute_credits, increment_compute_usage
     owner = await db.users.find_one({"id": agent["user_id"]})
     if owner:
-        await check_compute_credits(db, owner)
+        credit_check = await check_compute_credits(db, owner)
+        if credit_check.get("allowed") is False:
+            from fastapi.responses import JSONResponse as JR
+            return JR(status_code=200, content=credit_check)
 
     try:
         body = await request.json()

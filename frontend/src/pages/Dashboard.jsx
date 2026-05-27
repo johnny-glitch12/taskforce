@@ -8,6 +8,8 @@ import {
   Package, Webhook, Settings, AlertTriangle, GitBranch, FileText, Eye,
 } from "lucide-react";
 
+import { parseComputeLimit, ComputeLimitModal } from "@/components/ComputeLimitModal";
+
 const API = process.env.REACT_APP_BACKEND_URL;
 
 /* ─── Published Agents Tab (merged Creator Hub) ─── */
@@ -508,18 +510,28 @@ export default function Dashboard() {
     } catch { toast.error("Network error."); }
   };
 
+  const [computeLimit, setComputeLimit] = useState(null);
+
   const runAgent = async (data) => {
     if (!modalAgent) return null;
     try {
       const res = await fetch(`${API}/api/dashboard/agents/${modalAgent.id}/run`, { method: "POST", headers, body: JSON.stringify(data) });
-      if (res.ok) {
-        const result = await res.json();
+      let result;
+      try { const buf = await res.arrayBuffer(); result = JSON.parse(new TextDecoder().decode(buf)); } catch { result = {}; }
+
+      // Check for compute limit kill switch
+      const limitData = parseComputeLimit(res.status, result);
+      if (limitData) {
+        setComputeLimit(limitData);
+        return null;
+      }
+
+      if (res.ok && result.success !== undefined) {
         fetchData();
         loadExecutions(modalAgent.id);
         return result;
       } else {
-        const err = await res.json();
-        toast.error(err.detail || "Execution failed.");
+        toast.error(result.detail || "Execution failed.");
       }
     } catch { toast.error("Network error."); }
     return null;
@@ -704,6 +716,9 @@ export default function Dashboard() {
           onSubmit={modalMode === "run" ? runAgent : createAgent}
         />
       )}
+
+      {/* Compute Limit Modal */}
+      <ComputeLimitModal limitData={computeLimit} onClose={() => setComputeLimit(null)} />
     </div>
   );
 }
