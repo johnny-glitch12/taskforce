@@ -122,16 +122,24 @@ async def handle_transform(node: Dict, prev_output: Any, ctx: Dict) -> Dict[str,
 # LLM (platform Gemini 2.5 Flash, no BYOK in v1)
 # ─────────────────────────────────────────────────────────────
 async def handle_llm(node: Dict, prev_output: Any, ctx: Dict) -> Dict[str, Any]:
+    """LLM dispatcher — BYOK provider routing, falls back to platform Gemini."""
+    data = node.get("data", {}) or {}
+    provider = (data.get("provider") or "").lower()
+    if provider == "openai":
+        from lib.integration_handlers import llm_openai
+        return await llm_openai(data, prev_output, ctx)
+    if provider == "anthropic" or provider == "claude":
+        from lib.integration_handlers import llm_anthropic
+        return await llm_anthropic(data, prev_output, ctx)
+
+    # Platform Gemini fallback
     if not EMERGENT_LLM_KEY:
         return {"status": "error", "output": None, "log": "Emergent LLM Key not configured."}
-
-    data = node.get("data", {}) or {}
     prompt_template = data.get("prompt", "Summarize the input.")
     if isinstance(prev_output, (dict, list)):
         input_str = json.dumps(prev_output)[:3000]
     else:
         input_str = str(prev_output or "")[:3000]
-
     user_message = f"{prompt_template}\n\nINPUT DATA:\n{input_str}"
 
     try:
@@ -323,12 +331,14 @@ async def _action_gmail(node_data: Dict, prev_output: Any, ctx: Dict) -> Dict[st
 
 async def handle_action(node: Dict, prev_output: Any, ctx: Dict) -> Dict[str, Any]:
     """
-    Dispatcher for action nodes. data.service controls behaviour:
-        - "slack"     → post to Slack incoming webhook (BYOK)
-        - "sendgrid"  → send email (BYOK)
-        - "gmail"     → send email via Gmail API token (BYOK)
-        - other       → v1 stub (logged pass-through)
+    Dispatcher for action nodes. data.service controls behaviour.
+    Real handlers: slack, sendgrid, gmail, instagram, stripe, telegram, discord,
+    notion, gsheets, twilio, github. Other services fall through to a pass-through.
     """
+    from lib.integration_handlers import (
+        action_instagram, action_stripe, action_telegram, action_discord,
+        action_notion, action_gsheets, action_twilio, action_github,
+    )
     data = node.get("data", {}) or {}
     service = (data.get("service") or "").lower()
     if "slack" in service:
@@ -337,6 +347,22 @@ async def handle_action(node: Dict, prev_output: Any, ctx: Dict) -> Dict[str, An
         return await _action_sendgrid(data, prev_output, ctx)
     if "gmail" in service:
         return await _action_gmail(data, prev_output, ctx)
+    if "instagram" in service:
+        return await action_instagram(data, prev_output, ctx)
+    if "stripe" in service:
+        return await action_stripe(data, prev_output, ctx)
+    if "telegram" in service:
+        return await action_telegram(data, prev_output, ctx)
+    if "discord" in service:
+        return await action_discord(data, prev_output, ctx)
+    if "notion" in service:
+        return await action_notion(data, prev_output, ctx)
+    if "gsheets" in service or "google_sheets" in service:
+        return await action_gsheets(data, prev_output, ctx)
+    if "twilio" in service:
+        return await action_twilio(data, prev_output, ctx)
+    if "github" in service:
+        return await action_github(data, prev_output, ctx)
 
     return {
         "status": "skipped",
@@ -347,10 +373,18 @@ async def handle_action(node: Dict, prev_output: Any, ctx: Dict) -> Dict[str, An
 
 
 async def handle_database(node: Dict, prev_output: Any, ctx: Dict) -> Dict[str, Any]:
+    """Database dispatcher — real Postgres + MongoDB query handlers."""
+    from lib.integration_handlers import db_postgres, db_mongodb
+    data = node.get("data", {}) or {}
+    service = (data.get("service") or "").lower()
+    if "postgres" in service or service == "psql":
+        return await db_postgres(data, prev_output, ctx)
+    if "mongo" in service:
+        return await db_mongodb(data, prev_output, ctx)
     return {
         "status": "skipped",
         "output": prev_output,
-        "log": "[database] not executed in v1 — pass-through",
+        "log": f"[database:{service or 'unknown'}] not executed in v1 — pass-through",
         "not_executed_v1": True,
     }
 
@@ -370,4 +404,8 @@ HANDLERS = {
 }
 
 
-SUPPORTED_BYOK_SERVICES = ["slack", "sendgrid", "gmail"]
+SUPPORTED_BYOK_SERVICES = [
+    "slack", "sendgrid", "gmail",
+    "instagram", "stripe", "telegram", "discord", "notion", "gsheets",
+    "twilio", "github", "openai", "anthropic", "postgres", "mongodb",
+]

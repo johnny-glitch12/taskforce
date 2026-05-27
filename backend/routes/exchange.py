@@ -78,6 +78,110 @@ class UpdateListingRequest(BaseModel):
 
 
 # ── Routes ──
+class DirectPublishRequest(BaseModel):
+    """Direct-from-Exchange publish: user uploads a full bot package without
+    needing a saved workflow in The Armory first."""
+    name: str = Field(min_length=3, max_length=120)
+    description: str = Field(min_length=10, max_length=4000)
+    category: str = Field(min_length=2, max_length=64)
+    tags: List[str] = Field(default_factory=list, max_length=10)
+    rent_price: float = Field(default=0, ge=0, le=10000)
+    buy_price: float = Field(default=0, ge=0, le=100000)
+    # Optional bot payload (files + node graph)
+    files: List[dict] = Field(default_factory=list, max_length=20)
+    nodes: List[dict] = Field(default_factory=list, max_length=200)
+    edges: List[dict] = Field(default_factory=list, max_length=400)
+    language: str = Field(default="python", max_length=32)
+
+
+@router.post("/exchange/listings/direct")
+async def direct_publish(req: DirectPublishRequest, user=Depends(get_current_user())):
+    """
+    Direct publish path — bypasses The Armory.  Creates an underlying bot_project
+    + an exchange_listing in a single shot so users can upload a finished bot
+    package directly into The Exchange.  Media (video/photo) uploads go through
+    the existing /api/exchange/listings/{id}/upload endpoint after this returns.
+    """
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+
+    # 1) Create the underlying bot_project so the listing has runnable code.
+    project_id = uuid.uuid4().hex
+    now = datetime.now(timezone.utc).isoformat()
+    safe_files = []
+    for f in req.files[:20]:
+        if not isinstance(f, dict):
+            continue
+        path = (f.get("path") or "").strip()
+        if not path or path.startswith("/") or ".." in path:
+            continue
+        safe_files.append({
+            "path": path[:200],
+            "language": (f.get("language") or "text")[:32],
+            "content": str(f.get("content") or "")[:200_000],
+        })
+
+    project = {
+        "id": project_id,
+        "user_id": user_id,
+        "creator_email": user.get("email"),
+        "name": req.name,
+        "description": req.description,
+        "language": req.language,
+        "prompt": "direct-publish-from-exchange",
+        "files": safe_files,
+        "nodes": req.nodes,
+        "edges": req.edges,
+        "forked_from": None,
+        "forked_from_creator": None,
+        "commit_history": [{
+            "commit_id": uuid.uuid4().hex[:12],
+            "message": "Initial upload via direct-publish",
+            "author": user.get("email"),
+            "files": safe_files,
+            "nodes": req.nodes,
+            "edges": req.edges,
+            "created_at": now,
+        }],
+        "version": 1,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.bot_projects.insert_one(project)
+
+    # 2) Create the listing pointing at the new bot_project.
+    listing_id = uuid.uuid4().hex
+    listing = {
+        "id": listing_id,
+        "user_id": user_id,
+        "creator_email": user.get("email"),
+        "creator_name": user.get("name", user.get("email", "operator").split("@")[0]),
+        "source_workflow_id": None,
+        "source_project_id": project_id,
+        "name": req.name,
+        "description": req.description,
+        "category": req.category,
+        "tags": [t.strip().lower() for t in req.tags if isinstance(t, str) and 1 <= len(t) <= 30][:10],
+        "rent_price": float(req.rent_price),
+        "buy_price": float(req.buy_price),
+        "video_url": None,
+        "photo_urls": [],
+        "node_count": len(req.nodes),
+        "edge_count": len(req.edges),
+        "nodes_snapshot": req.nodes,
+        "edges_snapshot": req.edges,
+        "trust_score": min(95, 60 + len(req.nodes) * 2),
+        "deploy_count": 0,
+        "rating": 0,
+        "status": "draft",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.exchange_listings.insert_one(listing)
+    listing.pop("_id", None)
+    return {**listing, "nodes_snapshot": None, "edges_snapshot": None, "project_id": project_id}
+
+
 @router.post("/exchange/listings")
 async def publish_listing(req: PublishListingRequest, user=Depends(get_current_user())):
     db = get_db()

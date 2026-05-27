@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/App";
+import DirectPublishModal from "../components/DirectPublishModal";
 import {
   Search, Heart, Star, Shield, ChevronRight, TrendingUp,
-  Sparkles, BadgeCheck, Play,
+  Sparkles, BadgeCheck, Play, Upload,
   Headphones, BarChart3, Code2, Palette, DollarSign, MessageSquare,
 } from "lucide-react";
 
@@ -220,10 +222,12 @@ function AgentCard({ agent, index }) {
 }
 
 export default function Marketplace() {
+  const { token } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showPublish, setShowPublish] = useState(false);
 
   const fetchAgents = useCallback(async () => {
     setLoading(true);
@@ -272,6 +276,20 @@ export default function Marketplace() {
       <div className="absolute top-0 right-[10%] w-[400px] h-[400px] rounded-sm bg-cyan-400/[0.03] blur-[120px] pointer-events-none t-orb" />
       <div className="max-w-6xl mx-auto relative">
         <SearchHero searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
+
+        {/* Floating "Publish Your Bot" CTA — direct upload bypasses The Armory */}
+        {token && (
+          <div className="flex items-center justify-end mb-6">
+            <button
+              data-testid="publish-bot-cta"
+              onClick={() => setShowPublish(true)}
+              className="flex items-center gap-2 px-4 py-2 text-[11px] font-medium tracking-[0.1em] uppercase font-mono rounded-sm bg-cyan-400 text-black hover:bg-cyan-300 transition-all shadow-lg shadow-cyan-400/20"
+            >
+              <Upload size={12} /> Publish Your Bot
+            </button>
+          </div>
+        )}
+
         <CategoryPills activeCategory={activeCategory} setActiveCategory={setActiveCategory} />
         <CreatorSpotlight />
 
@@ -312,6 +330,12 @@ export default function Marketplace() {
           )}
         </section>
       </div>
+
+      <DirectPublishModal
+        open={showPublish}
+        onClose={() => setShowPublish(false)}
+        onPublished={() => { setShowPublish(false); fetchAgents(); }}
+      />
     </div>
   );
 }

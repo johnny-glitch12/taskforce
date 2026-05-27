@@ -58,7 +58,11 @@ def get_db():
 # Pydantic models
 # ─────────────────────────────────────────────────────────────
 class BYOKCreate(BaseModel):
-    service: Literal["slack", "sendgrid", "gmail"]
+    service: Literal[
+        "slack", "sendgrid", "gmail",
+        "instagram", "stripe", "telegram", "discord", "notion", "gsheets",
+        "twilio", "github", "openai", "anthropic", "postgres", "mongodb",
+    ]
     api_key: str = Field(min_length=1, max_length=4096)
     extra: Dict[str, Any] = Field(default_factory=dict)
 

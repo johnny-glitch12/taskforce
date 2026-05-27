@@ -1,0 +1,37 @@
+{
+  "summary": "Iter35 backend testing complete. Built /app/backend/tests/test_workflow_iter35.py covering all 14 review-requested items: 12 BYOK services credential roundtrip (POST/GET/DELETE), 5 integration_handlers error-path unit tests (telegram missing creds, discord SSRF block, github missing repo, postgres SELECT-only safety, openai missing BYOK), 11 dispatcher behavioural tests proving handle_action/handle_database/handle_llm now route to real handlers and return status='error' rather than the old skipped/not_executed_v1 pass-through, 6 tests on the new POST /api/exchange/listings/direct endpoint (happy path, path traversal silent drop, list-visibility with commit_history=1, 422 on short description, 422 on empty name, 401 unauthenticated), and 1 armory/build-bot smoke. 36/36 new tests PASS. iter31 regression rerun 29/29 PASS. Total 65/65 green.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_workflow_iter35.py",
+    "/app/test_reports/pytest/iter35_results.xml",
+    "/app/test_reports/pytest/iter31_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "integration_handlers.py is brand new and consolidates 12 handlers in one file — at ~450 lines it is still readable but consider splitting per-vendor once it grows past 700.",
+    "Dispatcher behavioural change is correctly implemented: handle_action now branches by data.service and returns status='error' for known services without BYOK; no not_executed_v1 flag observed in any of the 8 parametrized services tested (discord/stripe/telegram/notion/github/twilio/instagram/gsheets).",
+    "SSRF guard in action_discord correctly rejects http://localhost/foo — good defense-in-depth.",
+    "Postgres allow_write safety check fires BEFORE the connection attempt (verified: 'Only SELECT queries allowed' returned immediately with a fake DSN), preventing accidental writes even on misconfigured credentials.",
+    "BYOK encrypted api_key roundtrip works for all 12 new services via POST→GET→DELETE.",
+    "POST /api/exchange/listings/direct silently drops file entries with '../' in path (verified: '../../etc/passwd' absent from project.files on GET); does NOT reject the whole request as 422 — matches spec.",
+    "/api/armory/bot-projects (list) deliberately strips commit_history for lean responses; detail endpoint /api/armory/bot-projects/{id} preserves it (length=1 after direct-publish, as expected)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_workflow_iter35.py (NEW)"
+  ],
+  "success_rate": {"backend": "100% (36/36 new + 29/29 regression = 65/65)", "frontend": "not tested (per request)"},
+  "test_credentials": "admin@nova.ai / admin123 (admin) — used via shared conftest fixture, single login at session start.",
+  "seed_data_creation": "All TEST_ prefixed data (BYOK credentials, exchange listings, bot projects) cleaned up in fixtures/teardown. Verified no TEST_ rows leaked.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter35 added 12 real integration handlers + dispatcher rewire + /api/exchange/listings/direct endpoint. Full coverage now lives in /app/backend/tests/test_workflow_iter35.py (36 tests). For dispatcher tests we use a synthetic ctx with a fresh user_id (no BYOK rows) and call handle_action/handle_database/handle_llm directly. We share ONE event_loop fixture at module scope so motor's cached executor stays alive across handler calls (prior approach with per-test new_event_loop caused 'Event loop is closed'). Re-use this pattern for future handler-level tests. test_credentials.md confirmed present and accurate.",
+  "rca of the issue": "n/a — no bugs found in iter35."
+}
