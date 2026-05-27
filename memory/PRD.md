@@ -23,6 +23,17 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 28 (May 27, 2026) — Full Backlog Cleanup + BYOK + Async Runtime
+- **P2 — Deep-merge PATCH**: `/api/workflows/{id}/nodes/{node_id}` now recursively merges nested dicts (e.g., patching `headers.Authorization` preserves `headers.X-Other`). 50KB payload cap.
+- **P2 — `studio_workflow_id` validation**: `POST /api/workflows/save` requires non-empty studio_workflow_id (prevents duplicate stub inserts on retry).
+- **P3 — BYOK action handlers**: `lib/workflow_handlers.py` adds real Slack (incoming webhook), SendGrid (Bearer + from_email), Gmail (OAuth access token) handlers. Action node now dispatches by `data.service`. Stored in new `db.byok_credentials` collection. Endpoints: `GET/POST /api/workflows/credentials`, `DELETE /api/workflows/credentials/{service}`. Service whitelist: `slack|sendgrid|gmail`. api_key masked on GET. New `/credentials` page in frontend (`CredentialsVault.jsx`).
+- **P3 — Refactor**: Extracted all node handlers from `routes/workflow_executor.py` → `lib/workflow_handlers.py` (~280 lines). Executor router is now thin and route-ordered (specific paths before catch-all `/workflows/{id}`).
+- **P3 — Template direct-execute logging**: `POST /api/workflows/templates/{id}/execute` now persists to `db.workflow_runs` with `source="template"` and returns `run_id`. Also added `GET /api/workflows/{id}/runs` (paginated, owner-scoped).
+- **P3 — Async runtime (lightweight)**: `POST /api/workflows/{id}/dispatch` returns `job_id` immediately, fires `asyncio.create_task` background worker, transitions `queued→running→succeeded` in `db.workflow_jobs`. `GET /api/workflows/jobs/{job_id}` polls status. Compute-credit gate enforced on enqueue. Single-worker only (v1 — Celery/Redis for HA later).
+- **P3 — server.py split**: 5 auth routes (`/auth/register|login|me|forgot-password|reset-password`) extracted to `routes/auth.py` using lazy-import pattern (~120 lines saved from server.py).
+- **Bug fix (caught by testing-agent)**: `_load_byok` used `if not db` against motor's `AsyncIOMotorDatabase`, which raises `NotImplementedError`. Changed to `if db is None or not user_id`. Without this fix every BYOK action node would have crashed with "Database objects do not implement truth value testing".
+- **Tests**: iteration_28 → **64/64 backend tests pass (33 regression + 31 new)**. Routes/handlers/auth refactor verified end-to-end.
+
 ### Phase 27 (May 27, 2026) — Browse → Fork → Tweak → Run UI Loop
 - **Save & Fork hook** (`POST /api/workflows/save`): Idempotent upsert keyed by (user_id, studio_workflow_id). Save button on canvas now auto-forks the loaded template into `user_workflows`, returns the runtime workflow_id used by Execute. Validates 50-node cap and array shape; rejects with 400 on schema violations.
 - **Node config editor** (`components/NodeConfigPanel.jsx`): Right-side panel opens when user selects a canvas node. Per-type fields:
@@ -99,15 +110,18 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 - subscriptions (Mongo): Stripe IDs + statuses
 - n8n_templates (Mongo): source_hash (unique), name, category, description, nodes[], edges[], node_count, complexity, trust_score
 - user_workflows (Mongo): id, user_id, name, nodes, edges, source_template
-- workflow_runs (Mongo): id, user_id, workflow_id, success, duration_ms, node_results[]
+- workflow_runs (Mongo): id, user_id, workflow_id, source, success, duration_ms, node_results[]
+- workflow_jobs (Mongo): id, user_id, workflow_id, status (queued/running/succeeded/failed), result, run_id, created_at, finished_at
+- byok_credentials (Mongo): user_id, service (slack/sendgrid/gmail), api_key (plaintext v1), extra, created_at, updated_at
 - compute_usage (Mongo): user_id + period (YYYY-MM) + count
 
 ## Prioritized Backlog
-- **P1**: Bulk ingest (use --all to load all 280 templates after smoke validation)
-- **P2**: Visual node config editor (data panel for setting URL/code/condition on each canvas node)
-- **P2**: Live execution viewer (poll /api/workflows/{id}/runs/{run_id} for trace)
-- **P2**: "Execute" button in canvas header that calls /api/workflows/{id}/execute
-- **P3**: Hosted async runtime (Celery + Redis)
-- **P3**: BYOK action handlers (gmail/slack/sendgrid) — currently v1 stubs
-- **P3**: Refactor server.py into modular routers (Auth, CSDROP, Stripe)
+- **P2**: Encryption-at-rest for BYOK api_keys (Fernet + KMS-managed key)
+- **P2**: Pagination/projection on `/workflows/{id}/runs` (currently returns full node_results blob)
+- **P3**: Extract async dispatch into `lib/workflow_jobs.py`; startup hook to mark stale `running` jobs as `failed` after worker restart
+- **P3**: Bulk ingest all 280 templates via `scripts/ingest_templates.py --all`
+- **P3**: CSDROP routes (28) extraction from server.py
+- **P3**: Stripe /payments/* routes extraction from server.py
+- **P3**: Pydantic models for BYOK credential payloads
+- **P3**: Celery + Redis HA async runtime (replaces in-process asyncio.create_task)
 - **P3**: Real-time websocket feed for Overwatch execution table
