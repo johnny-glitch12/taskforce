@@ -19,6 +19,7 @@ import SecurityDashboard from "@/pages/SecurityDashboard";
 import OverwatchDashboard from "@/pages/OverwatchDashboard";
 import Pricing from "@/pages/Pricing";
 import CreatorDashboard from "@/pages/CreatorDashboard";
+import CredentialsVault from "@/pages/CredentialsVault";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -192,6 +193,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <CreatorDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/credentials"
+                  element={
+                    <ProtectedRoute>
+                      <CredentialsVault />
                     </ProtectedRoute>
                   }
                 />

@@ -266,80 +266,7 @@ async def get_optional_user(credentials: HTTPAuthorizationCredentials = Depends(
     except JWTError:
         return None
 
-# ─── Auth Endpoints ───
-
-@api_router.post("/auth/register", response_model=TokenResponse)
-async def register(data: UserCreate):
-    existing = await db.users.find_one({"email": data.email})
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    user_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
-    user_doc = {
-        "id": user_id,
-        "email": data.email,
-        "password_hash": hash_password(data.password),
-        "name": data.name or data.email.split("@")[0],
-        "role": "user",
-        "created_at": now,
-    }
-    await db.users.insert_one(user_doc)
-    token = create_token(user_id, data.email, "user")
-    return TokenResponse(
-        token=token,
-        user=UserResponse(id=user_id, email=data.email, name=user_doc["name"], role="user", created_at=now)
-    )
-
-@api_router.post("/auth/login", response_model=TokenResponse)
-async def login(data: UserLogin):
-    user = await db.users.find_one({"email": data.email}, {"_id": 0})
-    if not user or not verify_password(data.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    token = create_token(user["id"], user["email"], user["role"])
-    return TokenResponse(
-        token=token,
-        user=UserResponse(id=user["id"], email=user["email"], name=user["name"], role=user["role"], client_id=user.get("client_id"), tier=user.get("tier", "free"), created_at=user["created_at"])
-    )
-
-@api_router.get("/auth/me", response_model=UserResponse)
-async def get_me(user=Depends(get_current_user)):
-    return UserResponse(id=user["id"], email=user["email"], name=user["name"], role=user["role"], client_id=user.get("client_id"), tier=user.get("tier", "free"), created_at=user["created_at"])
-
-# ─── Password Reset Endpoints ───
-
-@api_router.post("/auth/forgot-password")
-async def forgot_password(data: ForgotPasswordRequest):
-    user = await db.users.find_one({"email": data.email}, {"_id": 0})
-    if not user:
-        # Return success even if email not found (prevent enumeration)
-        return {"message": "If that email exists, a reset link has been generated.", "reset_token": None}
-    reset_token = secrets.token_urlsafe(32)
-    expires = datetime.now(timezone.utc) + timedelta(hours=1)
-    await db.password_resets.insert_one({
-        "id": str(uuid.uuid4()),
-        "user_id": user["id"],
-        "email": data.email,
-        "token": reset_token,
-        "expires_at": expires.isoformat(),
-        "used": False,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-    # In production, send email with reset link. For demo, return the token.
-    logger.info(f"Password reset token generated for {data.email}: {reset_token}")
-    return {"message": "If that email exists, a reset link has been generated.", "reset_token": reset_token}
-
-@api_router.post("/auth/reset-password")
-async def reset_password(data: ResetPasswordRequest):
-    reset_entry = await db.password_resets.find_one({"token": data.token, "used": False}, {"_id": 0})
-    if not reset_entry:
-        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
-    expires = datetime.fromisoformat(reset_entry["expires_at"])
-    if datetime.now(timezone.utc) > expires:
-        raise HTTPException(status_code=400, detail="Reset token has expired")
-    new_hash = hash_password(data.new_password)
-    await db.users.update_one({"id": reset_entry["user_id"]}, {"$set": {"password_hash": new_hash}})
-    await db.password_resets.update_one({"token": data.token}, {"$set": {"used": True}})
-    return {"message": "Password reset successfully. You can now log in with your new password."}
+# ─── Auth Endpoints (extracted to routes/auth.py) ───
 
 # ─── Waitlist Endpoints ───
 
@@ -2064,6 +1991,10 @@ app.include_router(subscriptions_router, prefix="/api")
 # Include native workflow executor router (replaces n8n proxy)
 from routes.workflow_executor import router as workflow_router
 app.include_router(workflow_router, prefix="/api")
+
+# Include extracted auth router
+from routes.auth import router as auth_router
+app.include_router(auth_router, prefix="/api")
 
 # Mount static files for live bot screenshots
 STATIC_DIR = Path(__file__).parent / "static"
