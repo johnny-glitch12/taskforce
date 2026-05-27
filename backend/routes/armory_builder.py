@@ -412,9 +412,16 @@ async def patch_file(project_id: str, req: PatchFileRequest, user=Depends(get_cu
 @router.post("/armory/bot-projects/{project_id}/fork")
 async def fork_project(project_id: str, user=Depends(get_current_user())):
     """
-    GitHub-style fork. Clones the project under the caller's account, keeping
-    forked_from + forked_from_creator lineage for the 80/20 revenue share.
-    The original creator is NOT modified.
+    GitHub-style fork — INTENTIONALLY PUBLIC.
+
+    Any authenticated user may fork ANY bot_project by id. This mirrors GitHub's
+    fork model and is required for the 80/20 creator-revenue share: the
+    `forked_from` + `forked_from_creator` fields preserve lineage so we always
+    know which original creator gets royalties when a renter runs a modified
+    bot. The original creator's project is NOT modified.
+
+    If product later requires private projects, add a `visibility: 'public' |
+    'private'` field on bot_projects and filter here.
     """
     db = get_db()
     user_id = str(user.get("id", user.get("email")))

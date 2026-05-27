@@ -23,6 +23,27 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 32 (Feb, 2026) — Lego Edges + AI Bot Builder (Gemini 2.5 Pro)
+**P0 — User-reported polish (5 fixes):**
+- **Lego-style edge routing** (`Studio.jsx` ~line 393): Replaced cubic-bezier center→center with orthogonal right-port → vertical-elbow → left-port path. Edges now wrap around blocks instead of slicing through them. Active edges glow cyan (#22d3ee) with arrowhead.
+- **Markdown asterisk strip**: `sanitize()` helper in ChatPane strips `**bold**` / `__under__` / backticks from assistant messages. `cleanLabel()` mirrors the same on node `label` + `sub` fields. No more visual `**` clutter on canvas or in chat.
+- **DB pollution purge**: Wiped 72 `TEST_*` workflows + 2 orphan runs from MongoDB (79→7 legitimate workflows). Added permanent filter on `GET /api/workflows` excluding `name~/^TEST_/i` so future test fixtures never leak into the user-facing list.
+- **Firewall tuning** (`lib/firewall.py`): Rewrote AUDIT_SYSTEM_PROMPT to explicitly whitelist build-bot intents ("build a bot that posts to my Instagram", "build a calculator") as SAFE. UNSAFE now strictly requires prompt-injection patterns, secrets exfil, malware generation. Verified: legitimate Instagram bot prompt → SAFE; `ignore previous instructions` → UNSAFE.
+- **Import-from-Exchange rewire** (`MyWorkflowsGrid.jsx`): Modal now pulls from `/api/exchange/listings` (real community-published bots) instead of the raw 291-template n8n catalog. Click → `POST /api/exchange/listings/{id}/fork` clones ONLY that one listing into `user_workflows` with `forked_from_listing` + `forked_from_creator` lineage for 80/20 revenue attribution. New backend route in `routes/exchange.py`.
+
+**P1 — Major feature: AI Bot Builder (Gemini 2.5 Pro)**
+- **NEW `POST /api/armory/build-bot`** (`routes/armory_builder.py`): Natural-language prompt → Gemini 2.5 Pro → structured JSON `{name, description, files:[{path, content, language}], manifest:{nodes, edges}}`. Defensive normalizer strips markdown, blocks `..`/absolute paths, caps files@20 / nodes@50 / content@200KB. 502 if LLM returns empty package.
+- **GitHub-style project lifecycle** — all stateless, MongoDB-only (`bot_projects` collection):
+  - `GET /api/armory/bot-projects` — list user's projects (lean, no commit_history)
+  - `GET /api/armory/bot-projects/{id}` — full project with commit_history
+  - `POST /api/armory/bot-projects/{id}/commit` — version+=1, push commit_history entry
+  - `PATCH /api/armory/bot-projects/{id}/files` — in-place file content update
+  - `POST /api/armory/bot-projects/{id}/fork` — intentionally public (GitHub model); clones with `forked_from` + `forked_from_creator` for revenue lineage
+  - `DELETE /api/armory/bot-projects/{id}`
+- **Frontend `BotProjectPanel.jsx`** (`@monaco-editor/react` added): Slides in from canvas right when a bot project is active. File tree (left, color-coded by extension) + Monaco code editor with vs-dark theme + Save / COMMIT (with version bump) / FORK / History buttons. Dirty-state indicator (●) per file.
+- **Chat trigger** (`Studio.jsx` `handleChatSend`): Regex `/^(build|create|make|generate|design)\s+(me\s+)?(a|an|the)?/i` short-circuits the chatbot and routes straight to `/api/armory/build-bot`. Auto-renders generated nodes on canvas + flips into node mode + opens BotProjectPanel.
+- **Tests**: iter32 → **163/163 backend tests pass** (18 new + 145 regression). Zero production bugs. Real Gemini 2.5 Pro call cached via module-scoped fixture to bound cost (~$0.003/run).
+
 ### Phase 30 (May 27, 2026) — UX Cleanup + Backlog Closure
 - **The Armory restructured**: Removed the templates-grid sidebar that was polluting the canvas. New `MyWorkflowsGrid.jsx` shows the user's OWN runtime workflows in the left rail. Templates moved to an "IMPORT FROM EXCHANGE" modal triggered by an explicit button. Vibe/Workflows toggle remains prominent center-top. Mode-toggle uses `data-testid="vibe-mode-btn"` and `node-mode-btn`.
 - **Edge routing fix**: Connections now run right-edge → left-edge with cubic-bezier ports. Lines never pierce node bodies (replaces center-to-center routing). Subtle drop-shadow glow on active edges.
@@ -136,6 +157,8 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 - workflow_runs (Mongo): id, user_id, workflow_id, source, success, duration_ms, node_results[]
 - workflow_jobs (Mongo): id, user_id, workflow_id, status (queued/running/succeeded/failed), result, run_id, created_at, finished_at
 - byok_credentials (Mongo): user_id, service (slack/sendgrid/gmail), api_key (plaintext v1), extra, created_at, updated_at
+- exchange_listings (Mongo): id, user_id, creator_email, name, description, category, tags, rent_price, buy_price, video_url, photo_urls, nodes_snapshot, edges_snapshot, status (draft/published/delisted), deploy_count, trust_score, created_at, updated_at
+- bot_projects (Mongo): id, user_id, creator_email, name, description, language, prompt, files[{path,content,language}], nodes, edges, forked_from, forked_from_creator, commit_history[{commit_id,message,author,files,nodes,edges,created_at}], version, created_at, updated_at
 - compute_usage (Mongo): user_id + period (YYYY-MM) + count
 
 ## Prioritized Backlog
