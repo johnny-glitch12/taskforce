@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 25 — Compute Credits Kill Switch backend verification. Wrote pytest suite covering subscriptions/status compute block, 403 enforcement on /run-agent and /dashboard/agents/{id}/run for depleted free user, webhook killswitch on owner credits, admin unlimited bypass, and per-dispatch increment. All 7 tests passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/subscriptions/status", "issue": "compute.tier returns 'free' (from users.tier default) while top-level status returns tier 'recruit'. Inconsistent labeling between the two fields. Not breaking but confusing for clients."},
+      {"endpoint": "lib/compute_credits.get_compute_status", "issue": "Tier label 'free' is mapped to TIER_LIMITS but never normalized to 'recruit'. Consider unifying the canonical free-tier name."},
+      {"endpoint": "POST /api/run-agent", "issue": "Kill switch runs BEFORE the firewall/rate-limit gates but mark_execution_active/done is not involved — fine. However increment_compute_usage is called even if the background worker later fails (dispatch-based billing) — documented behaviour, just flag."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_compute_kill_switch.py",
+    "/app/test_reports/pytest/pytest_compute_kill_switch.xml"
+  ],
+  "action_items": [
+    "(Optional) Normalise free-tier label between subscriptions.status.tier ('recruit') and compute.tier ('free').",
+    "(Optional) Document dispatch-based billing semantics in API docs (credit consumed even if background worker fails)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 2170 lines — consider splitting auth, dashboard agents, webhook, csdrop into modules.",
+    "Webhook killswitch uses db.users.find_one without projection so MongoDB _id leaks into the in-memory dict; not exposed to client but still untidy.",
+    "check_compute_credits/check identifies user via user.get('id', user.get('email')). If a future code path passes a dict without 'id', usage will be tracked by email — fine but worth a comment.",
+    "agent.py /run-agent dispatches in BackgroundTasks but counts the execution before the worker actually runs; failures in audit_prompt fall back to SAFE silently — acceptable but should be logged."
+  ],
+  "updated_files": ["/app/backend/tests/test_compute_kill_switch.py"],
+  "success_rate": {"backend": "100%", "frontend": "not tested"},
+  "test_credentials": "freeuser@test.com / test123 (100/100 used in 2026-05); admin@nova.ai / admin123 (role=admin, unlimited)",
+  "seed_data_creation": "Test transiently creates: (a) a TEST_ webhook agent for the free user (deleted in finally); (b) a TEST_compute_* registered user with a TEST_increment_agent (fully cleaned up at end of test_increment_after_dashboard_run).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Compute kill switch is fully implemented and verified. Free user freeuser@test.com is at 100/100 for period 2026-05 (system clock is May 2026). All three execution paths return 403 with structured detail. Admin bypass confirmed. Increment confirmed via fresh user. Test file: /app/backend/tests/test_compute_kill_switch.py — 7 tests, ~3s runtime."
+}

@@ -812,6 +812,7 @@ async def seed_database():
     await db.referrals.create_index("referrer_id")
     await db.referrals.create_index("referred_id", unique=True)
     await db.referral_credits.create_index("user_id")
+    await db.compute_usage.create_index([("user_id", 1), ("period", 1)], unique=True)
 
     # Run initial supernova evaluation
     await evaluate_supernovas()
@@ -992,6 +993,10 @@ async def delete_user_agent(agent_id: str, user=Depends(get_current_user)):
 
 @api_router.post("/dashboard/agents/{agent_id}/run", response_model=AgentExecutionResponse)
 async def run_user_agent(agent_id: str, data: AgentRunRequest, user=Depends(get_current_user)):
+    # ── Compute Credits Kill Switch ──
+    from lib.compute_credits import check_compute_credits, increment_compute_usage
+    await check_compute_credits(db, user)
+
     agent = await db.user_agents.find_one(
         {"id": agent_id, "user_id": user["id"]}, {"_id": 0}
     )
@@ -1032,6 +1037,9 @@ async def run_user_agent(agent_id: str, data: AgentRunRequest, user=Depends(get_
         "last_result": "success" if result["success"] else "error",
         "updated_at": now,
     }, "$inc": {"run_count": 1}})
+
+    # Increment compute usage
+    await increment_compute_usage(db, user)
 
     return exec_doc
 
@@ -1079,6 +1087,12 @@ async def webhook_trigger_agent(webhook_key: str, request: Request):
     if agent["trigger_type"] not in ("webhook", "both"):
         raise HTTPException(status_code=400, detail="Webhook trigger not enabled for this agent")
 
+    # ── Compute Credits Kill Switch (lookup agent owner) ──
+    from lib.compute_credits import check_compute_credits, increment_compute_usage
+    owner = await db.users.find_one({"id": agent["user_id"]})
+    if owner:
+        await check_compute_credits(db, owner)
+
     try:
         body = await request.json()
     except Exception:
@@ -1115,6 +1129,10 @@ async def webhook_trigger_agent(webhook_key: str, request: Request):
         "updated_at": now,
     }, "$inc": {"run_count": 1}})
 
+    # Increment compute usage for webhook-triggered execution
+    if owner:
+        await increment_compute_usage(db, owner)
+
     return {
         "success": result["success"],
         "result": result["result"],
@@ -1124,7 +1142,6 @@ async def webhook_trigger_agent(webhook_key: str, request: Request):
     }
 
 # ─── CSDROP Client Portal ───
-
 CSDROP_CLIENT_ID = "csdrop"
 CSDROP_BOT_DIR = Path(__file__).parent / "clients" / "csdrop"
 CSDROP_LOG_DIR = CSDROP_BOT_DIR / "logs"

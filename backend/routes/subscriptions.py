@@ -130,13 +130,18 @@ async def get_subscription_status(user=Depends(get_current_user())):
         {"user_id": user["id"], "status": "active"},
         {"_id": 0},
     )
+
+    from lib.compute_credits import get_compute_status
+    compute = await get_compute_status(db, user)
+
     if not sub:
         return {
             "tier": "recruit",
             "status": "free",
             "label": "Recruit",
             "agent_limit": 3,
-            "executions": 100,
+            "executions_limit": 100,
+            "compute": compute,
         }
 
     tier_info = TIERS.get(sub["tier"], {})
@@ -145,9 +150,10 @@ async def get_subscription_status(user=Depends(get_current_user())):
         "status": sub["status"],
         "label": tier_info.get("label", sub["tier"].title()),
         "agent_limit": tier_info.get("agent_limit", 3),
-        "executions": tier_info.get("executions", 100),
+        "executions_limit": tier_info.get("executions", 100),
         "subscribed_at": sub.get("created_at"),
         "payment_id": sub.get("payment_id"),
+        "compute": compute,
     }
 
 

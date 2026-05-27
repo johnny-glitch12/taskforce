@@ -13,6 +13,7 @@ from supabase import create_client
 
 from lib.firewall import audit_prompt
 from lib.rate_limiter import check_rate_limit, check_concurrent_cap, mark_execution_active, mark_execution_done
+from lib.compute_credits import check_compute_credits, increment_compute_usage
 from routes.security import log_security_event
 
 load_dotenv()
@@ -40,6 +41,10 @@ def get_current_user():
     from server import get_current_user as _get_user
     return _get_user
 
+def get_db():
+    from server import db
+    return db
+
 
 # ──────────────────────────────────────────────
 # POST /api/run-agent
@@ -52,6 +57,10 @@ async def run_agent(
     user=Depends(get_current_user()),
 ):
     executor_id = str(user.get("email", "unknown"))
+
+    # ── Gate 0: Compute Credits Kill Switch ──
+    db = get_db()
+    await check_compute_credits(db, user)
 
     # ── Gate 1: Rate Limit (5 req/min per user) ──
     rate_check = check_rate_limit(executor_id)
@@ -117,6 +126,9 @@ async def run_agent(
     }).execute()
 
     background_tasks.add_task(agent_worker, log_id, req.system_prompt, req.user_message, executor_id)
+
+    # Increment compute usage (credit consumed on dispatch, not completion)
+    await increment_compute_usage(db, user)
 
     return {
         "success": True,
