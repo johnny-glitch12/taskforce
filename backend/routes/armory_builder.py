@@ -73,9 +73,22 @@ CRITICAL RULES — read carefully:
 1. NEVER ask the user clarifying questions. NEVER reply with markdown text. NEVER use
    asterisks for bold. Your ONLY allowed output is a single valid JSON object.
 2. Infer reasonable defaults for anything the user didn't specify.
-3. Always produce at least 3 nodes (Trigger → core logic → Output/Action).
-4. Inject the actual Python code that implements the logic into the matching node's
-   `data.code` field AND ALSO ship it as a real file (e.g. main.py).
+3. NODE COUNT MUST SCALE WITH COMPLEXITY. Do NOT force exactly 3 nodes. Use:
+       - Simple utility bots (calculator, formatter): 3-5 nodes
+       - Standard automations (send email, post tweet, scrape): 5-8 nodes
+       - Multi-service workflows (CRM → AI → Notification): 8-12 nodes
+       - Complex multi-branch agents (with conditions, loops, error handlers): 12-25 nodes
+   ALWAYS include explicit nodes for: validation/input-check, error handling, logging,
+   formatting/transform steps, and notification/output. Branches with IF/Condition nodes
+   are encouraged when there are multiple possible outcomes.
+4. PRODUCE MULTIPLE CODE FILES when the bot is non-trivial. Split logic into
+   modules (e.g. main.py + handlers.py + utils.py + config.py + requirements.txt +
+   README.md + .env.example). Simple bots can still be 2-3 files.
+5. Inject the actual Python code that implements each logical step into the matching
+   node's `data.code` field for transform/condition nodes AND ALSO ship it as a real
+   module file.
+6. Use realistic service slugs in `data.service` for action nodes — e.g. "instagram",
+   "slack", "stripe", "gmail", "openai", "twilio_sms", "shopify", "gsheets", "notion".
 
 Output schema — return EXACTLY this JSON shape, no prose, no code fences:
 
@@ -84,65 +97,45 @@ Output schema — return EXACTLY this JSON shape, no prose, no code fences:
   "description": "<one-sentence summary of what it does>",
   "language": "python",
   "files": [
-    {
-      "path": "main.py",
-      "language": "python",
-      "content": "<full runnable Python source — the entrypoint that implements the user request>"
-    },
-    {
-      "path": "requirements.txt",
-      "language": "text",
-      "content": "<one pip package per line>"
-    },
-    {
-      "path": "README.md",
-      "language": "markdown",
-      "content": "<plain text README, NO markdown asterisks or bold>"
-    }
+    { "path": "main.py",          "language": "python",   "content": "<runnable entrypoint>" },
+    { "path": "handlers.py",      "language": "python",   "content": "<extracted handler logic, if non-trivial>" },
+    { "path": "utils.py",         "language": "python",   "content": "<helpers, if applicable>" },
+    { "path": "config.py",        "language": "python",   "content": "<config + env reading>" },
+    { "path": "requirements.txt", "language": "text",     "content": "<one pip package per line>" },
+    { "path": ".env.example",     "language": "text",     "content": "<env keys with placeholder values>" },
+    { "path": "README.md",        "language": "markdown", "content": "<plain text, NO asterisks or bold>" }
   ],
   "manifest": {
     "nodes": [
-      {
-        "id": "n1",
-        "type": "trigger",
-        "label": "Trigger",
-        "sub": "<short title, no asterisks>",
-        "icon": "Mail",
-        "x": 80, "y": 120,
-        "data": { "source": "manual" }
-      },
-      {
-        "id": "n2",
-        "type": "transform",
-        "label": "Transform",
-        "sub": "<short title, no asterisks>",
-        "icon": "Code",
-        "x": 360, "y": 120,
-        "data": { "code": "<Python code body — set RESULT = ...>" }
-      },
-      {
-        "id": "n3",
-        "type": "action",
-        "label": "Action",
-        "sub": "<short title, no asterisks>",
-        "icon": "FileText",
-        "x": 640, "y": 120,
-        "data": { "service": "noop" }
-      }
+      { "id": "n1", "type": "trigger",   "label": "Trigger",    "sub": "<title>", "icon": "Mail",     "x": 80,   "y": 120, "data": { "source": "manual" } },
+      { "id": "n2", "type": "transform", "label": "Validate",   "sub": "<title>", "icon": "Filter",   "x": 360,  "y": 120, "data": { "code": "..." } },
+      { "id": "n3", "type": "http_request","label": "API Call", "sub": "<title>", "icon": "Globe",    "x": 640,  "y": 120, "data": { "method": "POST", "url": "" } },
+      { "id": "n4", "type": "condition", "label": "Success?",   "sub": "<title>", "icon": "Split",    "x": 920,  "y": 120, "data": { "condition": "..." } },
+      { "id": "n5", "type": "action",    "label": "Notify",     "sub": "<title>", "icon": "Send",     "x": 1200, "y": 60,  "data": { "service": "slack" } },
+      { "id": "n6", "type": "action",    "label": "Error Log",  "sub": "<title>", "icon": "Bug",      "x": 1200, "y": 200, "data": { "service": "noop" } }
     ],
     "edges": [
       { "from": "n1", "to": "n2" },
-      { "from": "n2", "to": "n3" }
+      { "from": "n2", "to": "n3" },
+      { "from": "n3", "to": "n4" },
+      { "from": "n4", "to": "n5" },
+      { "from": "n4", "to": "n6" }
     ]
   }
 }
 
-Node types you may use: trigger, llm, condition, action, http_request, webhook,
-database, transform. Icon must be one of: Mail, Brain, Zap, FileText, MessageCircle,
-GitBranch, Database, Globe, Filter, Code, Layers.
+Allowed node types: trigger, llm, condition, action, http_request, webhook,
+database, transform.
+Allowed icons: Mail, Brain, Zap, FileText, MessageCircle, GitBranch, Database,
+Globe, Filter, Code, Layers, Calendar, FileInput, Rss, CreditCard, Send, Hash,
+Phone, Bug, Cloud, Twitter, Linkedin, Facebook, Instagram, Youtube, ShoppingBag,
+Lock, Clock, Calculator, FolderOpen, Split, Combine, Repeat, Timer, Server,
+BookOpen, Mic, Volume2, Image, Film, Table, Trello, CheckSquare, Building2,
+Headphones, MessageSquare, Github, Gitlab, Bot, AtSign, Activity, AlertTriangle.
 
-Coordinate layout: lay nodes left-to-right starting at x=80, step x by 280, y=120 baseline.
-Branch nodes can offset y by ±100.
+Coordinate layout: lay nodes left-to-right starting at x=80, step x by 280.
+Use y=120 baseline; for branch alternates use y=60 (top) and y=200 (bottom).
+Stagger longer pipelines vertically by ±60 to avoid edge collisions.
 
 Strict output: a single JSON object. No ``` fences. No commentary."""
 

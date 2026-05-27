@@ -7,6 +7,7 @@ import { useState, useRef, useEffect } from "react";
 const CENTER_LINKS = [
   { to: "/exchange", label: "The Exchange" },
   { to: "/armory", label: "The Armory" },
+  { to: "/leaderboard", label: "Leaderboard", soon: true },
   { to: "/academy", label: "Academy" },
   { to: "/pricing", label: "Pricing" },
 ];
@@ -122,6 +123,13 @@ export default function Navbar() {
           <span className="text-[13px] font-bold tracking-[0.1em] uppercase font-mono t-text">
             Task<span className="text-cyan-400">Force</span>
           </span>
+          <span
+            data-testid="beta-badge"
+            className="ml-1 px-1.5 py-0.5 text-[8px] font-bold tracking-[0.15em] uppercase font-mono rounded-sm text-cyan-300"
+            style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.35)' }}
+          >
+            Beta
+          </span>
         </Link>
 
         {/* ── Center Links (Desktop) ── */}
@@ -131,11 +139,19 @@ export default function Navbar() {
               key={link.to}
               to={link.to}
               data-testid={`nav-link-${link.label.toLowerCase().replace(/\s/g, "-")}`}
-              className={`px-3.5 py-1.5 text-[11px] tracking-[0.1em] uppercase font-medium font-mono transition-all duration-200 ${
+              className={`px-3.5 py-1.5 text-[11px] tracking-[0.1em] uppercase font-medium font-mono transition-all duration-200 flex items-center gap-1.5 ${
                 location.pathname === link.to ? "text-cyan-400" : "text-zinc-500 hover:text-cyan-400"
               }`}
             >
               {link.label}
+              {link.soon && (
+                <span
+                  className="px-1 py-0.5 text-[7px] tracking-[0.1em] font-bold rounded-sm text-amber-300"
+                  style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)' }}
+                >
+                  SOON
+                </span>
+              )}
             </Link>
           ))}
         </div>

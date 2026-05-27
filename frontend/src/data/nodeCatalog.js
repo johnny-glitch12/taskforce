@@ -180,6 +180,152 @@ const NODES = [
   { service: "math",        label: "Math",             category: "Utility",       type: "transform",   icon: "Calculator",    color: "#9333EA", desc: "Arithmetic / stats",                    data: { op: "sum" } },
   { service: "uuid",        label: "Generate UUID",    category: "Utility",       type: "transform",   icon: "Fingerprint",   color: "#9333EA", desc: "Generate UUID v4",                      data: {} },
   { service: "qr",          label: "QR Code",          category: "Utility",       type: "transform",   icon: "QrCode",        color: "#9333EA", desc: "Generate QR PNG",                       data: {} },
+
+  // ── AI / LLM (extended providers) ────────────────────────────────────────
+  { service: "cohere",      label: "Cohere",           category: "AI / LLM",      type: "llm",         icon: "Sparkles",      color: "#06b6d4", desc: "Cohere Command R / R+",                 data: { provider: "cohere", model: "command-r-plus" } },
+  { service: "mistral",     label: "Mistral",          category: "AI / LLM",      type: "llm",         icon: "Sparkles",      color: "#06b6d4", desc: "Mistral Large / Codestral",             data: { provider: "mistral", model: "mistral-large-latest" } },
+  { service: "perplexity",  label: "Perplexity",       category: "AI / LLM",      type: "llm",         icon: "Sparkles",      color: "#06b6d4", desc: "Perplexity online search",              data: { provider: "perplexity", model: "sonar-pro" } },
+  { service: "groq",        label: "Groq",             category: "AI / LLM",      type: "llm",         icon: "Sparkles",      color: "#06b6d4", desc: "Ultra-fast LLM inference",              data: { provider: "groq" } },
+  { service: "huggingface", label: "Hugging Face",     category: "AI / LLM",      type: "llm",         icon: "Sparkles",      color: "#06b6d4", desc: "HF Inference API",                      data: { provider: "huggingface", model: "" } },
+  { service: "together_ai", label: "Together AI",      category: "AI / LLM",      type: "llm",         icon: "Sparkles",      color: "#06b6d4", desc: "Open-model hosting",                    data: { provider: "together" } },
+  { service: "replicate",   label: "Replicate",        category: "AI / LLM",      type: "llm",         icon: "Sparkles",      color: "#06b6d4", desc: "Run any model on Replicate",            data: { provider: "replicate", model: "" } },
+  { service: "fal_ai",      label: "fal.ai",           category: "AI / LLM",      type: "llm",         icon: "Sparkles",      color: "#06b6d4", desc: "fal.ai serverless inference",           data: { provider: "fal" } },
+  { service: "runway",      label: "Runway",           category: "AI / LLM",      type: "llm",         icon: "Film",          color: "#06b6d4", desc: "Runway video generation",               data: { provider: "runway" } },
+  { service: "pika",        label: "Pika Labs",        category: "AI / LLM",      type: "llm",         icon: "Film",          color: "#06b6d4", desc: "Pika video generation",                 data: { provider: "pika" } },
+  { service: "stability",   label: "Stability AI",     category: "AI / LLM",      type: "llm",         icon: "Image",         color: "#06b6d4", desc: "Stable Diffusion XL",                   data: { provider: "stability" } },
+  { service: "deepl",       label: "DeepL",            category: "AI / LLM",      type: "llm",         icon: "Languages",     color: "#06b6d4", desc: "DeepL machine translation",             data: { provider: "deepl" } },
+  { service: "moderation",  label: "Moderation",       category: "AI / LLM",      type: "llm",         icon: "Shield",        color: "#06b6d4", desc: "Content safety classification",         data: { provider: "openai" } },
+  { service: "ner",         label: "Named Entity",     category: "AI / LLM",      type: "llm",         icon: "Tags",          color: "#06b6d4", desc: "Extract entities from text",            data: {} },
+
+  // ── Communication (extended) ─────────────────────────────────────────────
+  { service: "mailchimp",   label: "Mailchimp",        category: "Communication", type: "action",      icon: "Mail",          color: "#0e7490", desc: "Email campaigns / lists",               data: { service: "mailchimp" } },
+  { service: "klaviyo",     label: "Klaviyo",          category: "Communication", type: "action",      icon: "Mail",          color: "#0e7490", desc: "E-com email + SMS",                     data: { service: "klaviyo" } },
+  { service: "convertkit",  label: "ConvertKit",       category: "Communication", type: "action",      icon: "Mail",          color: "#0e7490", desc: "Creator email broadcasts",              data: { service: "convertkit" } },
+  { service: "activecampaign",label:"ActiveCampaign",  category: "Communication", type: "action",      icon: "Mail",          color: "#0e7490", desc: "Marketing automation",                  data: { service: "activecampaign" } },
+  { service: "intercom_msg",label: "Intercom Message", category: "Communication", type: "action",      icon: "MessageSquare", color: "#0e7490", desc: "Send Intercom message",                 data: { service: "intercom" } },
+  { service: "msteams_msg", label: "Teams Webhook",    category: "Communication", type: "action",      icon: "Users",         color: "#0e7490", desc: "Teams incoming webhook",                data: { service: "msteams" } },
+  { service: "slack_dm",    label: "Slack DM",         category: "Communication", type: "action",      icon: "Send",          color: "#0e7490", desc: "Direct message a user",                 data: { service: "slack", op: "dm" } },
+  { service: "signal",      label: "Signal",           category: "Communication", type: "action",      icon: "Send",          color: "#0e7490", desc: "Signal CLI bridge",                     data: { service: "signal" } },
+  { service: "line",        label: "LINE",             category: "Communication", type: "action",      icon: "MessageCircle", color: "#0e7490", desc: "LINE messaging API",                    data: { service: "line" } },
+  { service: "wechat",      label: "WeChat",           category: "Communication", type: "action",      icon: "MessageCircle", color: "#0e7490", desc: "WeChat Work API",                       data: { service: "wechat" } },
+  { service: "kakaotalk",   label: "KakaoTalk",        category: "Communication", type: "action",      icon: "MessageCircle", color: "#0e7490", desc: "Kakao biz messaging",                   data: { service: "kakaotalk" } },
+
+  // ── Productivity (extended) ──────────────────────────────────────────────
+  { service: "confluence",  label: "Confluence",       category: "Productivity",  type: "action",      icon: "FileText",      color: "#0e7490", desc: "Wiki page CRUD",                        data: { service: "confluence" } },
+  { service: "coda",        label: "Coda",             category: "Productivity",  type: "database",    icon: "Table",         color: "#4C1D95", desc: "Coda doc / table ops",                  data: { service: "coda" } },
+  { service: "evernote",    label: "Evernote",         category: "Productivity",  type: "action",      icon: "FileText",      color: "#0e7490", desc: "Evernote note ops",                     data: { service: "evernote" } },
+  { service: "onenote",     label: "OneNote",          category: "Productivity",  type: "action",      icon: "FileText",      color: "#0e7490", desc: "OneNote ops",                           data: { service: "onenote" } },
+  { service: "todoist",     label: "Todoist",          category: "Productivity",  type: "action",      icon: "CheckSquare",   color: "#0e7490", desc: "Todoist task ops",                      data: { service: "todoist" } },
+  { service: "calendly",    label: "Calendly",         category: "Productivity",  type: "action",      icon: "Calendar",      color: "#0e7490", desc: "Calendly meeting ops",                  data: { service: "calendly" } },
+  { service: "outlook",     label: "Outlook",          category: "Productivity",  type: "action",      icon: "Mail",          color: "#0e7490", desc: "Outlook email + calendar",              data: { service: "outlook" } },
+  { service: "miro",        label: "Miro",             category: "Productivity",  type: "action",      icon: "Layers",        color: "#0e7490", desc: "Miro board ops",                        data: { service: "miro" } },
+  { service: "figma",       label: "Figma",            category: "Productivity",  type: "action",      icon: "Image",         color: "#0e7490", desc: "Figma file / comment ops",              data: { service: "figma" } },
+  { service: "loom",        label: "Loom",             category: "Productivity",  type: "action",      icon: "Video",         color: "#0e7490", desc: "Loom video metadata",                   data: { service: "loom" } },
+
+  // ── CRM & Sales (extended) ───────────────────────────────────────────────
+  { service: "copper",      label: "Copper",           category: "CRM & Sales",   type: "action",      icon: "Building2",     color: "#0e7490", desc: "Copper CRM ops",                        data: { service: "copper" } },
+  { service: "freshdesk",   label: "Freshdesk",        category: "CRM & Sales",   type: "action",      icon: "Headphones",    color: "#0e7490", desc: "Freshdesk ticket ops",                  data: { service: "freshdesk" } },
+  { service: "helpscout",   label: "Help Scout",       category: "CRM & Sales",   type: "action",      icon: "Headphones",    color: "#0e7490", desc: "Help Scout conversation",               data: { service: "helpscout" } },
+  { service: "drift",       label: "Drift",            category: "CRM & Sales",   type: "action",      icon: "MessageSquare", color: "#0e7490", desc: "Drift conversation API",                data: { service: "drift" } },
+  { service: "front",       label: "Front",            category: "CRM & Sales",   type: "action",      icon: "Mail",          color: "#0e7490", desc: "Front inbox ops",                       data: { service: "front" } },
+  { service: "close_crm",   label: "Close",            category: "CRM & Sales",   type: "action",      icon: "Building2",     color: "#0e7490", desc: "Close CRM ops",                         data: { service: "close" } },
+  { service: "apollo",      label: "Apollo.io",        category: "CRM & Sales",   type: "action",      icon: "Building2",     color: "#0e7490", desc: "Apollo lead search / sequence",         data: { service: "apollo" } },
+
+  // ── Social (extended) ────────────────────────────────────────────────────
+  { service: "mastodon",    label: "Mastodon",         category: "Social",        type: "action",      icon: "AtSign",        color: "#0e7490", desc: "Toot to instance",                      data: { service: "mastodon" } },
+  { service: "bluesky",     label: "Bluesky",          category: "Social",        type: "action",      icon: "AtSign",        color: "#0e7490", desc: "Post to Bluesky",                       data: { service: "bluesky" } },
+  { service: "twitch",      label: "Twitch",           category: "Social",        type: "action",      icon: "Video",         color: "#0e7490", desc: "Stream / chat ops",                     data: { service: "twitch" } },
+  { service: "snapchat",    label: "Snapchat",         category: "Social",        type: "action",      icon: "Image",         color: "#0e7490", desc: "Snap Ads / story",                      data: { service: "snapchat" } },
+  { service: "discord_bot", label: "Discord Bot",      category: "Social",        type: "action",      icon: "MessageSquare", color: "#0e7490", desc: "Run Discord bot command",               data: { service: "discord", op: "bot" } },
+  { service: "tg_channel",  label: "Telegram Channel", category: "Social",        type: "action",      icon: "Send",          color: "#0e7490", desc: "Post to channel",                       data: { service: "telegram", op: "channel" } },
+
+  // ── E-commerce (extended) ────────────────────────────────────────────────
+  { service: "magento",     label: "Magento",          category: "E-commerce",    type: "action",      icon: "ShoppingBag",   color: "#0e7490", desc: "Magento product / order",               data: { service: "magento" } },
+  { service: "prestashop",  label: "PrestaShop",       category: "E-commerce",    type: "action",      icon: "ShoppingBag",   color: "#0e7490", desc: "PrestaShop ops",                        data: { service: "prestashop" } },
+  { service: "gumroad",     label: "Gumroad",          category: "E-commerce",    type: "action",      icon: "ShoppingBag",   color: "#0e7490", desc: "Gumroad sale events",                   data: { service: "gumroad" } },
+  { service: "paddle",      label: "Paddle",           category: "E-commerce",    type: "action",      icon: "ShoppingBag",   color: "#0e7490", desc: "Paddle billing ops",                    data: { service: "paddle" } },
+  { service: "amazon_sp",   label: "Amazon SP-API",    category: "E-commerce",    type: "action",      icon: "ShoppingBag",   color: "#0e7490", desc: "Amazon seller central",                 data: { service: "amazon" } },
+  { service: "ebay",        label: "eBay",             category: "E-commerce",    type: "action",      icon: "ShoppingBag",   color: "#0e7490", desc: "eBay listing ops",                      data: { service: "ebay" } },
+
+  // ── Database (extended) ──────────────────────────────────────────────────
+  { service: "clickhouse",  label: "ClickHouse",       category: "Database",      type: "database",    icon: "Database",      color: "#4C1D95", desc: "Columnar OLAP query",                   data: { service: "clickhouse" } },
+  { service: "elasticsearch",label:"Elasticsearch",    category: "Database",      type: "database",    icon: "Database",      color: "#4C1D95", desc: "ES query / index",                      data: { service: "elasticsearch" } },
+  { service: "pinecone",    label: "Pinecone",         category: "Database",      type: "database",    icon: "Layers",        color: "#4C1D95", desc: "Vector search",                         data: { service: "pinecone" } },
+  { service: "qdrant",      label: "Qdrant",           category: "Database",      type: "database",    icon: "Layers",        color: "#4C1D95", desc: "Vector search",                         data: { service: "qdrant" } },
+  { service: "weaviate",    label: "Weaviate",         category: "Database",      type: "database",    icon: "Layers",        color: "#4C1D95", desc: "Vector + hybrid search",                data: { service: "weaviate" } },
+  { service: "chroma",      label: "Chroma",           category: "Database",      type: "database",    icon: "Layers",        color: "#4C1D95", desc: "Embedded vector DB",                    data: { service: "chroma" } },
+  { service: "neo4j",       label: "Neo4j",            category: "Database",      type: "database",    icon: "GitBranch",     color: "#4C1D95", desc: "Graph DB Cypher query",                 data: { service: "neo4j" } },
+  { service: "sqlite",      label: "SQLite",           category: "Database",      type: "database",    icon: "Database",      color: "#4C1D95", desc: "Local SQLite",                          data: { service: "sqlite" } },
+
+  // ── Cloud & DevOps (extended) ────────────────────────────────────────────
+  { service: "cloudflare",  label: "Cloudflare",       category: "Cloud & DevOps",type: "action",      icon: "Cloud",         color: "#0e7490", desc: "Workers / DNS / cache ops",             data: { service: "cloudflare" } },
+  { service: "vercel",      label: "Vercel",           category: "Cloud & DevOps",type: "action",      icon: "Cloud",         color: "#0e7490", desc: "Vercel deploy hook",                    data: { service: "vercel" } },
+  { service: "netlify",     label: "Netlify",          category: "Cloud & DevOps",type: "action",      icon: "Cloud",         color: "#0e7490", desc: "Netlify deploy / forms",                data: { service: "netlify" } },
+  { service: "heroku",      label: "Heroku",           category: "Cloud & DevOps",type: "action",      icon: "Cloud",         color: "#0e7490", desc: "Heroku dyno / addon",                   data: { service: "heroku" } },
+  { service: "render",      label: "Render",           category: "Cloud & DevOps",type: "action",      icon: "Cloud",         color: "#0e7490", desc: "Render service ops",                    data: { service: "render" } },
+  { service: "fly_io",      label: "Fly.io",           category: "Cloud & DevOps",type: "action",      icon: "Cloud",         color: "#0e7490", desc: "Fly machine ops",                       data: { service: "fly" } },
+  { service: "sentry",      label: "Sentry",           category: "Cloud & DevOps",type: "action",      icon: "Bug",           color: "#0e7490", desc: "Sentry issue ops",                      data: { service: "sentry" } },
+  { service: "betterstack", label: "Better Stack",     category: "Cloud & DevOps",type: "action",      icon: "Activity",      color: "#0e7490", desc: "Uptime + log mgmt",                     data: { service: "betterstack" } },
+  { service: "statuspage",  label: "Statuspage",       category: "Cloud & DevOps",type: "action",      icon: "Activity",      color: "#0e7490", desc: "Incident updates",                      data: { service: "statuspage" } },
+  { service: "opsgenie",    label: "Opsgenie",         category: "Cloud & DevOps",type: "action",      icon: "AlertTriangle", color: "#0e7490", desc: "Alert routing",                         data: { service: "opsgenie" } },
+  { service: "newrelic",    label: "New Relic",        category: "Cloud & DevOps",type: "action",      icon: "Activity",      color: "#0e7490", desc: "APM event push",                        data: { service: "newrelic" } },
+  { service: "circleci",    label: "CircleCI",         category: "Cloud & DevOps",type: "action",      icon: "Cog",           color: "#0e7490", desc: "Trigger CI pipeline",                   data: { service: "circleci" } },
+  { service: "gh_actions",  label: "GitHub Actions",   category: "Cloud & DevOps",type: "action",      icon: "Github",        color: "#0e7490", desc: "Dispatch workflow_run",                 data: { service: "github_actions" } },
+  { service: "terraform",   label: "Terraform Cloud",  category: "Cloud & DevOps",type: "action",      icon: "Cloud",         color: "#0e7490", desc: "TF run / plan ops",                     data: { service: "terraform" } },
+
+  // ── Payments (extended) ──────────────────────────────────────────────────
+  { service: "wise",        label: "Wise",             category: "Payments",      type: "action",      icon: "CreditCard",    color: "#0e7490", desc: "Wise transfer",                         data: { service: "wise" } },
+  { service: "plaid",       label: "Plaid",            category: "Payments",      type: "action",      icon: "CreditCard",    color: "#0e7490", desc: "Plaid Link / accounts",                 data: { service: "plaid" } },
+  { service: "alchemy",     label: "Alchemy (Web3)",   category: "Payments",      type: "action",      icon: "Bitcoin",       color: "#0e7490", desc: "Ethereum RPC ops",                      data: { service: "alchemy" } },
+  { service: "etherscan",   label: "Etherscan",        category: "Payments",      type: "http_request",icon: "Bitcoin",       color: "#5B21B6", desc: "ETH tx / address lookup",               data: { url: "https://api.etherscan.io/api" } },
+  { service: "coingecko",   label: "CoinGecko",        category: "Payments",      type: "http_request",icon: "Bitcoin",       color: "#5B21B6", desc: "Crypto price feed",                     data: { url: "https://api.coingecko.com/api/v3" } },
+
+  // ── Files & Storage (extended) ───────────────────────────────────────────
+  { service: "dropbox",     label: "Dropbox",          category: "Files & Storage",type: "action",     icon: "Cloud",         color: "#0e7490", desc: "Dropbox file ops",                      data: { service: "dropbox" } },
+  { service: "onedrive",    label: "OneDrive",         category: "Files & Storage",type: "action",     icon: "Cloud",         color: "#0e7490", desc: "OneDrive file ops",                     data: { service: "onedrive" } },
+  { service: "box",         label: "Box",              category: "Files & Storage",type: "action",     icon: "Cloud",         color: "#0e7490", desc: "Box file ops",                          data: { service: "box" } },
+  { service: "mega",        label: "MEGA",             category: "Files & Storage",type: "action",     icon: "Cloud",         color: "#0e7490", desc: "MEGA file ops",                         data: { service: "mega" } },
+  { service: "imagekit",    label: "ImageKit",         category: "Files & Storage",type: "action",     icon: "Image",         color: "#0e7490", desc: "Image CDN + transforms",                data: { service: "imagekit" } },
+  { service: "cloudinary",  label: "Cloudinary",       category: "Files & Storage",type: "action",     icon: "Image",         color: "#0e7490", desc: "Asset upload + transform",              data: { service: "cloudinary" } },
+
+  // ── Analytics ────────────────────────────────────────────────────────────
+  { service: "ga4",         label: "Google Analytics 4",category: "Utility",      type: "action",      icon: "Activity",      color: "#9333EA", desc: "GA4 event tracking",                    data: { service: "ga4" } },
+  { service: "mixpanel",    label: "Mixpanel",         category: "Utility",       type: "action",      icon: "Activity",      color: "#9333EA", desc: "Mixpanel event ingest",                 data: { service: "mixpanel" } },
+  { service: "amplitude",   label: "Amplitude",        category: "Utility",       type: "action",      icon: "Activity",      color: "#9333EA", desc: "Amplitude event ingest",                data: { service: "amplitude" } },
+  { service: "segment",     label: "Segment",          category: "Utility",       type: "action",      icon: "Activity",      color: "#9333EA", desc: "Segment track / identify",              data: { service: "segment" } },
+  { service: "posthog",     label: "PostHog",          category: "Utility",       type: "action",      icon: "Activity",      color: "#9333EA", desc: "PostHog event capture",                 data: { service: "posthog" } },
+  { service: "hotjar",      label: "Hotjar",           category: "Utility",       type: "action",      icon: "Activity",      color: "#9333EA", desc: "Hotjar event ping",                     data: { service: "hotjar" } },
+
+  // ── Queues / Streaming (Cloud bucket) ────────────────────────────────────
+  { service: "kafka",       label: "Kafka",            category: "Cloud & DevOps",type: "action",      icon: "Combine",       color: "#0e7490", desc: "Kafka produce / consume",               data: { service: "kafka" } },
+  { service: "rabbitmq",    label: "RabbitMQ",         category: "Cloud & DevOps",type: "action",      icon: "Combine",       color: "#0e7490", desc: "AMQP publish",                          data: { service: "rabbitmq" } },
+  { service: "nats",        label: "NATS",             category: "Cloud & DevOps",type: "action",      icon: "Combine",       color: "#0e7490", desc: "NATS subject publish",                  data: { service: "nats" } },
+  { service: "sns",         label: "AWS SNS",          category: "Cloud & DevOps",type: "action",      icon: "Cloud",         color: "#0e7490", desc: "SNS topic publish",                     data: { service: "sns" } },
+  { service: "sqs",         label: "AWS SQS",          category: "Cloud & DevOps",type: "action",      icon: "Combine",       color: "#0e7490", desc: "SQS send / receive",                    data: { service: "sqs" } },
+  { service: "pubsub",      label: "Pub/Sub",          category: "Cloud & DevOps",type: "action",      icon: "Cloud",         color: "#0e7490", desc: "GCP Pub/Sub publish",                   data: { service: "pubsub" } },
+  { service: "mqtt",        label: "MQTT",             category: "Cloud & DevOps",type: "action",      icon: "Send",          color: "#0e7490", desc: "MQTT broker publish",                   data: { service: "mqtt" } },
+
+  // ── Auth / Secrets (Utility) ─────────────────────────────────────────────
+  { service: "auth0",       label: "Auth0",            category: "Utility",       type: "action",      icon: "Lock",          color: "#9333EA", desc: "Auth0 user mgmt",                       data: { service: "auth0" } },
+  { service: "clerk",       label: "Clerk",            category: "Utility",       type: "action",      icon: "Lock",          color: "#9333EA", desc: "Clerk user mgmt",                       data: { service: "clerk" } },
+  { service: "supabase_auth",label:"Supabase Auth",    category: "Utility",       type: "action",      icon: "Lock",          color: "#9333EA", desc: "Supabase auth ops",                     data: { service: "supabase_auth" } },
+  { service: "1password",   label: "1Password",        category: "Utility",       type: "action",      icon: "Lock",          color: "#9333EA", desc: "1Password CLI ops",                     data: { service: "1password" } },
+  { service: "bitwarden",   label: "Bitwarden",        category: "Utility",       type: "action",      icon: "Lock",          color: "#9333EA", desc: "Bitwarden vault ops",                   data: { service: "bitwarden" } },
+  { service: "vault",       label: "HashiCorp Vault",  category: "Utility",       type: "action",      icon: "Lock",          color: "#9333EA", desc: "Vault secret read/write",               data: { service: "vault" } },
+  { service: "aws_secrets", label: "AWS Secrets Mgr",  category: "Utility",       type: "action",      icon: "Lock",          color: "#9333EA", desc: "AWS Secrets Manager",                   data: { service: "aws_secrets" } },
+
+  // ── Core (extended logic) ────────────────────────────────────────────────
+  { service: "set_multi",   label: "Set Multiple",     category: "Core",          type: "transform",   icon: "PencilLine",    color: "#9333EA", desc: "Set many fields at once",               data: { code: "RESULT = {**INPUT}" } },
+  { service: "sort",        label: "Sort",             category: "Core",          type: "transform",   icon: "AlignLeft",     color: "#9333EA", desc: "Sort list by key",                      data: { key: "" } },
+  { service: "dedupe",      label: "Deduplicate",      category: "Core",          type: "transform",   icon: "Filter",        color: "#9333EA", desc: "Remove duplicates",                     data: { by: "id" } },
+  { service: "aggregate",   label: "Aggregate",        category: "Core",          type: "transform",   icon: "Combine",       color: "#9333EA", desc: "Reduce / sum / count",                  data: { op: "sum" } },
+  { service: "split_batch", label: "Split In Batches", category: "Core",          type: "transform",   icon: "Split",         color: "#9333EA", desc: "Chunk list into batches",               data: { size: 10 } },
+  { service: "jsonpath",    label: "JSONPath",         category: "Core",          type: "transform",   icon: "Braces",        color: "#9333EA", desc: "Extract via JSONPath expr",             data: { path: "$." } },
+  { service: "jmespath",    label: "JMESPath",         category: "Core",          type: "transform",   icon: "Braces",        color: "#9333EA", desc: "JMESPath query",                        data: { expr: "" } },
+  { service: "rename_keys", label: "Rename Keys",      category: "Core",          type: "transform",   icon: "PencilLine",    color: "#9333EA", desc: "Rename payload fields",                 data: { mapping: {} } },
+  { service: "error_handler",label:"Error Handler",    category: "Core",          type: "condition",   icon: "AlertTriangle", color: "#0891b2", desc: "Catch + branch on error",               data: { catch: "exception" } },
+  { service: "try_catch",   label: "Try / Catch",      category: "Core",          type: "transform",   icon: "Shield",        color: "#9333EA", desc: "Wrap step in try/catch",                data: { code: "try:\n    RESULT = INPUT\nexcept Exception as e:\n    RESULT = {'error': str(e)}" } },
+  { service: "stop",        label: "Stop / Halt",      category: "Core",          type: "action",      icon: "Circle",        color: "#0e7490", desc: "Terminate workflow",                    data: { service: "stop" } },
 ];
 
 export const NODE_CATALOG = NODES;

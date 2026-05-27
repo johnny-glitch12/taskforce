@@ -20,6 +20,7 @@ import OverwatchDashboard from "@/pages/OverwatchDashboard";
 import Pricing from "@/pages/Pricing";
 import CreatorDashboard from "@/pages/CreatorDashboard";
 import CredentialsVault from "@/pages/CredentialsVault";
+import Leaderboard from "@/pages/Leaderboard";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -136,6 +137,7 @@ function App() {
                 <Route path="/academy" element={<Academy />} />
                 <Route path="/pricing" element={<Pricing />} />
                 <Route path="/exchange" element={<Marketplace />} />
+                <Route path="/leaderboard" element={<Leaderboard />} />
                 <Route path="/marketplace" element={<Marketplace />} />
                 <Route path="/agent/:id" element={<AgentDetail />} />
                 <Route path="/creator/:id" element={<CreatorProfile />} />
