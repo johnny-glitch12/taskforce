@@ -2061,9 +2061,9 @@ app.include_router(published_router, prefix="/api")
 from routes.subscriptions import router as subscriptions_router
 app.include_router(subscriptions_router, prefix="/api")
 
-# Include n8n white-label proxy router
-from routes.n8n_proxy import router as n8n_router
-app.include_router(n8n_router, prefix="/api")
+# Include native workflow executor router (replaces n8n proxy)
+from routes.workflow_executor import router as workflow_router
+app.include_router(workflow_router, prefix="/api")
 
 # Mount static files for live bot screenshots
 STATIC_DIR = Path(__file__).parent / "static"

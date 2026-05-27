@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/App";
 import { parseComputeLimit, ComputeLimitModal } from "../components/ComputeLimitModal";
-import ArmoryEditor from "../components/ArmoryEditor";
+import WorkflowTemplatesGrid from "../components/WorkflowTemplatesGrid";
 import {
   Send, Rocket, Bot, Zap, Mail, Brain, FileText,
   MessageCircle, GitBranch, Sparkles, Plus, Save,
@@ -788,6 +788,30 @@ export default function Studio() {
     }
   };
 
+  // Load a translated n8n template into the active canvas (replaces current nodes/edges)
+  const loadTemplateIntoCanvas = (template) => {
+    if (!template || !template.nodes) return;
+    // Ensure each node has icon/label our canvas expects
+    const tNodes = template.nodes.map((n) => ({
+      id: n.id,
+      type: n.type,
+      label: n.label || n.type,
+      sub: n.sub || "Imported",
+      icon: n.icon || "Zap",
+      x: n.x ?? 60,
+      y: n.y ?? 100,
+      data: n.data || {},
+    }));
+    const tEdges = (template.edges || []).map((e) => ({
+      from: e.from || e.source,
+      to: e.to || e.target,
+    }));
+    setNodes(tNodes);
+    setEdges(tEdges);
+    setCodeJson(generateCodeJson(tNodes, tEdges));
+    setActiveNode(null);
+  };
+
   const runLinter = async () => {
     try {
       const res = await fetch(`${API}/api/linter/scan`, { method: "POST", headers, body: JSON.stringify({ workflow_id: activeWorkflowId, nodes, edges }) });
@@ -871,12 +895,15 @@ export default function Studio() {
         {!isMobile && mode === "vibe" && <CodePane visible={true} codeJson={codeJson} onDeploy={handleDeploy} onPublish={handlePublish} linterResult={linterResult} onRunLinter={runLinter} saving={saving} publishing={publishing} />}
 
         {!isMobile && mode === "node" && (
-          <ArmoryEditor visible={true} />
+          <>
+            <WorkflowTemplatesGrid visible={true} onLoadTemplate={loadTemplateIntoCanvas} />
+            <CanvasPane visible={true} nodes={nodes} edges={edges} activeNode={activeNode} setActiveNode={setActiveNode} onMoveNode={moveNode} onAddNode={addNode} onDeleteNode={deleteNode} onAddEdge={addEdge} />
+          </>
         )}
 
         {/* Mobile: Single pane */}
         {isMobile && mode === "vibe" && <ChatPane messages={messages} onSend={handleChatSend} visible={true} agentStatus={agentStatus} terminalHistory={terminalHistory} />}
-        {isMobile && mode === "node" && <ArmoryEditor visible={true} />}
+        {isMobile && mode === "node" && <CanvasPane visible={true} nodes={nodes} edges={edges} activeNode={activeNode} setActiveNode={setActiveNode} onMoveNode={moveNode} onAddNode={addNode} onDeleteNode={deleteNode} onAddEdge={addEdge} />}
         {isMobile && mode === "code" && <CodePane visible={true} codeJson={codeJson} onDeploy={handleDeploy} onPublish={handlePublish} linterResult={linterResult} onRunLinter={runLinter} saving={saving} publishing={publishing} />}
       </div>
 

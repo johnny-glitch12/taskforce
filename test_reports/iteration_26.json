@@ -1,0 +1,44 @@
+{
+  "summary": "Tested native Python workflow executor at /api/workflows/*. 21/22 backend tests pass. Verified engine status, template catalog (list/get/category-filter/404), template fork, user-workflow CRUD with isolation, synthetic workflow execution (transform/condition/SSRF block/external HTTP), workflow_runs DB persistence, cycle rejection, compute-credit gating for freeuser (seeded at 100/100), direct template execution by admin, and confirmed n8n proxy routes & ArmoryEditor.jsx are removed. One real bug found: workflows exceeding the 50-node limit cause a 500 (KeyError: 'duration_ms') instead of a graceful rejection.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/workflows/{id}/execute",
+        "issue": "When the workflow exceeds MAX_NODES_PER_RUN (50) OR is empty, execute_workflow_dag returns a dict without the 'duration_ms' key. execute_workflow_route then raises KeyError -> HTTP 500 instead of returning a clean error. Confirmed in backend.err.log: KeyError: 'duration_ms'. Fix: include 'duration_ms': 0 in the early-return dicts (lines 255 & 257 of routes/workflow_executor.py), or guard with result.get('duration_ms', 0)."
+      },
+      {
+        "endpoint": "GET /api/workflows/engine/status",
+        "issue": "Documented as 'admin required' but the route only requires authentication (any logged-in user can call it). If admin-only is desired, add a role check; otherwise update the spec."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_workflow_routes.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_workflow_routes.xml"
+  ],
+  "action_items": [
+    "Fix KeyError on oversized/empty workflow execution by adding 'duration_ms': 0 (and 'final_output': None) to the two early-return dicts in execute_workflow_dag (routes/workflow_executor.py:255 and :257).",
+    "Decide whether engine_status should be admin-gated; if yes, add a role=='admin' check to the dependency."
+  ],
+  "critical_code_review_comments": [
+    "execute_workflow_dag early-return paths (empty workflow, >50 nodes) omit 'duration_ms' and 'final_output' keys that the route handler unconditionally reads -> 500 crash.",
+    "Template execution route at POST /api/workflows/templates/{id}/execute does NOT log to db.workflow_runs (only user-workflow executes do). If that is desired for audit, add run logging.",
+    "fork_template uses user_id = str(user.get('id', user.get('email'))) but user docs always have 'id' so 'email' fallback is dead code; consistent throughout file.",
+    "Webhook node treats missing URL as 'inbound stub' silently returning ok — could mask misconfiguration; consider an explicit 'mode' field.",
+    "list_templates default sort is by node_count ascending, which puts trivial templates first; sort by complexity or popularity would be more useful in UI."
+  ],
+  "updated_files": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_workflow_routes.py"
+  ],
+  "success_rate": {"backend": "95% (21/22)", "frontend": "skipped"},
+  "test_credentials": "admin@nova.ai/admin123 (admin), freeuser@test.com/test123 (recruit; seeded to 100/100)",
+  "seed_data_creation": "Seeded compute_usage doc for freeuser@test.com at count=100 for current YYYY-MM period (autouse fixture). Created and removed multiple TEST_-prefixed user_workflows during tests. db.workflow_runs gained a few rows from synthetic executions (not cleaned up; safe since user-scoped).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All workflow executor coverage lives in /app/backend/tests/test_workflow_routes.py. Re-running it requires that freeuser@test.com exist and that the seed fixture be active (it auto-seeds compute_usage to 100). After the main agent fixes the duration_ms KeyError bug, only TestGuardrails::test_over_50_nodes_rejected needs re-run to confirm. n8n_proxy.py and ArmoryEditor.jsx confirmed absent.",
+  "rca of the issue": "Bug RCA — KeyError: 'duration_ms' on >50-node or empty workflow execution. Reproduction: POST /api/workflows/{id}/execute with a workflow whose nodes array has length >50 or is empty. Stack: routes/workflow_executor.py execute_workflow_dag returns {'success': False, 'error': ..., 'node_results': []} (lines 255/257) without duration_ms; route handler then dereferences result['duration_ms'] (line 471) -> KeyError -> 500. Mitigation: include 'duration_ms': 0 and 'final_output': None in those early-return dicts (or use result.get(...) defensively in the route)."
+}
