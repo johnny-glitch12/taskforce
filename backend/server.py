@@ -7,7 +7,7 @@ import os
 import logging
 import re
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict, Any
 import uuid
 import secrets
@@ -57,13 +57,13 @@ scheduler = AsyncIOScheduler()
 # ─── Models ───
 
 class UserCreate(BaseModel):
-    email: str
-    password: str
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
     name: str = ""
 
 class UserLogin(BaseModel):
-    email: str
-    password: str
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=128)
 
 class UserResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -80,11 +80,11 @@ class TokenResponse(BaseModel):
     user: UserResponse
 
 class ForgotPasswordRequest(BaseModel):
-    email: str
+    email: EmailStr
 
 class ResetPasswordRequest(BaseModel):
-    token: str
-    new_password: str
+    token: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=128)
 
 class WaitlistCreate(BaseModel):
     email: str
@@ -1857,12 +1857,6 @@ app.add_middleware(
 )
 
 
-# ─── Health ───
-
-@api_router.get("/")
-async def root():
-    return {"message": "Nova AI API", "status": "ok"}
-
 # Include router
 app.include_router(api_router)
 
@@ -1894,10 +1888,74 @@ app.include_router(auth_router, prefix="/api")
 from routes.stripe_payments import router as stripe_router
 app.include_router(stripe_router, prefix="/api")
 
-# Mount static files for live bot screenshots
-STATIC_DIR = Path(__file__).parent / "static"
-STATIC_DIR.mkdir(exist_ok=True)
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+# Include Exchange listings router (Publish to Exchange flow)
+from routes.exchange import router as exchange_router
+app.include_router(exchange_router, prefix="/api")
+
+# Include Gmail OAuth routes (extracted from workflow_executor)
+from routes.gmail_oauth_routes import router as gmail_oauth_router
+app.include_router(gmail_oauth_router, prefix="/api")
+
+# Mount uploads dir for exchange listing media (videos + photos)
+UPLOADS_DIR = Path(__file__).parent / "uploads"
+UPLOADS_DIR.mkdir(exist_ok=True)
+(UPLOADS_DIR / "exchange").mkdir(exist_ok=True)
+app.mount("/static/exchange", StaticFiles(directory=str(UPLOADS_DIR / "exchange")), name="exchange-uploads")
+
+
+# ─── WebSocket: Real-time Overwatch execution feed ───
+from fastapi import WebSocket, WebSocketDisconnect
+from typing import Set
+import asyncio as _ws_asyncio
+import json as _ws_json
+
+_overwatch_connections: Set[WebSocket] = set()
+
+@app.websocket("/api/overwatch/feed")
+async def overwatch_feed(websocket: WebSocket):
+    """Stream new workflow_runs to admin clients in real time (poll-based broadcast).
+    Auth: token query param (e.g., ws://.../api/overwatch/feed?token=JWT)
+    """
+    token = websocket.query_params.get("token", "")
+    try:
+        payload = decode_token(token)
+        if not payload or payload.get("role") != "admin":
+            await websocket.close(code=1008)
+            return
+    except Exception:
+        await websocket.close(code=1008)
+        return
+
+    await websocket.accept()
+    _overwatch_connections.add(websocket)
+    last_seen = datetime.now(timezone.utc).isoformat()
+
+    try:
+        while True:
+            # Poll for new runs since last_seen (cheap, every 2s)
+            new_runs = await db.workflow_runs.find(
+                {"created_at": {"$gt": last_seen}},
+                {"_id": 0, "node_results": 0},
+            ).sort("created_at", 1).limit(20).to_list(20)
+            if new_runs:
+                last_seen = new_runs[-1]["created_at"]
+                for r in new_runs:
+                    try:
+                        await websocket.send_text(_ws_json.dumps({"type": "run", "data": r}))
+                    except Exception:
+                        break
+            else:
+                # Heartbeat to keep connection alive
+                await websocket.send_text(_ws_json.dumps({"type": "heartbeat", "ts": datetime.now(timezone.utc).isoformat()}))
+            await _ws_asyncio.sleep(2)
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        _overwatch_connections.discard(websocket)
+
+
 
 app.add_middleware(
     CORSMiddleware,

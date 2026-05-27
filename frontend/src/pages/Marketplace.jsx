@@ -231,8 +231,31 @@ export default function Marketplace() {
       const params = new URLSearchParams();
       if (activeCategory !== "all") params.set("category", activeCategory);
       if (searchQuery) params.set("search", searchQuery);
-      const res = await fetch(`${API}/api/agents?${params}`);
-      if (res.ok) setAgents(await res.json());
+      // Query the Exchange listings endpoint (user-published bots/agents with media+pricing)
+      const res = await fetch(`${API}/api/exchange/listings?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        // Map exchange listing schema → marketplace card schema
+        const listings = (data.listings || []).map((l) => ({
+          id: l.id,
+          shortTitle: l.name,
+          description: l.description,
+          category: l.category,
+          price: l.rent_price,
+          buyPrice: l.buy_price,
+          image: l.video_url ? `${API}${l.video_url}` : (l.photo_urls?.[0] ? `${API}${l.photo_urls[0]}` : null),
+          videoUrl: l.video_url ? `${API}${l.video_url}` : null,
+          photoUrls: (l.photo_urls || []).map((u) => `${API}${u}`),
+          rating: l.rating || 4.5,
+          reviews: 0,
+          trustScore: l.trust_score,
+          deployCount: l.deploy_count || 0,
+          creator: l.creator_name,
+          trending: (l.deploy_count || 0) > 10,
+          tags: l.tags || [],
+        }));
+        setAgents(listings);
+      }
     } catch { /* ignore */ }
     setLoading(false);
   }, [activeCategory, searchQuery]);

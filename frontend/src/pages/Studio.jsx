@@ -4,6 +4,7 @@ import { useAuth } from "@/App";
 import { parseComputeLimit, ComputeLimitModal } from "../components/ComputeLimitModal";
 import WorkflowTemplatesGrid from "../components/WorkflowTemplatesGrid";
 import MyWorkflowsGrid from "../components/MyWorkflowsGrid";
+import PublishToExchangeModal from "../components/PublishToExchangeModal";
 import NodeConfigPanel from "../components/NodeConfigPanel";
 import TraceViewer from "../components/TraceViewer";
 import {
@@ -185,7 +186,7 @@ function ChatPane({ messages, onSend, visible, agentStatus, terminalHistory }) {
 }
 
 /* ─── Draggable Canvas ─── */
-function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNode, onAddNode, onDeleteNode, onAddEdge, onExecute, executing }) {
+function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNode, onAddNode, onDeleteNode, onAddEdge, onExecute, executing, onPublish, canPublish }) {
   const canvasRef = useRef(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [scale, setScale] = useState(1);
@@ -339,6 +340,21 @@ function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNo
           >
             <Play size={11} fill={executing ? "none" : "currentColor"} />
             <span className="hidden sm:inline">{executing ? "RUNNING..." : "EXECUTE"}</span>
+          </button>
+          <button
+            data-testid="publish-to-exchange-btn"
+            onClick={() => onPublish?.()}
+            disabled={!canPublish}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{
+              background: 'transparent',
+              color: '#10b981',
+              border: '1px solid #10b981',
+            }}
+            title={canPublish ? "Publish this workflow to The Exchange" : "Save the workflow first"}
+          >
+            <Rocket size={11} />
+            <span className="hidden sm:inline">PUBLISH</span>
           </button>
           <div className="w-px h-4 mx-1" style={{ background: 'var(--border)' }} />
           <div className="relative">
@@ -616,6 +632,7 @@ export default function Studio() {
   const [executing, setExecuting] = useState(false);
   const [trace, setTrace] = useState(null);
   const [showTrace, setShowTrace] = useState(false);
+  const [showPublish, setShowPublish] = useState(false);
   const [messages, setMessages] = useState([]);
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
@@ -1069,6 +1086,8 @@ export default function Studio() {
                   onMoveNode={moveNode} onAddNode={addNode}
                   onDeleteNode={deleteNode} onAddEdge={addEdge}
                   onExecute={executeWorkflow} executing={executing}
+                  onPublish={() => setShowPublish(true)}
+                  canPublish={!!runtimeWorkflowId && nodes.length > 0}
                 />
                 {activeNode && (
                   <NodeConfigPanel
@@ -1114,6 +1133,15 @@ export default function Studio() {
 
       {/* Compute Limit Modal */}
       <ComputeLimitModal limitData={computeLimit} onClose={() => setComputeLimit(null)} />
+
+      {/* Publish to Exchange Modal */}
+      <PublishToExchangeModal
+        open={showPublish}
+        onClose={() => setShowPublish(false)}
+        runtimeWorkflowId={runtimeWorkflowId}
+        workflowName={workflows.find((w) => w.id === activeWorkflowId)?.name}
+        onPublished={() => setShowPublish(false)}
+      />
     </div>
   );
 }

@@ -153,10 +153,10 @@ class TestGmailExchange:
             f"{base_url}/api/workflows/credentials/gmail/exchange",
             json={"code": "fake-auth-code", "redirect_uri": "https://example.com/cb"},
         )
-        # Either 500 (env not set) OR 400 (env set but bad code)
-        assert r.status_code in (500, 400), r.text
+        # Either 503 (env not set, post-iter31 extraction) OR 500 (legacy) OR 400 (env set but bad code)
+        assert r.status_code in (503, 500, 400), r.text
         detail = str(r.json().get("detail", "")).lower()
-        if r.status_code == 500:
+        if r.status_code in (503, 500):
             assert "not configured" in detail or "google_client" in detail or "google" in detail
         else:
             assert "oauth" in detail or "exchange" in detail

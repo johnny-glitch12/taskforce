@@ -1,0 +1,46 @@
+{
+  "summary": "Iteration 31 backend regression + new-feature coverage complete. 145/145 tests pass (33 workflow_routes + 31 iter28 + 25 iter29 + 27 iter30 + 29 NEW iter31). All 23 review-request items verified green: Exchange CRUD/upload/auto-promote/validation/public catalog/my-listings, rate-limit (login=10/60s, register=5/600s, forgot=3/600s with Retry-After + 'Too many' detail), Gmail OAuth extraction (routes still wired in gmail_oauth_routes.py), WebSocket /api/overwatch/feed (admin-only, streams runs/heartbeats), PATCH-422 regression, BYOK round-trip. One stale iter30 assertion relaxed (500→500|503) because the extracted gmail route now correctly returns 503 for missing GOOGLE_CLIENT_ID — improvement that iter30 itself recommended.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/auth/login (rate-limit window)", "issue": "Re-running the iter31 test suite within 60s yields a transient login-test flake on first request because the per-IP sliding-window bucket is still full from the prior run. Mitigation: tests pass cleanly with a 60s cooldown OR running iter31 in isolation. Not a product bug — a test-orchestration nuance of the in-memory limiter."},
+      {"endpoint": "shutdown hook", "issue": "Pre-existing apscheduler SchedulerNotRunningError on reload (cosmetic, unchanged from iter29/30)."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_workflow_iter31.py",
+    "/app/backend/tests/test_workflow_iter30.py",
+    "/app/backend/tests/test_workflow_iter29.py",
+    "/app/backend/tests/test_workflow_iter28.py",
+    "/app/backend/tests/test_workflow_routes.py",
+    "/app/test_reports/pytest/iter31.xml",
+    "/app/test_reports/pytest/iter31_full.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: For production-grade rate-limit at scale, swap lib/rate_limit.py in-memory deque for Redis-backed sliding window (v2 noted in module docstring). Single-process in-memory is fine for current k8s pod count but won't survive horizontal autoscale.",
+    "OPTIONAL: Expose lib.rate_limit.reset_for_tests() through an admin-only debug endpoint (env-gated) so CI can flush buckets between suites — currently can only be reset via process restart.",
+    "OPTIONAL (carried from iter30): tighten /api/auth/register Pydantic — already done in routes/auth.py (EmailStr + password min_length=8). Verify the route in routes/auth.py is the active one (it is — server.py registers auth_router).",
+    "OPTIONAL: lib/rate_limit.py treats client.host from k8s ingress as same IP for ALL traffic when X-Forwarded-For is absent — could let one tenant exhaust the bucket for others. Recommend always honoring X-F-F when behind a trusted proxy and also adding per-email scoping for auth endpoints."
+  ],
+  "critical_code_review_comments": [
+    "routes/exchange.py: clean, focused 315 lines. UPLOAD_ROOT pathing is Path-based, MIME whitelist + size cap (50MB/10MB) enforced via streamed 1MB chunks with partial-file cleanup on overflow. Snapshots nodes/edges at publish time and excludes from list/get responses — keeps payloads light. Mongo _id correctly stripped everywhere. Solid implementation.",
+    "Auto-promote logic correctly transitions status='draft'→'published' on first successful upload — verified live: draft listing becomes publicly visible after 1 photo upload.",
+    "lib/rate_limit.py: clean 64-line sliding-window impl with deque-per-(scope,IP), correct X-F-F handling, 429 detail string includes 'Too many' + Retry-After header. Bucket-length safety cap (1000) prevents pathological memory growth. Good v1.",
+    "routes/gmail_oauth_routes.py: clean extraction — same paths, Pydantic schema preserved, RuntimeError→503 (better than the old 500 in workflow_executor.py). workflow_executor.py is correspondingly trimmed.",
+    "WebSocket /api/overwatch/feed: token validation BEFORE accept() — fails fast with close(code=1008) for missing/non-admin tokens. Poll-based (2s) intentionally — labeled in code comments and aligned with the MOCKED-API note in the review request. Heartbeat keeps connection alive. Receives type='heartbeat' or type='run' messages — verified live.",
+    "Frontend integration not tested per request, but Marketplace.jsx is now wired to /api/exchange/listings (public) instead of /api/agents — main agent should verify category cards still render with the new schema (rent_price/buy_price/video_url/photo_urls vs old price field).",
+    "Carried forward: routes/workflow_executor.py is now ~589 lines (down from 663), well under 700-line threshold after the Gmail OAuth extraction — split was clean and surgical."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_workflow_iter31.py (NEW — 29 tests)",
+    "/app/backend/tests/test_workflow_iter30.py (1 assertion relaxed: gmail/exchange 500→500|503 for iter31 extraction contract)"
+  ],
+  "success_rate": {"backend": "100% (145/145 cumulative; 29/29 iter31 net-new)", "frontend": "skipped per request"},
+  "test_credentials": "admin@nova.ai/admin123 (admin), freeuser@test.com/test123 (recruit). Verified present and login-functional.",
+  "seed_data_creation": "iter31 fixtures create/save TEST_i31_* user_workflows + TEST_i31_* exchange_listings; module-scoped autouse cleanup wipes all TEST_-prefixed listings (and their uploads/ directories via the DELETE endpoint) at teardown. Multipart uploads use small synthetic byte payloads — never large files. No production data mutated.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Five test files now cover the full backend: test_workflow_routes.py(33) + test_workflow_iter28.py(31) + test_workflow_iter29.py(25) + test_workflow_iter30.py(27) + test_workflow_iter31.py(29) = 145 tests. Re-running iter31 within 60s of a prior run may transiently flake the login rate-limit test because the sliding-window bucket is still draining; wait 60s OR run iter31 in isolation. WebSocket tests use the `websockets` python lib (v15.0.1, already installed) — wss:// scheme over the public REACT_APP_BACKEND_URL works through k8s ingress. The Exchange listings store nodes_snapshot/edges_snapshot internally (always excluded from API responses). Auto-promote rule: draft→published on first /upload success (video OR photo). PUT can also force status. /api/exchange/listings is the only PUBLIC endpoint (no auth) — all others require Bearer token. Gmail OAuth routes were moved to routes/gmail_oauth_routes.py; the paths under /api/workflows/credentials/gmail/* are identical to before. Rate-limit windows: login=10/60s, register=5/600s, forgot-password=3/600s; all return 429 with Retry-After header and detail string containing 'Too many'.",
+  "rca of the issue": "No production bugs surfaced this iteration. The single test failure during initial full-suite run (test_workflow_iter30::test_exchange_without_google_env_returns_500) was a stale assertion — the iter31 extraction intentionally changed RuntimeError handling from 500→503 (the better behavior recommended in iter30's own report). Test was relaxed from `in (500, 400)` to `in (503, 500, 400)`. The transient login-rate-limit flake when re-running iter31 within 60s is expected behavior of the in-memory sliding-window limiter — not a bug. Reproduction: run pytest twice within 60s, the second run will likely see 429 on attempt 1 of test_login_429_after_burst; the test does NOT assert 'first 10 succeed' (it asserts 429 occurs within 15 attempts), so it still passes when run in isolation but the assertion about retry_after_seen could fail if a transient request hits a different proxy node. Mitigation: 60s cooldown between full-suite runs, or expose reset_for_tests() via env-gated debug endpoint."
+}

@@ -23,6 +23,19 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 30 (May 27, 2026) — UX Cleanup + Backlog Closure
+- **The Armory restructured**: Removed the templates-grid sidebar that was polluting the canvas. New `MyWorkflowsGrid.jsx` shows the user's OWN runtime workflows in the left rail. Templates moved to an "IMPORT FROM EXCHANGE" modal triggered by an explicit button. Vibe/Workflows toggle remains prominent center-top. Mode-toggle uses `data-testid="vibe-mode-btn"` and `node-mode-btn`.
+- **Edge routing fix**: Connections now run right-edge → left-edge with cubic-bezier ports. Lines never pierce node bodies (replaces center-to-center routing). Subtle drop-shadow glow on active edges.
+- **Marketplace emptied**: `db.agents` + `db.creators` deleted (was 6 mock agents, 5 mock creators). Auto-seed gated with `if False` so restarts don't repopulate. Marketplace shows "No agents found. Try a different search or category." — ready for real listings.
+- **PATCH 422 contract**: `routes/workflow_executor.py` adds `NodePatchRequest` Pydantic model with `data: Dict[str, Any]` validator that rejects non-dict + 50KB cap. All PATCH validation errors now return 422 (not 400).
+- **BYOK KMS abstraction** (`lib/byok_crypto.py`): Provider-pluggable encryption via `BYOK_KMS_PROVIDER` env var. v1 implements `local` (Fernet); stubs for `aws|gcp|vault` raise with clear migration guidance. New `GET /api/workflows/credentials/_provider` (admin-only) exposes diagnostics.
+- **Gmail OAuth refresh-token flow** (`lib/gmail_oauth.py`): `POST /credentials/gmail/exchange` (code + redirect_uri → stores access+refresh tokens encrypted) and `POST /credentials/gmail/refresh`. Action handler auto-refreshes when `expires_at` is in the past. Returns 503 (not 500) when `GOOGLE_CLIENT_ID/SECRET` env vars are unset.
+- **Server.py consolidation**: Removed the pre-existing duplicate `@app.on_event("startup")` + `@app.on_event("shutdown")` blocks. Single startup + single shutdown. `scheduler.start()` + `scheduler.shutdown()` both guarded with `if (not) scheduler.running`.
+- **Auth hardening** (bug found by testing-agent iteration_30): `UserCreate`, `UserLogin`, `ForgotPasswordRequest`, `ResetPasswordRequest` now use `EmailStr` + `Field(min_length=8, max_length=128)` for passwords. Previously `/api/auth/register` accepted empty email + password and returned a valid JWT (HIGH severity). routes/auth.py re-defined as standalone Pydantic models so FastAPI auto-422s before reaching the handler.
+- **Stripe**: User has sandbox keys but screenshots truncated them. Kept existing `STRIPE_API_KEY=sk_test_emergent`. Swap in `backend/.env` whenever real keys are available; no code change needed.
+- **Skipped per infra**: Celery + Redis (no Redis container available — in-process asyncio worker stays for v1). Real-time websocket Overwatch feed (deprioritized).
+- **Tests**: iteration_30 → **116/116 backend tests pass** (33+31+25+27), 0 production bugs after auth hardening.
+
 ### Phase 29 (May 27, 2026) — Backlog Cleanup II: Encryption + Pydantic + Pagination + Job Module
 - **BYOK encryption at rest** (`lib/byok_crypto.py`): Fernet (AES-128-CBC+HMAC) with SHA-256-derived key from `BYOK_MASTER_KEY` env. Stored with `enc:v1:` prefix for migration. Legacy plaintext rows pass through transparently. Handler decrypts on use.
 - **Pydantic models** in `routes/workflow_executor.py`: `BYOKCreate` (Literal service whitelist, `min_length=1 max_length=4096`, `extra: Dict`) and `SaveCanvasRequest` (`min_length=1` + custom non-whitespace validator). Validation errors now return 422 with structured field-level detail.
@@ -126,10 +139,10 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 - compute_usage (Mongo): user_id + period (YYYY-MM) + count
 
 ## Prioritized Backlog
-- **P2**: KMS-managed BYOK key (currently env-bound; rotate to AWS KMS / GCP KMS / Vault)
-- **P3**: Consolidate duplicate `@app.on_event("startup")` functions in server.py
-- **P3**: CSDROP routes extraction (28 routes) — **deprioritized per user**
-- **P3**: Pydantic models for `PATCH /nodes/{node_id}` (still uses request.json()→400 instead of 422)
-- **P3**: Celery + Redis HA async runtime (replaces in-process asyncio worker)
-- **P3**: Real-time websocket feed for Overwatch live execution table
-- **P3**: Token-refresh OAuth flow for Gmail BYOK (currently manual access-token refresh)
+- **P2**: Real KMS integration (`aws|gcp|vault`) for `BYOK_KMS_PROVIDER` (stubs in place)
+- **P2**: Real-time Overwatch execution feed via WebSocket (currently polled)
+- **P3**: Celery + Redis HA async runtime (needs Redis container; in-process asyncio worker stays for v1)
+- **P3**: CSDROP routes extraction — **deprioritized per user**
+- **P3**: Split routes/workflow_executor.py (~700 lines) — move Gmail OAuth + provider diagnostics into routes/gmail_oauth.py
+- **P3**: Rate-limit auth endpoints (brute-force protection)
+- **P3**: Provision real Stripe sandbox keys (user has them, just need full strings)
