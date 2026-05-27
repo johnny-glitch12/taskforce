@@ -1,0 +1,33 @@
+{
+  "summary": "Tested NEW endpoints POST /api/workflows/save and PATCH /api/workflows/{id}/nodes/{node_id} plus full regression of all workflow executor routes. 33/33 backend tests pass (11 new + 22 prior). Verified: save creates runtime workflow, save is idempotent by studio_workflow_id (same workflow_id on re-save), save rejects >50 nodes with 400 'exceeds', save rejects non-list nodes/edges with 400 'must be arrays', save allows empty workflow + execute on it returns success:false with duration_ms:0 (iteration_26 KeyError fix confirmed), save isolation between users holds, save requires auth. PATCH updates only target node's data (merged dict — existing keys preserved, new keys overwrite), PATCH on another user's workflow → 404, PATCH on missing node_id → 404. End-to-end loop verified: SAVE with code 'RESULT=INPUT*2' → PATCH to 'RESULT=INPUT*3' → EXECUTE with INPUT=5 produces final_output=15 (not 10), confirming PATCHed code is what actually runs. Compute-credit gate for freeuser still triggers correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_workflow_routes.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_workflow_routes.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "save_canvas_to_runtime upsert relies on studio_workflow_id+user_id but if studio_id is None it ALWAYS inserts a new doc — multiple POSTs without studio_workflow_id create duplicates. Frontend should always send studio_workflow_id; consider validating that it is non-empty server-side (HTTP 400) or de-duping by name.",
+    "save endpoint does not validate per-node structure (e.g., missing 'id'); a malformed node could later cause execute to crash. Light schema validation (Pydantic) would harden the surface.",
+    "PATCH update_node_data merges shallowly via {**existing, **new}; nested config (e.g., headers dict inside data) gets fully replaced, not merged. Document this behavior or implement deep-merge if expected by NodeConfigPanel.",
+    "PATCH does not bound payload size; a very large 'code' string could be persisted unchecked. Consider a max length (e.g., 50KB) on 'data' values.",
+    "engine/status (noted in iteration_26) still has no admin gate — any authenticated user can list supported node types and template_count. Likely acceptable but worth confirming intent.",
+    "Template direct execute route still does not log to db.workflow_runs (prior comment from iteration_26 stands).",
+    "routes/workflow_executor.py is ~600 lines and growing; splitting handlers into lib/workflow_handlers.py would respect the <700-line guideline before the next batch of node types lands."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_workflow_routes.py"
+  ],
+  "success_rate": {"backend": "100% (33/33)", "frontend": "skipped"},
+  "test_credentials": "admin@nova.ai/admin123 (admin), freeuser@test.com/test123 (recruit; auto-seeded to 100/100 for current period via session-scoped autouse fixture)",
+  "seed_data_creation": "compute_usage doc for freeuser@test.com seeded to count=100 for current YYYY-MM period (autouse session fixture). All test-created user_workflows are deleted at end of each test (TEST_-prefixed). db.workflow_runs gains a few rows from synthetic executions — safe, user-scoped.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All workflow executor coverage (templates, fork, CRUD, execute, guardrails, compute gate, save, patch) is consolidated in /app/backend/tests/test_workflow_routes.py — 33 tests, currently 100% green. Save endpoint test class is TestSaveEndpoint; PATCH class is TestPatchNodeData; the full SAVE→PATCH→EXECUTE loop test is TestPatchNodeData::test_full_loop_save_patch_execute. Conftest fixtures auto-login admin + freeuser and seed compute_usage. If next iteration adds new endpoints, add a new class to this file rather than creating a new file. action/database node types remain v1 stubs (MOCKED) by design.",
+  "rca of the issue": "No bugs found this iteration. Iteration_26's KeyError on empty/oversized execute is confirmed fixed — verified by TestSaveEndpoint::test_save_empty_workflow_allowed_then_execute_no_keyerror (asserts data['duration_ms'] == 0 with success:false instead of HTTP 500)."
+}

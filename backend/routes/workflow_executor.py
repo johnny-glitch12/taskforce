@@ -420,6 +420,96 @@ async def delete_user_workflow(workflow_id: str, user=Depends(get_current_user()
     return {"success": True}
 
 
+@router.post("/workflows/save")
+async def save_canvas_to_runtime(request: Request, user=Depends(get_current_user())):
+    """
+    Save the current canvas (nodes/edges) into the user's runtime user_workflows collection.
+    Idempotent — keyed by studio_workflow_id so re-saving updates the same runtime entry.
+    Returns the runtime workflow_id used by /workflows/{id}/execute.
+    """
+    body = await request.json()
+    studio_id = body.get("studio_workflow_id")
+    name = body.get("name", "Untitled Workflow")
+    nodes = body.get("nodes", [])
+    edges = body.get("edges", [])
+    source_template = body.get("source_template")
+
+    if not isinstance(nodes, list) or not isinstance(edges, list):
+        raise HTTPException(status_code=400, detail="nodes and edges must be arrays.")
+    if len(nodes) > MAX_NODES_PER_RUN:
+        raise HTTPException(status_code=400, detail=f"Workflow exceeds {MAX_NODES_PER_RUN} node limit.")
+
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Idempotent upsert keyed by (user_id, studio_workflow_id)
+    if studio_id:
+        existing = await db.user_workflows.find_one({"user_id": user_id, "studio_workflow_id": studio_id})
+    else:
+        existing = None
+
+    if existing:
+        await db.user_workflows.update_one(
+            {"_id": existing["_id"]},
+            {"$set": {
+                "name": name,
+                "nodes": nodes,
+                "edges": edges,
+                "source_template": source_template,
+                "updated_at": now,
+            }},
+        )
+        wf_id = existing["id"]
+    else:
+        wf_id = uuid.uuid4().hex
+        await db.user_workflows.insert_one({
+            "id": wf_id,
+            "user_id": user_id,
+            "studio_workflow_id": studio_id,
+            "name": name,
+            "nodes": nodes,
+            "edges": edges,
+            "source_template": source_template,
+            "created_at": now,
+            "updated_at": now,
+        })
+
+    return {"success": True, "workflow_id": wf_id}
+
+
+@router.patch("/workflows/{workflow_id}/nodes/{node_id}")
+async def update_node_data(workflow_id: str, node_id: str, request: Request, user=Depends(get_current_user())):
+    """Update the `data` config of a single node within a user's workflow."""
+    body = await request.json()
+    new_data = body.get("data", {})
+    if not isinstance(new_data, dict):
+        raise HTTPException(status_code=400, detail="data must be an object.")
+
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    wf = await db.user_workflows.find_one({"id": workflow_id, "user_id": user_id})
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found.")
+
+    updated_nodes = []
+    found = False
+    for n in wf.get("nodes", []):
+        if n.get("id") == node_id:
+            n["data"] = {**n.get("data", {}), **new_data}
+            found = True
+        updated_nodes.append(n)
+
+    if not found:
+        raise HTTPException(status_code=404, detail="Node not found in workflow.")
+
+    await db.user_workflows.update_one(
+        {"_id": wf["_id"]},
+        {"$set": {"nodes": updated_nodes, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"success": True, "node_id": node_id, "data": next(n["data"] for n in updated_nodes if n["id"] == node_id)}
+
+
 # ─────────────────────────────────────────────────────────────
 # Routes — Execute (compute-gated)
 # ─────────────────────────────────────────────────────────────

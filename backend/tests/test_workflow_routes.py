@@ -348,3 +348,247 @@ class TestN8nProxyRemoved:
     def test_n8n_status_route_gone(self, base_url, admin_client):
         r = admin_client.get(f"{base_url}/api/n8n/status")
         assert r.status_code == 404
+
+
+# ────────────────────────── 9. SAVE endpoint ──────────────────────────
+class TestSaveEndpoint:
+    def test_save_creates_runtime_workflow(self, base_url, admin_client):
+        studio_id = f"TEST_studio_{uuid.uuid4().hex[:8]}"
+        nodes = [
+            {"id": "t1", "type": "trigger", "data": {"payload": 1}},
+            {"id": "x1", "type": "transform", "data": {"code": "RESULT = INPUT + 1"}},
+        ]
+        edges = [{"from": "t1", "to": "x1"}]
+        r = admin_client.post(
+            f"{base_url}/api/workflows/save",
+            json={
+                "studio_workflow_id": studio_id,
+                "name": "TEST_save_basic",
+                "nodes": nodes,
+                "edges": edges,
+            },
+        )
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["success"] is True
+        assert "workflow_id" in data
+        wf_id = data["workflow_id"]
+
+        # Verify persisted via GET
+        g = admin_client.get(f"{base_url}/api/workflows/{wf_id}")
+        assert g.status_code == 200, g.text
+        wf = g.json()
+        assert wf["name"] == "TEST_save_basic"
+        assert wf.get("studio_workflow_id") == studio_id
+        assert len(wf["nodes"]) == 2
+        admin_client.delete(f"{base_url}/api/workflows/{wf_id}")
+
+    def test_save_idempotent_same_studio_id(self, base_url, admin_client):
+        studio_id = f"TEST_studio_{uuid.uuid4().hex[:8]}"
+        body = {
+            "studio_workflow_id": studio_id,
+            "name": "TEST_idempotent_v1",
+            "nodes": [{"id": "t1", "type": "trigger"}],
+            "edges": [],
+        }
+        r1 = admin_client.post(f"{base_url}/api/workflows/save", json=body)
+        assert r1.status_code == 200
+        wf_id1 = r1.json()["workflow_id"]
+
+        # Re-save with same studio_id, different name/nodes — must return same id
+        body2 = {
+            "studio_workflow_id": studio_id,
+            "name": "TEST_idempotent_v2",
+            "nodes": [
+                {"id": "t1", "type": "trigger"},
+                {"id": "x1", "type": "transform", "data": {"code": "RESULT=INPUT"}},
+            ],
+            "edges": [{"from": "t1", "to": "x1"}],
+        }
+        r2 = admin_client.post(f"{base_url}/api/workflows/save", json=body2)
+        assert r2.status_code == 200
+        wf_id2 = r2.json()["workflow_id"]
+        assert wf_id1 == wf_id2, "upsert should return same workflow_id"
+
+        # Verify content updated
+        g = admin_client.get(f"{base_url}/api/workflows/{wf_id1}")
+        assert g.json()["name"] == "TEST_idempotent_v2"
+        assert len(g.json()["nodes"]) == 2
+        admin_client.delete(f"{base_url}/api/workflows/{wf_id1}")
+
+    def test_save_over_50_nodes_rejected(self, base_url, admin_client):
+        nodes = [{"id": f"n{i}", "type": "trigger"} for i in range(51)]
+        r = admin_client.post(
+            f"{base_url}/api/workflows/save",
+            json={
+                "studio_workflow_id": f"TEST_oversize_{uuid.uuid4().hex[:6]}",
+                "name": "TEST_oversize",
+                "nodes": nodes,
+                "edges": [],
+            },
+        )
+        assert r.status_code == 400, r.text
+        assert "exceed" in r.text.lower()
+
+    def test_save_non_list_nodes_rejected(self, base_url, admin_client):
+        r = admin_client.post(
+            f"{base_url}/api/workflows/save",
+            json={
+                "studio_workflow_id": f"TEST_badtype_{uuid.uuid4().hex[:6]}",
+                "name": "TEST_badtype",
+                "nodes": "not-a-list",
+                "edges": [],
+            },
+        )
+        assert r.status_code == 400, r.text
+        assert "must be arrays" in r.text.lower()
+
+    def test_save_empty_workflow_allowed_then_execute_no_keyerror(
+        self, base_url, admin_client
+    ):
+        r = admin_client.post(
+            f"{base_url}/api/workflows/save",
+            json={
+                "studio_workflow_id": f"TEST_empty_{uuid.uuid4().hex[:6]}",
+                "name": "TEST_empty",
+                "nodes": [],
+                "edges": [],
+            },
+        )
+        assert r.status_code == 200, r.text
+        wf_id = r.json()["workflow_id"]
+
+        # Execute empty — must NOT raise KeyError; success:False, duration_ms present
+        ex = admin_client.post(f"{base_url}/api/workflows/{wf_id}/execute")
+        assert ex.status_code == 200, ex.text
+        data = ex.json()
+        assert data["success"] is False
+        assert "duration_ms" in data
+        assert data["duration_ms"] == 0
+        admin_client.delete(f"{base_url}/api/workflows/{wf_id}")
+
+    def test_save_isolation_between_users(
+        self, base_url, admin_client, freeuser_client
+    ):
+        """User A's save must not appear in User B's workflows."""
+        studio_id = f"TEST_iso_{uuid.uuid4().hex[:8]}"
+        r = admin_client.post(
+            f"{base_url}/api/workflows/save",
+            json={
+                "studio_workflow_id": studio_id,
+                "name": "TEST_iso_adminonly",
+                "nodes": [{"id": "t1", "type": "trigger"}],
+                "edges": [],
+            },
+        )
+        assert r.status_code == 200
+        wf_id = r.json()["workflow_id"]
+
+        # Freeuser must not see it
+        g = freeuser_client.get(f"{base_url}/api/workflows/{wf_id}")
+        assert g.status_code == 404, "isolation broken — freeuser saw admin's wf"
+        admin_client.delete(f"{base_url}/api/workflows/{wf_id}")
+
+    def test_save_requires_auth(self, base_url):
+        r = requests.post(
+            f"{base_url}/api/workflows/save",
+            json={"studio_workflow_id": "x", "name": "x", "nodes": [], "edges": []},
+            timeout=15,
+        )
+        assert r.status_code in (401, 403), r.text
+
+
+# ────────────────────────── 10. PATCH node data endpoint ──────────────────────────
+class TestPatchNodeData:
+    def _save(self, base_url, admin_client, nodes, edges, name="TEST_patch"):
+        body = {
+            "studio_workflow_id": f"TEST_pa_{uuid.uuid4().hex[:8]}",
+            "name": name,
+            "nodes": nodes,
+            "edges": edges,
+        }
+        r = admin_client.post(f"{base_url}/api/workflows/save", json=body)
+        assert r.status_code == 200, r.text
+        return r.json()["workflow_id"]
+
+    def test_patch_updates_only_target_node(self, base_url, admin_client):
+        nodes = [
+            {"id": "t1", "type": "trigger", "data": {"payload": 1}},
+            {"id": "x1", "type": "transform", "data": {"code": "RESULT = INPUT * 2",
+                                                       "label": "Doubler"}},
+            {"id": "x2", "type": "transform", "data": {"code": "RESULT = INPUT + 7"}},
+        ]
+        edges = [{"from": "t1", "to": "x1"}, {"from": "x1", "to": "x2"}]
+        wf_id = self._save(base_url, admin_client, nodes, edges)
+
+        r = admin_client.patch(
+            f"{base_url}/api/workflows/{wf_id}/nodes/x1",
+            json={"data": {"code": "RESULT = INPUT * 3"}},
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["success"] is True
+        assert body["node_id"] == "x1"
+        # MERGED dict — existing 'label' preserved, code overwritten
+        assert body["data"]["code"] == "RESULT = INPUT * 3"
+        assert body["data"]["label"] == "Doubler"
+
+        # Verify other node untouched
+        g = admin_client.get(f"{base_url}/api/workflows/{wf_id}").json()
+        x2 = next(n for n in g["nodes"] if n["id"] == "x2")
+        assert x2["data"]["code"] == "RESULT = INPUT + 7"
+
+        admin_client.delete(f"{base_url}/api/workflows/{wf_id}")
+
+    def test_patch_wrong_workflow_returns_404(
+        self, base_url, admin_client, freeuser_client
+    ):
+        # admin creates wf; freeuser tries to patch — should 404 (ownership)
+        nodes = [{"id": "t1", "type": "trigger"}]
+        wf_id = self._save(base_url, admin_client, nodes, [])
+        r = freeuser_client.patch(
+            f"{base_url}/api/workflows/{wf_id}/nodes/t1",
+            json={"data": {"foo": "bar"}},
+        )
+        assert r.status_code == 404, r.text
+        admin_client.delete(f"{base_url}/api/workflows/{wf_id}")
+
+    def test_patch_nonexistent_node_returns_404(self, base_url, admin_client):
+        nodes = [{"id": "t1", "type": "trigger"}]
+        wf_id = self._save(base_url, admin_client, nodes, [])
+        r = admin_client.patch(
+            f"{base_url}/api/workflows/{wf_id}/nodes/ghost_node",
+            json={"data": {"foo": "bar"}},
+        )
+        assert r.status_code == 404, r.text
+        assert "node" in r.text.lower()
+        admin_client.delete(f"{base_url}/api/workflows/{wf_id}")
+
+    def test_full_loop_save_patch_execute(self, base_url, admin_client):
+        """SAVE with INPUT*2 → PATCH to INPUT*3 → EXECUTE with 5 → expect 15."""
+        nodes = [
+            {"id": "t1", "type": "trigger", "data": {"payload": 5}},
+            {"id": "x1", "type": "transform", "data": {"code": "RESULT = INPUT * 2"}},
+        ]
+        edges = [{"from": "t1", "to": "x1"}]
+        wf_id = self._save(
+            base_url, admin_client, nodes, edges, name="TEST_full_loop"
+        )
+
+        # PATCH transform code
+        p = admin_client.patch(
+            f"{base_url}/api/workflows/{wf_id}/nodes/x1",
+            json={"data": {"code": "RESULT = INPUT * 3"}},
+        )
+        assert p.status_code == 200, p.text
+        assert p.json()["data"]["code"] == "RESULT = INPUT * 3"
+
+        # EXECUTE
+        ex = admin_client.post(f"{base_url}/api/workflows/{wf_id}/execute")
+        assert ex.status_code == 200, ex.text
+        data = ex.json()
+        assert data["success"] is True, data
+        assert data["final_output"] == 15, (
+            f"Expected PATCHed code (*3) to run; got {data['final_output']}"
+        )
+        admin_client.delete(f"{base_url}/api/workflows/{wf_id}")

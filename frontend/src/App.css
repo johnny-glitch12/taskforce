@@ -68,6 +68,23 @@
 .t-input::placeholder { color: var(--text-dim); }
 .t-input:focus { border-color: var(--accent); }
 
+/* ─── Node Config Panel inputs ─── */
+.config-input {
+  width: 100%;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 2px;
+  padding: 6px 8px;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 150ms;
+}
+.config-input:focus { border-color: #22d3ee; }
+.config-input::placeholder { color: var(--text-dim); }
+textarea.config-input { resize: vertical; min-height: 60px; }
+
+
 /* Decorative orb opacity */
 .t-orb { opacity: var(--orb-opacity); }
 

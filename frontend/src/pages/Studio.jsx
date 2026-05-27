@@ -3,12 +3,14 @@ import { toast } from "sonner";
 import { useAuth } from "@/App";
 import { parseComputeLimit, ComputeLimitModal } from "../components/ComputeLimitModal";
 import WorkflowTemplatesGrid from "../components/WorkflowTemplatesGrid";
+import NodeConfigPanel from "../components/NodeConfigPanel";
+import TraceViewer from "../components/TraceViewer";
 import {
   Send, Rocket, Bot, Zap, Mail, Brain, FileText,
   MessageCircle, GitBranch, Sparkles, Plus, Save,
   Trash2, ChevronDown, Shield, AlertTriangle, Check,
   X, Copy, ZoomIn, ZoomOut, Maximize2, Move,
-  Database, Globe, Filter, Code, Layers,
+  Database, Globe, Filter, Code, Layers, Play,
 } from "lucide-react";
 
 import { useAgentTerminal } from "../hooks/useAgentTerminal";
@@ -182,7 +184,7 @@ function ChatPane({ messages, onSend, visible, agentStatus, terminalHistory }) {
 }
 
 /* ─── Draggable Canvas ─── */
-function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNode, onAddNode, onDeleteNode, onAddEdge }) {
+function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNode, onAddNode, onDeleteNode, onAddEdge, onExecute, executing }) {
   const canvasRef = useRef(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [scale, setScale] = useState(1);
@@ -313,6 +315,22 @@ function CanvasPane({ visible, nodes, edges, activeNode, setActiveNode, onMoveNo
           <span className="text-[10px] t-text-dim w-10 text-center">{Math.round(scale * 100)}%</span>
           <button onClick={() => setScale((s) => Math.max(0.3, s - 0.2))} data-testid="zoom-out-btn" className="p-1.5 t-text-sub hover:t-text transition-colors" title="Zoom Out"><ZoomOut size={14} /></button>
           <button onClick={resetView} data-testid="reset-view-btn" className="p-1.5 t-text-sub hover:t-text transition-colors" title="Reset View"><Maximize2 size={14} /></button>
+          <div className="w-px h-4 mx-1" style={{ background: 'var(--border)' }} />
+          <button
+            data-testid="execute-workflow-btn"
+            onClick={() => onExecute?.()}
+            disabled={executing || nodes.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{
+              background: executing ? 'rgba(34,211,238,0.1)' : '#22d3ee',
+              color: executing ? '#22d3ee' : '#000',
+              border: '1px solid #22d3ee',
+            }}
+            title="Execute workflow"
+          >
+            <Play size={11} fill={executing ? "none" : "currentColor"} />
+            <span className="hidden sm:inline">{executing ? "RUNNING..." : "EXECUTE"}</span>
+          </button>
           <div className="w-px h-4 mx-1" style={{ background: 'var(--border)' }} />
           <div className="relative">
             <button data-testid="add-node-btn" onClick={() => setShowNodeMenu(!showNodeMenu)} className="flex items-center gap-1.5 px-3 py-1.5 t-text-mute text-[11px] rounded-lg hover:border-cyan-400/30 transition-all" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
@@ -584,6 +602,11 @@ export default function Studio() {
   const [mode, setMode] = useState("vibe");
   const [workflows, setWorkflows] = useState([]);
   const [activeWorkflowId, setActiveWorkflowId] = useState(null);
+  const [runtimeWorkflowId, setRuntimeWorkflowId] = useState(null);
+  const [sourceTemplate, setSourceTemplate] = useState(null);
+  const [executing, setExecuting] = useState(false);
+  const [trace, setTrace] = useState(null);
+  const [showTrace, setShowTrace] = useState(false);
   const [messages, setMessages] = useState([]);
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
@@ -649,9 +672,30 @@ export default function Studio() {
         const updated = await res.json();
         setWorkflows((prev) => prev.map((w) => (w.id === updated.id ? updated : w)));
       }
+      // Also sync to runtime user_workflows if we have canvas nodes (enables Execute)
+      if (mode === "node" && nodes.length > 0) {
+        const activeWf = workflows.find((w) => w.id === activeWorkflowId);
+        try {
+          const r = await fetch(`${API}/api/workflows/save`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              studio_workflow_id: activeWorkflowId,
+              name: activeWf?.name || "Untitled Workflow",
+              nodes,
+              edges,
+              source_template: sourceTemplate,
+            }),
+          });
+          if (r.ok) {
+            const data = await r.json();
+            setRuntimeWorkflowId(data.workflow_id);
+          }
+        } catch {}
+      }
     } catch {}
     setSaving(false);
-  }, [activeWorkflowId, token, mode, messages, nodes, edges, codeJson, generateCodeJson]);
+  }, [activeWorkflowId, token, mode, messages, nodes, edges, codeJson, generateCodeJson, sourceTemplate, workflows]);
 
   useEffect(() => {
     if (!activeWorkflowId || !loaded) return;
@@ -810,6 +854,92 @@ export default function Studio() {
     setEdges(tEdges);
     setCodeJson(generateCodeJson(tNodes, tEdges));
     setActiveNode(null);
+    setSourceTemplate(template.source_hash);
+    setRuntimeWorkflowId(null);
+    setTrace(null);
+  };
+
+  // Save current canvas to the runtime user_workflows collection
+  // and return the runtime workflow id (used by Execute).
+  const syncToRuntime = useCallback(async () => {
+    if (!token || nodes.length === 0) return null;
+    try {
+      const activeWf = workflows.find((w) => w.id === activeWorkflowId);
+      const res = await fetch(`${API}/api/workflows/save`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          studio_workflow_id: activeWorkflowId,
+          name: activeWf?.name || "Untitled Workflow",
+          nodes,
+          edges,
+          source_template: sourceTemplate,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRuntimeWorkflowId(data.workflow_id);
+        return data.workflow_id;
+      }
+    } catch (e) {
+      console.error("[syncToRuntime]", e);
+    }
+    return null;
+  }, [token, nodes, edges, sourceTemplate, activeWorkflowId, workflows]);
+
+  // Patch a single node's data (called from NodeConfigPanel)
+  const updateNodeData = (nodeId, newData) => {
+    setNodes((prev) => prev.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, ...newData } } : n));
+  };
+
+  // Execute the workflow via native engine
+  const executeWorkflow = async () => {
+    if (executing) return;
+    if (nodes.length === 0) {
+      toast.error("Add or load some nodes first.");
+      return;
+    }
+    setExecuting(true);
+    setShowTrace(true);
+    setTrace(null);
+
+    let wfId = runtimeWorkflowId;
+    if (!wfId) {
+      wfId = await syncToRuntime();
+      if (!wfId) {
+        toast.error("Could not save workflow before execution.");
+        setExecuting(false);
+        return;
+      }
+    } else {
+      // sync latest before execute
+      await syncToRuntime();
+    }
+
+    try {
+      const res = await fetch(`${API}/api/workflows/${wfId}/execute`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+
+      // Compute-limit gate returns 200 with allowed:false
+      const limitData = parseComputeLimit({ status: res.status, data });
+      if (limitData) {
+        setComputeLimit(limitData);
+        setExecuting(false);
+        return;
+      }
+
+      setTrace(data);
+      if (data.success) toast.success(`Workflow executed in ${data.duration_ms}ms`);
+      else toast.error(data.error || "Workflow failed");
+    } catch (e) {
+      toast.error("Execution failed: " + (e.message || "unknown"));
+      setTrace({ success: false, error: e.message, node_results: [] });
+    }
+    setExecuting(false);
   };
 
   const runLinter = async () => {
@@ -897,13 +1027,54 @@ export default function Studio() {
         {!isMobile && mode === "node" && (
           <>
             <WorkflowTemplatesGrid visible={true} onLoadTemplate={loadTemplateIntoCanvas} />
-            <CanvasPane visible={true} nodes={nodes} edges={edges} activeNode={activeNode} setActiveNode={setActiveNode} onMoveNode={moveNode} onAddNode={addNode} onDeleteNode={deleteNode} onAddEdge={addEdge} />
+            <div className="flex-1 relative flex flex-col overflow-hidden">
+              <div className="flex-1 relative flex overflow-hidden">
+                <CanvasPane
+                  visible={true} nodes={nodes} edges={edges}
+                  activeNode={activeNode} setActiveNode={setActiveNode}
+                  onMoveNode={moveNode} onAddNode={addNode}
+                  onDeleteNode={deleteNode} onAddEdge={addEdge}
+                  onExecute={executeWorkflow} executing={executing}
+                />
+                {activeNode && (
+                  <NodeConfigPanel
+                    node={nodes.find((n) => n.id === activeNode)}
+                    onUpdate={updateNodeData}
+                    onClose={() => setActiveNode(null)}
+                    runtimeWorkflowId={runtimeWorkflowId}
+                    token={token}
+                  />
+                )}
+              </div>
+              <TraceViewer
+                open={showTrace}
+                onClose={() => setShowTrace(false)}
+                trace={trace}
+                executing={executing}
+              />
+            </div>
           </>
         )}
 
         {/* Mobile: Single pane */}
         {isMobile && mode === "vibe" && <ChatPane messages={messages} onSend={handleChatSend} visible={true} agentStatus={agentStatus} terminalHistory={terminalHistory} />}
-        {isMobile && mode === "node" && <CanvasPane visible={true} nodes={nodes} edges={edges} activeNode={activeNode} setActiveNode={setActiveNode} onMoveNode={moveNode} onAddNode={addNode} onDeleteNode={deleteNode} onAddEdge={addEdge} />}
+        {isMobile && mode === "node" && (
+          <div className="flex-1 relative flex flex-col overflow-hidden">
+            <CanvasPane
+              visible={true} nodes={nodes} edges={edges}
+              activeNode={activeNode} setActiveNode={setActiveNode}
+              onMoveNode={moveNode} onAddNode={addNode}
+              onDeleteNode={deleteNode} onAddEdge={addEdge}
+              onExecute={executeWorkflow} executing={executing}
+            />
+            <TraceViewer
+              open={showTrace}
+              onClose={() => setShowTrace(false)}
+              trace={trace}
+              executing={executing}
+            />
+          </div>
+        )}
         {isMobile && mode === "code" && <CodePane visible={true} codeJson={codeJson} onDeploy={handleDeploy} onPublish={handlePublish} linterResult={linterResult} onRunLinter={runLinter} saving={saving} publishing={publishing} />}
       </div>
 
