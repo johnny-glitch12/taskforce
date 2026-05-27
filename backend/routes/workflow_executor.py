@@ -252,9 +252,9 @@ async def execute_workflow_dag(workflow: Dict[str, Any]) -> Dict[str, Any]:
     edges = workflow.get("edges", []) or []
 
     if not nodes:
-        return {"success": False, "error": "Empty workflow.", "node_results": []}
+        return {"success": False, "error": "Empty workflow.", "node_results": [], "duration_ms": 0, "final_output": None}
     if len(nodes) > MAX_NODES_PER_RUN:
-        return {"success": False, "error": f"Workflow exceeds {MAX_NODES_PER_RUN} node limit.", "node_results": []}
+        return {"success": False, "error": f"Workflow exceeds {MAX_NODES_PER_RUN} node limit.", "node_results": [], "duration_ms": 0, "final_output": None}
 
     order = topological_sort(nodes, edges)
     node_results: List[Dict[str, Any]] = []
