@@ -3,7 +3,9 @@ import { useAuth } from "@/App";
 import { toast } from "sonner";
 import {
   X, Upload, Video, Image as ImgIcon, DollarSign, Trash2, FileCode2,
-  Plus, Loader2, Rocket,
+  Plus, Loader2, Rocket, Bot, Zap, Brain, Sparkles, Shield, ShoppingBag,
+  Mail, MessageCircle, Database, Code, Globe, GitBranch, Calendar, Play,
+  Webhook, Cpu, BadgeCheck, CheckCircle2,
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -13,6 +15,43 @@ const CATEGORIES = [
   "scraping", "analytics", "sales", "support", "devops", "other",
 ];
 
+const AVATAR_OPTIONS = [
+  { name: "Bot",          Icon: Bot },
+  { name: "Zap",          Icon: Zap },
+  { name: "Rocket",       Icon: Rocket },
+  { name: "Brain",        Icon: Brain },
+  { name: "Sparkles",     Icon: Sparkles },
+  { name: "Shield",       Icon: Shield },
+  { name: "ShoppingBag",  Icon: ShoppingBag },
+  { name: "Mail",         Icon: Mail },
+  { name: "MessageCircle",Icon: MessageCircle },
+  { name: "Database",     Icon: Database },
+  { name: "Code",         Icon: Code },
+  { name: "Globe",        Icon: Globe },
+];
+const ICON_MAP = Object.fromEntries(AVATAR_OPTIONS.map((a) => [a.name, a.Icon]));
+
+const AVATAR_COLORS = ["#22d3ee", "#a78bfa", "#f472b6", "#34d399", "#fbbf24", "#fb7185", "#60a5fa", "#f87171"];
+
+const INTEGRATIONS = [
+  "slack", "sendgrid", "gmail", "telegram", "discord", "stripe",
+  "notion", "gsheets", "twilio", "github", "openai", "anthropic",
+  "instagram", "postgres", "mongodb",
+];
+
+const TRIGGER_TYPES = [
+  { id: "manual",   label: "Manual",   desc: "Run on demand", Icon: Play },
+  { id: "webhook",  label: "Webhook",  desc: "Inbound HTTP",  Icon: Webhook },
+  { id: "schedule", label: "Schedule", desc: "Cron timer",    Icon: Calendar },
+];
+
+const ENGINES = [
+  { id: "gemini-flash", label: "Gemini Flash", desc: "Fast · cheap" },
+  { id: "gemini-pro",   label: "Gemini Pro",   desc: "Complex · pricier" },
+  { id: "byok-openai",  label: "OpenAI (BYOK)", desc: "Renter's key" },
+  { id: "byok-claude",  label: "Claude (BYOK)", desc: "Renter's key" },
+];
+
 const STARTER_FILES = [
   { path: "main.py", language: "python", content: "# Entry point\nimport os\n\ndef run(input):\n    return input\n\nif __name__ == '__main__':\n    print(run({}))\n" },
   { path: "requirements.txt", language: "text", content: "" },
@@ -20,12 +59,14 @@ const STARTER_FILES = [
 ];
 
 /**
- * DirectPublishModal — used from The Exchange to upload + publish a finished
- * bot package without going through The Armory builder.
+ * DirectPublishModal — Cyber-luxury 3-step bot uploader for The Exchange.
  *
- *   Step 1: meta (name / description / category / tags / pricing)
- *   Step 2: code files (editable; user adds source files of their bot)
- *   Step 3: media (video + photos, same upload pipeline as PublishToExchange)
+ *   Step 1: Marketplace metadata WITH live-preview card on the right.
+ *           Fields: avatar (icon + color), name, description, category, tags,
+ *                   required integrations (badge multi-select), trigger type,
+ *                   engine, rent/buy pricing with live 80% take-home calc.
+ *   Step 2: Code files (VS-Code tabs + disk ingest).
+ *   Step 3: Media (video + photos).
  */
 export default function DirectPublishModal({ open, onClose, onPublished }) {
   const { token } = useAuth();
@@ -39,6 +80,11 @@ export default function DirectPublishModal({ open, onClose, onPublished }) {
     tags: "",
     rent_price: 0,
     buy_price: 0,
+    avatar_icon: "Bot",
+    avatar_color: "#22d3ee",
+    required_integrations: [],
+    trigger_type: "manual",
+    engine: "gemini-flash",
   });
   const [files, setFiles] = useState(STARTER_FILES);
   const [activeFileIdx, setActiveFileIdx] = useState(0);
@@ -90,8 +136,13 @@ export default function DirectPublishModal({ open, onClose, onPublished }) {
           tags,
           rent_price: parseFloat(form.rent_price) || 0,
           buy_price: parseFloat(form.buy_price) || 0,
+          avatar_icon: form.avatar_icon,
+          avatar_color: form.avatar_color,
+          required_integrations: form.required_integrations,
+          trigger_type: form.trigger_type,
+          engine: form.engine,
           files: files,
-          nodes: [],   // direct upload: no canvas graph required
+          nodes: [],
           edges: [],
           language: "python",
         }),
@@ -160,12 +211,12 @@ export default function DirectPublishModal({ open, onClose, onPublished }) {
     <div
       data-testid="direct-publish-modal"
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.85)' }}
+      style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(6px)' }}
       onClick={onClose}
     >
       <div
-        className="w-full max-w-3xl rounded-sm flex flex-col"
-        style={{ maxHeight: '92vh', background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+        className={`w-full ${step === 1 ? 'max-w-6xl' : 'max-w-3xl'} rounded-sm flex flex-col`}
+        style={{ maxHeight: '94vh', background: 'var(--bg-card)', border: '1px solid var(--border)' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -184,52 +235,9 @@ export default function DirectPublishModal({ open, onClose, onPublished }) {
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {/* ── Step 1: meta ── */}
+          {/* ── Step 1: meta with live preview ── */}
           {step === 1 && (
-            <>
-              <Field label="Bot Name *">
-                <input data-testid="dp-name" className="config-input" value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Shopify Order Notifier" />
-              </Field>
-              <Field label="Description * (what does it do?)">
-                <textarea data-testid="dp-description" className="config-input" rows={5}
-                  value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  placeholder="Inputs / Outputs / Required BYOK credentials / Use case..." />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Category">
-                  <select data-testid="dp-category" className="config-input"
-                    value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-                    {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-                  </select>
-                </Field>
-                <Field label="Tags (comma-separated)">
-                  <input data-testid="dp-tags" className="config-input" value={form.tags}
-                    onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="shopify, notify, e-com" />
-                </Field>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Rent Price ($ / run)">
-                  <div className="relative">
-                    <DollarSign size={11} className="absolute left-2 top-1/2 -translate-y-1/2 t-text-dim" />
-                    <input data-testid="dp-rent-price" type="number" step="0.01" min="0" max="10000"
-                      className="config-input pl-7" value={form.rent_price}
-                      onChange={(e) => setForm({ ...form, rent_price: e.target.value })} />
-                  </div>
-                </Field>
-                <Field label="Buy Price ($ flat)">
-                  <div className="relative">
-                    <DollarSign size={11} className="absolute left-2 top-1/2 -translate-y-1/2 t-text-dim" />
-                    <input data-testid="dp-buy-price" type="number" step="0.01" min="0" max="100000"
-                      className="config-input pl-7" value={form.buy_price}
-                      onChange={(e) => setForm({ ...form, buy_price: e.target.value })} />
-                  </div>
-                </Field>
-              </div>
-              <div className="text-[10px] t-text-dim">
-                Set either to 0 to disable that purchase option. Creators take 80% of revenue.
-              </div>
-            </>
+            <DetailsStep form={form} setForm={setForm} />
           )}
 
           {/* ── Step 2: code files ── */}
@@ -397,6 +405,404 @@ function Field({ label, children }) {
     <div>
       <label className="block text-[10px] tracking-widest uppercase t-text-dim mb-1">{label}</label>
       {children}
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Step 1 — DetailsStep: two-column live-preview marketplace metadata form
+   ────────────────────────────────────────────────────────────────────── */
+function DetailsStep({ form, setForm }) {
+  const update = (patch) => setForm({ ...form, ...patch });
+  const toggleIntegration = (id) => {
+    const cur = form.required_integrations || [];
+    update({ required_integrations: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] });
+  };
+
+  const rent = parseFloat(form.rent_price) || 0;
+  const buy = parseFloat(form.buy_price) || 0;
+  const rentTakeHome = (rent * 0.8).toFixed(2);
+  const buyTakeHome  = (buy  * 0.8).toFixed(2);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 lg:gap-8">
+      {/* ── LEFT — form ── */}
+      <div className="space-y-5 min-w-0">
+
+        {/* Avatar picker */}
+        <div>
+          <label className="block text-[10px] tracking-widest uppercase t-text-dim mb-2">Bot Avatar</label>
+          <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5 mb-3">
+            {AVATAR_OPTIONS.map(({ name, Icon }) => {
+              const active = form.avatar_icon === name;
+              return (
+                <button
+                  key={name}
+                  data-testid={`dp-avatar-${name}`}
+                  onClick={() => update({ avatar_icon: name })}
+                  className="aspect-square rounded-sm flex items-center justify-center transition-all"
+                  style={{
+                    background: active ? `${form.avatar_color}1f` : 'var(--bg-elevated)',
+                    border: `1px solid ${active ? form.avatar_color : 'var(--border)'}`,
+                    boxShadow: active ? `0 0 0 2px ${form.avatar_color}30, 0 0 12px ${form.avatar_color}40` : 'none',
+                  }}
+                >
+                  <Icon size={14} style={{ color: active ? form.avatar_color : 'var(--text-mute)' }} />
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-1.5">
+            {AVATAR_COLORS.map((c) => {
+              const active = form.avatar_color === c;
+              return (
+                <button
+                  key={c}
+                  data-testid={`dp-color-${c.replace('#','')}`}
+                  onClick={() => update({ avatar_color: c })}
+                  className="w-5 h-5 rounded-full transition-all"
+                  style={{ background: c, boxShadow: active ? `0 0 0 2px var(--bg-card), 0 0 0 4px ${c}` : 'none' }}
+                />
+              );
+            })}
+          </div>
+        </div>
+
+        <CyberField label="Bot Name *">
+          <input
+            data-testid="dp-name"
+            className="cy-input"
+            value={form.name}
+            onChange={(e) => update({ name: e.target.value })}
+            placeholder="e.g. Shopify Order Notifier"
+            style={{ '--glow': form.avatar_color }}
+          />
+        </CyberField>
+
+        <CyberField label="Description * (what does it do?)">
+          <textarea
+            data-testid="dp-description"
+            rows={4}
+            className="cy-input"
+            value={form.description}
+            onChange={(e) => update({ description: e.target.value })}
+            placeholder="Inputs · Outputs · Required BYOK · Use case..."
+            style={{ '--glow': form.avatar_color }}
+          />
+        </CyberField>
+
+        <div className="grid grid-cols-2 gap-3">
+          <CyberField label="Category">
+            <select
+              data-testid="dp-category"
+              className="cy-input"
+              value={form.category}
+              onChange={(e) => update({ category: e.target.value })}
+              style={{ '--glow': form.avatar_color }}
+            >
+              {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </CyberField>
+          <CyberField label="Tags (comma-separated)">
+            <input
+              data-testid="dp-tags"
+              className="cy-input"
+              value={form.tags}
+              onChange={(e) => update({ tags: e.target.value })}
+              placeholder="shopify, notify, e-com"
+              style={{ '--glow': form.avatar_color }}
+            />
+          </CyberField>
+        </div>
+
+        {/* Required integrations */}
+        <div>
+          <label className="block text-[10px] tracking-widest uppercase t-text-dim mb-2">
+            Required Integrations
+            <span className="ml-1.5 t-text-mute normal-case tracking-normal">— renters need these BYOK keys</span>
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {INTEGRATIONS.map((s) => {
+              const active = (form.required_integrations || []).includes(s);
+              return (
+                <button
+                  key={s}
+                  data-testid={`dp-int-${s}`}
+                  onClick={() => toggleIntegration(s)}
+                  className="px-2.5 py-1 text-[10px] uppercase tracking-wider font-mono rounded-sm transition-all flex items-center gap-1"
+                  style={{
+                    background: active ? `${form.avatar_color}1f` : 'var(--bg-elevated)',
+                    border: `1px solid ${active ? form.avatar_color : 'var(--border)'}`,
+                    color: active ? form.avatar_color : 'var(--text-mute)',
+                  }}
+                >
+                  {active && <CheckCircle2 size={9} />}
+                  {s}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Trigger Type segmented */}
+        <div>
+          <label className="block text-[10px] tracking-widest uppercase t-text-dim mb-2">Trigger Type</label>
+          <div className="grid grid-cols-3 gap-2">
+            {TRIGGER_TYPES.map(({ id, label, desc, Icon }) => {
+              const active = form.trigger_type === id;
+              return (
+                <button
+                  key={id}
+                  data-testid={`dp-trigger-${id}`}
+                  onClick={() => update({ trigger_type: id })}
+                  className="p-3 rounded-sm text-left transition-all flex items-start gap-2"
+                  style={{
+                    background: active ? `${form.avatar_color}10` : 'var(--bg-elevated)',
+                    border: `1px solid ${active ? form.avatar_color : 'var(--border)'}`,
+                    boxShadow: active ? `0 0 0 1px ${form.avatar_color}40 inset` : 'none',
+                  }}
+                >
+                  <Icon size={14} style={{ color: active ? form.avatar_color : 'var(--text-mute)' }} />
+                  <div className="min-w-0">
+                    <div className="text-[11px] t-text font-medium uppercase tracking-wider">{label}</div>
+                    <div className="text-[9px] t-text-dim mt-0.5">{desc}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Engine */}
+        <div>
+          <label className="block text-[10px] tracking-widest uppercase t-text-dim mb-2">Core Engine</label>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {ENGINES.map(({ id, label, desc }) => {
+              const active = form.engine === id;
+              return (
+                <button
+                  key={id}
+                  data-testid={`dp-engine-${id}`}
+                  onClick={() => update({ engine: id })}
+                  className="p-2.5 rounded-sm text-left transition-all"
+                  style={{
+                    background: active ? `${form.avatar_color}10` : 'var(--bg-elevated)',
+                    border: `1px solid ${active ? form.avatar_color : 'var(--border)'}`,
+                  }}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Cpu size={11} style={{ color: active ? form.avatar_color : 'var(--text-mute)' }} />
+                    <span className="text-[10px] t-text font-medium uppercase tracking-wider">{label}</span>
+                  </div>
+                  <div className="text-[9px] t-text-dim mt-0.5">{desc}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Pricing */}
+        <div>
+          <label className="block text-[10px] tracking-widest uppercase t-text-dim mb-2">Pricing</label>
+          <div className="grid grid-cols-2 gap-3">
+            <PriceInput
+              dataTestId="dp-rent-price"
+              label="Rent / run"
+              value={form.rent_price}
+              onChange={(v) => update({ rent_price: v })}
+              takeHome={rentTakeHome}
+              suffix="/run"
+              color={form.avatar_color}
+            />
+            <PriceInput
+              dataTestId="dp-buy-price"
+              label="Buy (flat)"
+              value={form.buy_price}
+              onChange={(v) => update({ buy_price: v })}
+              takeHome={buyTakeHome}
+              suffix="one-time"
+              color={form.avatar_color}
+            />
+          </div>
+          <div className="text-[10px] t-text-dim mt-2 flex items-center gap-1.5">
+            <BadgeCheck size={10} className="text-emerald-400" />
+            Set either to 0 to disable that purchase option · Platform takes 20%, you keep 80%
+          </div>
+        </div>
+      </div>
+
+      {/* ── RIGHT — live preview card ── */}
+      <div className="lg:sticky lg:top-2 self-start">
+        <LivePreviewCard form={form} />
+      </div>
+
+      {/* scoped styling for cyber inputs (glow on focus, glass) */}
+      <style>{`
+        .cy-input {
+          width: 100%;
+          padding: 9px 12px;
+          font-size: 12px;
+          color: var(--text);
+          background: rgba(255,255,255,0.02);
+          backdrop-filter: blur(6px);
+          border: 1px solid var(--border);
+          border-radius: 2px;
+          transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+          font-family: inherit;
+        }
+        .cy-input:focus {
+          outline: none;
+          border-color: var(--glow, #22d3ee);
+          box-shadow: 0 0 0 1px var(--glow, #22d3ee), 0 0 18px 0 color-mix(in srgb, var(--glow, #22d3ee) 35%, transparent);
+          background: rgba(255,255,255,0.04);
+        }
+        textarea.cy-input { resize: vertical; min-height: 100px; line-height: 1.5; }
+        select.cy-input { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text-mute) 50%), linear-gradient(135deg, var(--text-mute) 50%, transparent 50%); background-position: calc(100% - 14px) 14px, calc(100% - 9px) 14px; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; padding-right: 28px; }
+        .cy-price-input { font-family: 'JetBrains Mono','SF Mono',Menlo,monospace; letter-spacing: 0.02em; font-size: 14px; }
+      `}</style>
+    </div>
+  );
+}
+
+function CyberField({ label, children }) {
+  return (
+    <div>
+      <label className="block text-[10px] tracking-widest uppercase t-text-dim mb-1.5">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function PriceInput({ dataTestId, label, value, onChange, takeHome, suffix, color }) {
+  return (
+    <div>
+      <label className="block text-[10px] tracking-widest uppercase t-text-dim mb-1.5">{label}</label>
+      <div className="relative">
+        <DollarSign size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 t-text-dim" />
+        <input
+          data-testid={dataTestId}
+          type="number" step="0.01" min="0" max="100000"
+          className="cy-input cy-price-input pl-7"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{ '--glow': color }}
+        />
+      </div>
+      <div className="text-[10px] t-text-dim mt-1 font-mono flex items-center gap-1">
+        <span style={{ color }}>${takeHome}</span> to you · {suffix}
+      </div>
+    </div>
+  );
+}
+
+function LivePreviewCard({ form }) {
+  const Icon = ICON_MAP[form.avatar_icon] || Bot;
+  const tagList = form.tags.split(",").map((t) => t.trim()).filter(Boolean).slice(0, 4);
+  const trigger = TRIGGER_TYPES.find((t) => t.id === form.trigger_type) || TRIGGER_TYPES[0];
+  const TriggerIcon = trigger.Icon;
+  const engine = ENGINES.find((e) => e.id === form.engine);
+  const rent = parseFloat(form.rent_price) || 0;
+  const buy = parseFloat(form.buy_price) || 0;
+  const intList = (form.required_integrations || []).slice(0, 6);
+
+  return (
+    <div>
+      <div className="text-[10px] tracking-widest uppercase t-text-dim mb-2 flex items-center gap-1.5">
+        <Sparkles size={10} className="text-cyan-400" />
+        Live Marketplace Preview
+      </div>
+      <div
+        data-testid="dp-preview-card"
+        className="rounded-sm overflow-hidden"
+        style={{
+          background: 'var(--bg-elevated)',
+          border: `1px solid ${form.avatar_color}33`,
+          boxShadow: `0 0 32px -8px ${form.avatar_color}33`,
+        }}
+      >
+        {/* gradient header */}
+        <div
+          className="h-20 relative"
+          style={{
+            background: `linear-gradient(135deg, ${form.avatar_color}30 0%, transparent 60%), radial-gradient(circle at 80% 20%, ${form.avatar_color}25, transparent 50%)`,
+          }}
+        >
+          <div className="absolute -bottom-5 left-3 w-12 h-12 rounded-sm flex items-center justify-center"
+            style={{
+              background: 'var(--bg-card)',
+              border: `1px solid ${form.avatar_color}`,
+              boxShadow: `0 0 18px ${form.avatar_color}55`,
+            }}
+          >
+            <Icon size={20} style={{ color: form.avatar_color }} />
+          </div>
+        </div>
+
+        <div className="pt-7 px-3 pb-3 space-y-2">
+          <div>
+            <div className="text-[13px] t-text font-semibold truncate" data-testid="dp-preview-name">
+              {form.name || "Untitled Bot"}
+            </div>
+            <div className="text-[10px] t-text-dim uppercase tracking-widest font-mono">
+              {form.category}
+              {tagList.length > 0 && <span> · {tagList.join(" · ")}</span>}
+            </div>
+          </div>
+
+          <p className="text-[11px] t-text-mute leading-relaxed line-clamp-3 min-h-[44px]">
+            {form.description || "Description will appear here as you type."}
+          </p>
+
+          {/* trigger + engine row */}
+          <div className="flex items-center gap-2 pt-1.5" style={{ borderTop: '1px solid var(--border)' }}>
+            <span className="flex items-center gap-1 text-[9px] uppercase tracking-wider t-text-mute font-mono">
+              <TriggerIcon size={9} style={{ color: form.avatar_color }} /> {trigger.label}
+            </span>
+            <span className="text-[9px] t-text-dim">·</span>
+            <span className="flex items-center gap-1 text-[9px] uppercase tracking-wider t-text-mute font-mono">
+              <Cpu size={9} style={{ color: form.avatar_color }} /> {engine?.label}
+            </span>
+          </div>
+
+          {/* required integrations */}
+          {intList.length > 0 && (
+            <div className="flex flex-wrap gap-1 pt-1.5">
+              {intList.map((s) => (
+                <span key={s} className="text-[9px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded-sm"
+                  style={{ background: 'var(--bg-card)', color: 'var(--text-mute)', border: '1px solid var(--border)' }}>
+                  {s}
+                </span>
+              ))}
+              {(form.required_integrations || []).length > 6 && (
+                <span className="text-[9px] t-text-dim">+{form.required_integrations.length - 6}</span>
+              )}
+            </div>
+          )}
+
+          {/* pricing */}
+          <div className="flex items-end justify-between pt-2 mt-1.5" style={{ borderTop: '1px solid var(--border)' }}>
+            <div>
+              <div className="text-[9px] uppercase tracking-widest t-text-dim font-mono">Pricing</div>
+              <div className="font-mono text-[12px] t-text mt-0.5">
+                {rent > 0 && <span>${rent.toFixed(2)}<span className="t-text-dim text-[10px]">/run</span></span>}
+                {rent > 0 && buy > 0 && <span className="t-text-dim mx-1">·</span>}
+                {buy > 0 && <span>${buy.toFixed(2)}<span className="t-text-dim text-[10px]"> flat</span></span>}
+                {rent === 0 && buy === 0 && <span className="t-text-dim text-[10px]">— free —</span>}
+              </div>
+            </div>
+            <button
+              disabled
+              className="px-2.5 py-1.5 text-[10px] uppercase tracking-widest font-mono rounded-sm font-medium"
+              style={{ background: form.avatar_color, color: '#000', opacity: 0.9 }}
+            >
+              Deploy
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className="text-[9px] t-text-dim mt-2 text-center uppercase tracking-widest">
+        How buyers will see your bot
+      </div>
     </div>
   );
 }

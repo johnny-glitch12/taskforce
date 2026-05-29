@@ -87,6 +87,12 @@ class DirectPublishRequest(BaseModel):
     tags: List[str] = Field(default_factory=list, max_length=10)
     rent_price: float = Field(default=0, ge=0, le=10000)
     buy_price: float = Field(default=0, ge=0, le=100000)
+    # Marketplace metadata (new in iter37)
+    avatar_icon: str = Field(default="Bot", max_length=40)         # lucide-react icon name
+    avatar_color: str = Field(default="#22d3ee", max_length=20)    # hex
+    required_integrations: List[str] = Field(default_factory=list, max_length=20)
+    trigger_type: str = Field(default="manual", pattern="^(manual|webhook|schedule)$")
+    engine: str = Field(default="gemini-flash", pattern="^(gemini-flash|gemini-pro|byok-openai|byok-claude)$")
     # Optional bot payload (files + node graph)
     files: List[dict] = Field(default_factory=list, max_length=20)
     nodes: List[dict] = Field(default_factory=list, max_length=200)
@@ -164,6 +170,12 @@ async def direct_publish(req: DirectPublishRequest, user=Depends(get_current_use
         "tags": [t.strip().lower() for t in req.tags if isinstance(t, str) and 1 <= len(t) <= 30][:10],
         "rent_price": float(req.rent_price),
         "buy_price": float(req.buy_price),
+        # Marketplace metadata (iter37)
+        "avatar_icon": req.avatar_icon,
+        "avatar_color": req.avatar_color,
+        "required_integrations": req.required_integrations[:20],
+        "trigger_type": req.trigger_type,
+        "engine": req.engine,
         "video_url": None,
         "photo_urls": [],
         "node_count": len(req.nodes),
