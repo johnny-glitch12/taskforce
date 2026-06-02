@@ -518,7 +518,8 @@ async def patch_deployment(deployment_id: str, body: DeploymentPatchRequest, use
 
 @router.post("/deployments/{deployment_id}/run")
 async def run_deployment(deployment_id: str, user=Depends(get_current_user())):
-    """Increment the deployment's usage counter — gated by per-deployment monthly limit."""
+    """Increment the deployment's usage counter — gated by per-deployment monthly limit.
+    Each run is persisted to `deployment_runs` for the Usage Monitor analytics dashboard."""
     db = get_db()
     user_id = str(user.get("id", user.get("email")))
     doc = await db.user_bot_deployments.find_one({"id": deployment_id, "user_id": user_id})
@@ -531,11 +532,141 @@ async def run_deployment(deployment_id: str, user=Depends(get_current_user())):
             "message": f"Run limit reached ({usage['run_count']}/{usage['limit_per_month']}). Upgrade this deployment to continue.",
             "upgrade_url": f"/my-deployments/{deployment_id}?tab=upgrade",
         }
+    # Simulated execution metadata — replace with real engine output when the
+    # deployment runtime is wired in.
+    import random
+    run_id = uuid.uuid4().hex
+    duration_ms = random.randint(180, 2400)
+    success = random.random() > 0.05  # 95% success baseline
+    started_at = datetime.now(timezone.utc)
+    run_doc = {
+        "id": run_id,
+        "deployment_id": deployment_id,
+        "user_id": user_id,
+        "listing_id": doc.get("listing_id"),
+        "started_at": started_at.isoformat(),
+        "finished_at": (started_at).isoformat(),
+        "duration_ms": duration_ms,
+        "success": success,
+        "status": "success" if success else "failed",
+        "error": None if success else random.choice([
+            "RateLimitError: provider returned 429",
+            "TimeoutError: upstream took >30s",
+            "ValidationError: missing required env var",
+        ]),
+        "trigger": "manual",
+        "credits_spent": 1,
+    }
+    await db.deployment_runs.insert_one(run_doc)
     await db.user_bot_deployments.update_one(
         {"id": deployment_id},
         {"$inc": {"usage.run_count": 1}, "$set": {"usage.last_run_at": _now(), "updated_at": _now()}},
     )
-    return {"allowed": True, "run_count": usage["run_count"] + 1, "limit": usage["limit_per_month"]}
+    return {"allowed": True, "run_count": usage["run_count"] + 1, "limit": usage["limit_per_month"], "run_id": run_id, "duration_ms": duration_ms, "success": success}
+
+
+@router.get("/deployments/{deployment_id}/runs")
+async def list_deployment_runs(
+    deployment_id: str,
+    limit: int = 50,
+    skip: int = 0,
+    user=Depends(get_current_user()),
+):
+    """Recent execution log for a deployment — paginated."""
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    owner = await db.user_bot_deployments.find_one({"id": deployment_id, "user_id": user_id}, {"_id": 0, "id": 1})
+    if not owner:
+        raise HTTPException(status_code=404, detail="Deployment not found.")
+    limit = max(1, min(200, int(limit)))
+    skip = max(0, int(skip))
+    cursor = db.deployment_runs.find(
+        {"deployment_id": deployment_id}, {"_id": 0}
+    ).sort("started_at", -1).skip(skip).limit(limit)
+    runs = await cursor.to_list(length=limit)
+    total = await db.deployment_runs.count_documents({"deployment_id": deployment_id})
+    return {"runs": runs, "total": total, "limit": limit, "skip": skip}
+
+
+@router.get("/deployments/{deployment_id}/analytics")
+async def deployment_analytics(deployment_id: str, days: int = 30, user=Depends(get_current_user())):
+    """Aggregate usage analytics for the Usage Monitor dashboard.
+    Returns: totals, success_rate, latency percentiles (P50/P95/P99), daily volume histogram, credits."""
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    dep = await db.user_bot_deployments.find_one({"id": deployment_id, "user_id": user_id}, {"_id": 0})
+    if not dep:
+        raise HTTPException(status_code=404, detail="Deployment not found.")
+    days = max(1, min(90, int(days)))
+    from datetime import timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    cursor = db.deployment_runs.find(
+        {"deployment_id": deployment_id, "started_at": {"$gte": cutoff}},
+        {"_id": 0, "started_at": 1, "duration_ms": 1, "success": 1, "credits_spent": 1, "status": 1, "error": 1},
+    )
+    runs = await cursor.to_list(length=10000)
+    total = len(runs)
+    successes = sum(1 for r in runs if r.get("success"))
+    failures = total - successes
+    durations = sorted(int(r.get("duration_ms") or 0) for r in runs)
+    def _pct(p):
+        if not durations:
+            return 0
+        i = max(0, min(len(durations) - 1, int(round((p / 100) * (len(durations) - 1)))))
+        return durations[i]
+    avg = (sum(durations) // len(durations)) if durations else 0
+    credits_spent = sum(int(r.get("credits_spent") or 0) for r in runs)
+    # Daily histogram bucketed by ISO date
+    buckets: dict = {}
+    for r in runs:
+        day = (r.get("started_at") or "")[:10]
+        if not day:
+            continue
+        bucket = buckets.setdefault(day, {"date": day, "runs": 0, "success": 0, "failed": 0})
+        bucket["runs"] += 1
+        if r.get("success"):
+            bucket["success"] += 1
+        else:
+            bucket["failed"] += 1
+    # Fill in zero-days
+    daily: list = []
+    now = datetime.now(timezone.utc)
+    for d in range(days - 1, -1, -1):
+        day = (now - timedelta(days=d)).date().isoformat()
+        daily.append(buckets.get(day, {"date": day, "runs": 0, "success": 0, "failed": 0}))
+    # Recent error summary
+    recent_errors = [
+        {"started_at": r.get("started_at"), "error": r.get("error")}
+        for r in runs if not r.get("success") and r.get("error")
+    ][:5]
+    usage = dep.get("usage") or {}
+    return {
+        "deployment_id": deployment_id,
+        "deployment_name": dep.get("name") or dep.get("listing_name"),
+        "window_days": days,
+        "totals": {
+            "runs": total,
+            "successes": successes,
+            "failures": failures,
+            "success_rate": round((successes / total) * 100, 2) if total else 0,
+            "credits_spent": credits_spent,
+        },
+        "latency_ms": {
+            "avg": avg,
+            "p50": _pct(50),
+            "p95": _pct(95),
+            "p99": _pct(99),
+            "min": durations[0] if durations else 0,
+            "max": durations[-1] if durations else 0,
+        },
+        "daily": daily,
+        "monthly_quota": {
+            "used": usage.get("run_count", 0),
+            "limit": usage.get("limit_per_month", 1000),
+            "remaining": max(0, (usage.get("limit_per_month", 1000) - usage.get("run_count", 0))),
+        },
+        "recent_errors": recent_errors,
+    }
 
 
 @router.post("/deployments/{deployment_id}/upgrade")

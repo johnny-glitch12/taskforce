@@ -423,7 +423,7 @@ function AgentModal({ mode, agent, onClose, onSubmit, templates }) {
             onClick={handleSubmit}
             data-testid={isRun ? "execute-agent-btn" : "deploy-agent-btn"}
             disabled={submitting}
-            className="px-6 py-2.5 bg-cyan-400 text-white text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all shadow-[0_0_15px_rgba(139,92,246,0.2)] disabled:opacity-50 flex items-center gap-2"
+            className="px-6 py-2.5 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all shadow-[0_0_15px_rgba(139,92,246,0.2)] disabled:opacity-50 flex items-center gap-2"
           >
             {submitting ? <Loader2 size={13} className="animate-spin" /> : isRun ? <Play size={13} /> : <Zap size={13} />}
             {isRun ? "Execute" : agent ? "Update" : "Deploy Agent"}
@@ -585,7 +585,7 @@ export default function Dashboard() {
             onClick={() => { setModalAgent(null); setModalMode("create"); }}
             data-testid="create-agent-btn"
             disabled={stats && stats.agent_count >= stats.agent_limit}
-            className="px-5 py-2.5 bg-cyan-400 text-white text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all shadow-[0_0_15px_rgba(139,92,246,0.2)] flex items-center gap-2 disabled:opacity-50"
+            className="px-5 py-2.5 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all shadow-[0_0_15px_rgba(139,92,246,0.2)] flex items-center gap-2 disabled:opacity-50"
           >
             <Plus size={14} /> Deploy Agent
           </button>
@@ -607,7 +607,7 @@ export default function Dashboard() {
               <p className="text-[13px] text-white font-medium">Agent limit reached ({stats.agent_count}/{stats.agent_limit})</p>
               <p className="text-[12px] text-zinc-500 mt-0.5">Upgrade to Pro for unlimited agents, priority execution, and advanced analytics.</p>
             </div>
-            <button className="px-5 py-2 bg-cyan-400 text-white text-[12px] font-medium rounded-sm hover:bg-cyan-300 transition-all whitespace-nowrap">
+            <button className="px-5 py-2 bg-cyan-400 text-black font-bold text-[12px] font-medium rounded-sm hover:bg-cyan-300 transition-all whitespace-nowrap">
               Upgrade to Pro
             </button>
           </div>
@@ -643,7 +643,7 @@ export default function Dashboard() {
                 <p className="text-[12px] t-text-dim mb-4">Deploy your first custom AI agent to get started.</p>
                 <button
                   onClick={() => { setModalAgent(null); setModalMode("create"); }}
-                  className="px-5 py-2.5 bg-cyan-400 text-white text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all"
+                  className="px-5 py-2.5 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all"
                 >
                   Deploy Agent
                 </button>

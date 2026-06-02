@@ -228,7 +228,7 @@ export default function Academy() {
           <p className="text-[14px] t-text-sub mb-6">
             Start with our free beginner course. No credit card required.
           </p>
-          <button className="px-7 py-3 bg-cyan-400 text-white text-[14px] font-medium rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.25)] flex items-center gap-2 mx-auto">
+          <button className="px-7 py-3 bg-cyan-400 text-black font-bold text-[14px] font-medium rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.25)] flex items-center gap-2 mx-auto">
             Start Learning <ArrowRight size={15} />
           </button>
         </div>

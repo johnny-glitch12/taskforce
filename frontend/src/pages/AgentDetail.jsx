@@ -67,7 +67,7 @@ function LiveDemoModal({ agent, onClose }) {
         </div>
         <form onSubmit={handleSend} className="px-5 py-3 flex gap-2" style={{ borderTop: '1px solid var(--border)' }}>
           <input type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Try asking something..." data-testid="demo-chat-input" className="flex-1 t-input rounded-sm px-4 py-2.5 text-[13px] focus:outline-none focus:border-cyan-400/40 transition-all" style={{ border: '1px solid var(--input-border)' }} />
-          <button type="submit" data-testid="demo-send-btn" className="px-4 py-2.5 bg-cyan-400 text-white rounded-sm hover:bg-cyan-300 transition-all text-[13px] font-medium flex items-center gap-1.5"><Send size={13} /> Send</button>
+          <button type="submit" data-testid="demo-send-btn" className="px-4 py-2.5 bg-cyan-400 text-black font-bold rounded-sm hover:bg-cyan-300 transition-all text-[13px] font-medium flex items-center gap-1.5"><Send size={13} /> Send</button>
         </form>
       </div>
     </div>
@@ -175,7 +175,7 @@ function PurchasePanel({ agent, user, token, checkingOut, setCheckingOut }) {
             onClick={() => handleCheckout("rent")}
             data-testid="rent-agent-btn"
             disabled={checkingOut === "rent"}
-            className="w-full py-3.5 bg-cyan-400 text-white text-[14px] font-medium rounded-sm hover:bg-cyan-300 transition-all shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_30px_rgba(139,92,246,0.4)] flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full py-3.5 bg-cyan-400 text-black font-bold text-[14px] font-medium rounded-sm hover:bg-cyan-300 transition-all shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_30px_rgba(139,92,246,0.4)] flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {checkingOut === "rent" ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
             Rent Now — ${rentPrice}
@@ -306,7 +306,7 @@ export default function AgentDetail() {
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-violet-950/60 to-zinc-950" />
               )}
-              <button onClick={() => setShowDemo(true)} data-testid="agent-demo-btn" className="absolute bottom-4 left-4 flex items-center gap-2 px-5 py-2.5 bg-cyan-400 text-white text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all shadow-[0_0_20px_rgba(139,92,246,0.3)]">
+              <button onClick={() => setShowDemo(true)} data-testid="agent-demo-btn" className="absolute bottom-4 left-4 flex items-center gap-2 px-5 py-2.5 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all shadow-[0_0_20px_rgba(139,92,246,0.3)]">
                 <Play size={14} /> Live Demo
               </button>
             </div>
@@ -378,7 +378,7 @@ export default function AgentDetail() {
         {/* Tabs */}
         <div className="flex gap-1 mb-6 rounded-sm p-1 w-fit" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }} data-testid="agent-tabs">
           {["overview", "reviews"].map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)} data-testid={`tab-${tab}`} className={`px-5 py-2 text-[13px] rounded-sm transition-all capitalize ${activeTab === tab ? "bg-cyan-400 text-white" : "t-text-sub hover:t-text"}`}>{tab}</button>
+            <button key={tab} onClick={() => setActiveTab(tab)} data-testid={`tab-${tab}`} className={`px-5 py-2 text-[13px] rounded-sm transition-all capitalize ${activeTab === tab ? "bg-cyan-400 text-black font-bold" : "t-text-sub hover:t-text"}`}>{tab}</button>
           ))}
         </div>
 

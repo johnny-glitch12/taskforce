@@ -58,7 +58,7 @@ function ModeToggle({ mode, setMode, isMobile }) {
           data-testid={`${m}-mode-btn`}
           className={`flex items-center gap-1.5 px-3 sm:px-5 py-2 text-[12px] sm:text-[13px] rounded-sm transition-all duration-300 ${
             mode === m
-              ? "bg-cyan-400 text-white shadow-[0_0_15px_rgba(139,92,246,0.25)]"
+              ? "bg-cyan-400 text-black font-bold shadow-[0_0_15px_rgba(139,92,246,0.25)]"
               : "t-text-sub hover:t-text"
           }`}
         >
@@ -624,7 +624,7 @@ function CodePane({ visible, codeJson, onDeploy, onPublish, linterResult, onRunL
           <button onClick={onRunLinter} data-testid="run-linter-btn" className="flex items-center gap-1 px-2.5 py-1.5 t-text-mute text-[11px] rounded-sm hover:border-cyan-400/30 transition-all" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
             <Shield size={11} /> Scan
           </button>
-          <button onClick={onDeploy} data-testid="deploy-agent-btn" disabled={saving} className="flex items-center gap-1 px-3 py-1.5 bg-cyan-400 text-white text-[11px] font-medium rounded-sm hover:bg-cyan-300 transition-all shadow-[0_0_15px_rgba(139,92,246,0.2)] disabled:opacity-50">
+          <button onClick={onDeploy} data-testid="deploy-agent-btn" disabled={saving} className="flex items-center gap-1 px-3 py-1.5 bg-cyan-400 text-black font-bold text-[11px] font-medium rounded-sm hover:bg-cyan-300 transition-all shadow-[0_0_15px_rgba(139,92,246,0.2)] disabled:opacity-50">
             <Rocket size={11} /> {saving ? "..." : "Deploy"}
           </button>
         </div>

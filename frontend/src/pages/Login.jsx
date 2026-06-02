@@ -107,7 +107,7 @@ export default function Login() {
               <label htmlFor="password" className="block text-[13px] t-text-sub mb-2">Password</label>
               <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} data-testid="login-password-input" placeholder="Enter password" className={inputCls} style={{ border: '1px solid var(--input-border)' }} required />
             </div>
-            <button type="submit" data-testid="login-submit-btn" className="mt-2 w-full py-3.5 bg-cyan-400 text-white text-[14px] font-medium rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_35px_rgba(139,92,246,0.4)] disabled:opacity-50" disabled={submitting}>
+            <button type="submit" data-testid="login-submit-btn" className="mt-2 w-full py-3.5 bg-cyan-400 text-black text-[14px] font-bold rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.25)] hover:shadow-[0_0_35px_rgba(34,211,238,0.4)] disabled:opacity-50" disabled={submitting}>
               {submitting ? "Signing in..." : "Sign in"}
             </button>
             <div className="flex items-center justify-between mt-1">
@@ -132,7 +132,7 @@ export default function Login() {
               <label htmlFor="s-password" className="block text-[13px] t-text-sub mb-2">Password</label>
               <input id="s-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} data-testid="signup-password-input" placeholder="Min 6 characters" className={inputCls} style={{ border: '1px solid var(--input-border)' }} required minLength={6} />
             </div>
-            <button type="submit" data-testid="signup-submit-btn" className="mt-2 w-full py-3.5 bg-cyan-400 text-white text-[14px] font-medium rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_35px_rgba(139,92,246,0.4)] disabled:opacity-50" disabled={submitting}>
+            <button type="submit" data-testid="signup-submit-btn" className="mt-2 w-full py-3.5 bg-cyan-400 text-black text-[14px] font-bold rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.25)] hover:shadow-[0_0_35px_rgba(34,211,238,0.4)] disabled:opacity-50" disabled={submitting}>
               {submitting ? "Creating account..." : "Create account"}
             </button>
             <button type="button" data-testid="switch-to-login-btn" onClick={() => setMode("login")} className="flex items-center justify-center gap-1.5 text-[12px] t-text-sub hover:t-text transition-colors mt-1">
@@ -150,7 +150,7 @@ export default function Login() {
                   <label htmlFor="f-email" className="block text-[13px] t-text-sub mb-2">Email</label>
                   <input id="f-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="forgot-email-input" placeholder="your@email.com" className={inputCls} style={{ border: '1px solid var(--input-border)' }} required />
                 </div>
-                <button type="submit" data-testid="forgot-submit-btn" className="mt-2 w-full py-3.5 bg-cyan-400 text-white text-[14px] font-medium rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_35px_rgba(139,92,246,0.4)] disabled:opacity-50" disabled={submitting}>
+                <button type="submit" data-testid="forgot-submit-btn" className="mt-2 w-full py-3.5 bg-cyan-400 text-black text-[14px] font-bold rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.25)] hover:shadow-[0_0_35px_rgba(34,211,238,0.4)] disabled:opacity-50" disabled={submitting}>
                   {submitting ? "Sending..." : "Send reset link"}
                 </button>
                 <button type="button" onClick={() => setMode("login")} className="flex items-center justify-center gap-1.5 text-[12px] t-text-sub hover:t-text transition-colors mt-1">
@@ -197,7 +197,7 @@ function ResetPasswordForm({ token, API, onSuccess }) {
         <label htmlFor="new-password" className="block text-[13px] t-text-sub mb-2">New Password</label>
         <input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} data-testid="reset-password-input" placeholder="Min 6 characters" className="w-full t-input focus:outline-none focus:border-cyan-400/50 transition-all py-3 px-4 text-[15px] rounded-xl" style={{ border: '1px solid var(--input-border)' }} required minLength={6} />
       </div>
-      <button type="submit" data-testid="reset-submit-btn" className="mt-2 w-full py-3.5 bg-cyan-400 text-white text-[14px] font-medium rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_35px_rgba(139,92,246,0.4)] disabled:opacity-50" disabled={submitting}>
+      <button type="submit" data-testid="reset-submit-btn" className="mt-2 w-full py-3.5 bg-cyan-400 text-black text-[14px] font-bold rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.25)] hover:shadow-[0_0_35px_rgba(34,211,238,0.4)] disabled:opacity-50" disabled={submitting}>
         {submitting ? "Resetting..." : "Set new password"}
       </button>
     </form>

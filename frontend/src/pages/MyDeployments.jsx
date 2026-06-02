@@ -184,6 +184,11 @@ function DeploymentCard({ deployment: d, token, onUpdate }) {
               style={{ background: color, color: '#000' }}>
               <Play size={9} className="inline mr-1" /> Run Now
             </button>
+            <Link to={`/my-deployments/${d.id}/monitor`} data-testid={`dep-open-monitor-${d.id}`}
+              className="mt-2 w-full py-2 text-[10px] font-mono tracking-widest uppercase rounded-sm flex items-center justify-center gap-1.5 t-text-sub hover:t-text"
+              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+              <BarChart3 size={9} /> Open Full Analytics
+            </Link>
           </>
         )}
 

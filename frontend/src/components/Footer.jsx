@@ -18,7 +18,7 @@ const LEGAL = [
 ];
 
 function FooterLink({ to, href, label, badge }) {
-  const cls = "text-[12px] text-zinc-500 hover:text-cyan-400 transition-colors duration-200 flex items-center gap-2";
+  const cls = "text-[12px] t-text-mute hover:text-cyan-400 transition-colors duration-200 flex items-center gap-2";
 
   if (to) {
     return (
@@ -39,7 +39,7 @@ function FooterLink({ to, href, label, badge }) {
 
 function Badge({ text }) {
   return (
-    <span className="text-[10px] bg-zinc-900 text-cyan-400 px-1.5 py-0.5 rounded-sm font-mono leading-none">
+    <span className="text-[10px] t-bg-elev t-border border t-text-sub px-1.5 py-0.5 rounded-sm font-mono leading-none" style={{ color: '#22d3ee' }}>
       {text}
     </span>
   );
@@ -49,8 +49,8 @@ export default function Footer() {
   return (
     <footer
       data-testid="footer"
-      className="bg-black px-6 lg:px-8 pt-14 pb-8"
-      style={{ borderTop: "1px solid #1a1a1e" }}
+      className="t-bg-sub t-border px-6 lg:px-8 pt-14 pb-8"
+      style={{ borderTop: "1px solid var(--border)" }}
     >
       <div className="max-w-7xl mx-auto">
         {/* ── Main Grid ── */}
@@ -59,7 +59,7 @@ export default function Footer() {
           <div className="col-span-2 md:col-span-1">
             <div className="flex items-center gap-2 mb-4">
               <div className="w-[7px] h-[7px] bg-cyan-400" />
-              <span className="text-[13px] font-bold tracking-[0.1em] uppercase font-mono text-zinc-200">
+              <span className="text-[13px] font-bold tracking-[0.1em] uppercase font-mono t-text">
                 Task<span className="text-cyan-400">Force</span>
               </span>
               <span className="ml-1 px-1.5 py-0.5 text-[8px] font-bold tracking-[0.15em] uppercase font-mono rounded-sm text-cyan-300"
@@ -67,13 +67,13 @@ export default function Footer() {
                 Beta
               </span>
             </div>
-            <p className="text-[12px] text-zinc-600 leading-relaxed max-w-[220px] mb-4">
+            <p className="text-[12px] t-text-mute leading-relaxed max-w-[220px] mb-4">
               Build, deploy, and monetize autonomous AI agents.
             </p>
             <div>
-              <p className="text-[10px] tracking-[0.2em] uppercase font-mono text-zinc-400 mb-2 font-semibold">The Briefing</p>
+              <p className="text-[10px] tracking-[0.2em] uppercase font-mono t-text-sub mb-2 font-semibold">The Briefing</p>
               <NewsletterWidget />
-              <p className="text-[10px] text-zinc-600 mt-1.5 leading-relaxed">Weekly drops, leaderboard winners, integration news.</p>
+              <p className="text-[10px] t-text-mute mt-1.5 leading-relaxed">Weekly drops, leaderboard winners, integration news.</p>
             </div>
           </div>
 
@@ -81,7 +81,7 @@ export default function Footer() {
           <div>
             <h4
               data-testid="footer-col-ecosystem"
-              className="text-[10px] tracking-[0.2em] uppercase font-mono text-zinc-400 mb-4 font-semibold"
+              className="text-[10px] tracking-[0.2em] uppercase font-mono t-text-sub mb-4 font-semibold"
             >
               Ecosystem
             </h4>
@@ -96,7 +96,7 @@ export default function Footer() {
           <div>
             <h4
               data-testid="footer-col-company"
-              className="text-[10px] tracking-[0.2em] uppercase font-mono text-zinc-400 mb-4 font-semibold"
+              className="text-[10px] tracking-[0.2em] uppercase font-mono t-text-sub mb-4 font-semibold"
             >
               Company
             </h4>
@@ -111,7 +111,7 @@ export default function Footer() {
           <div>
             <h4
               data-testid="footer-col-legal"
-              className="text-[10px] tracking-[0.2em] uppercase font-mono text-zinc-400 mb-4 font-semibold"
+              className="text-[10px] tracking-[0.2em] uppercase font-mono t-text-sub mb-4 font-semibold"
             >
               Legal
             </h4>
@@ -124,10 +124,10 @@ export default function Footer() {
         </div>
 
         {/* ── Bottom Bar ── */}
-        <div className="pt-6" style={{ borderTop: "1px solid #18181b" }}>
+        <div className="pt-6" style={{ borderTop: "1px solid var(--border)" }}>
           <p
             data-testid="footer-copyright"
-            className="text-[10px] font-mono tracking-wide text-zinc-700"
+            className="text-[10px] font-mono tracking-wide t-text-dim"
           >
             &copy; 2026 TASK FORCE AI DEVELOPMENT SERVICES L.L.C. All rights reserved.
           </p>

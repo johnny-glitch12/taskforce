@@ -56,7 +56,7 @@ export default function PaymentSuccess() {
             </p>
             {data?.amount != null && <p className="text-[13px] text-zinc-600 mb-6">${(data.amount / 100).toFixed(2)} {data.currency?.toUpperCase()}</p>}
             <div className="flex flex-col sm:flex-row gap-3">
-              <Link to="/studio" data-testid="go-to-studio-btn" className="flex-1 py-3 bg-cyan-400 text-white text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all text-center">
+              <Link to="/studio" data-testid="go-to-studio-btn" className="flex-1 py-3 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all text-center">
                 Open Studio
               </Link>
               <Link to="/marketplace" data-testid="back-to-marketplace-btn" className="flex-1 py-3 bg-white/[0.06] text-white text-[13px] font-medium rounded-sm border border-white/[0.08] hover:bg-white/[0.1] transition-all text-center">
@@ -76,7 +76,7 @@ export default function PaymentSuccess() {
             <p className="text-[13px] text-zinc-500 mb-6">
               {status === "expired" ? "Your payment session has expired. Please try again." : "We couldn't verify your payment. Please try again or contact support."}
             </p>
-            <Link to="/marketplace" className="inline-block py-3 px-8 bg-cyan-400 text-white text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all">
+            <Link to="/marketplace" className="inline-block py-3 px-8 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all">
               Back to Marketplace
             </Link>
           </>

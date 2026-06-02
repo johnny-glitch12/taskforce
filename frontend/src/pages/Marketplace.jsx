@@ -63,7 +63,7 @@ function CategoryPills({ activeCategory, setActiveCategory }) {
             data-testid={`category-${cat.id}`}
             className={`flex items-center gap-2 px-4 py-2 text-[13px] rounded-sm whitespace-nowrap transition-all duration-200 ${
               isActive
-                ? "bg-cyan-400 text-white shadow-[0_0_15px_rgba(139,92,246,0.25)]"
+                ? "bg-cyan-400 text-black font-bold shadow-[0_0_15px_rgba(34,211,238,0.35)]"
                 : "t-text-sub"
             }`}
             style={!isActive ? { background: 'var(--bg-card)', border: '1px solid var(--border)' } : {}}
@@ -156,7 +156,7 @@ function AgentCard({ agent, index }) {
           <div className="w-full h-full bg-gradient-to-br from-violet-950/80 to-zinc-950 opacity-60" />
         )}
         {agent.trendingLabel && (
-          <span className="absolute top-3 left-3 text-[10px] bg-cyan-400/80 backdrop-blur-sm text-white px-2.5 py-1 rounded-sm font-medium flex items-center gap-1">
+          <span className="absolute top-3 left-3 text-[10px] bg-cyan-400/90 backdrop-blur-sm text-black px-2.5 py-1 rounded-sm font-bold flex items-center gap-1">
             <TrendingUp size={10} /> {agent.trendingLabel}
           </span>
         )}

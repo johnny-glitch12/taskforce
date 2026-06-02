@@ -24,6 +24,7 @@ import Leaderboard from "@/pages/Leaderboard";
 import ComingSoon from "@/pages/ComingSoon";
 import Credits from "@/pages/Credits";
 import MyDeployments from "@/pages/MyDeployments";
+import UsageMonitor from "@/pages/UsageMonitor";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -40,11 +41,10 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-/** Admin-only route — non-admins see a ComingSoon page. */
+/** Admin-only route — non-admins (including unauthenticated) see ComingSoon. */
 function AdminGate({ children, feature, subtitle }) {
-  const { user, isAdmin, loading } = useAuth();
+  const { isAdmin, loading } = useAuth();
   if (loading) return null;
-  if (!user) return <Navigate to="/login" replace />;
   if (!isAdmin) return <ComingSoon feature={feature} subtitle={subtitle} />;
   return children;
 }
@@ -184,6 +184,11 @@ function App() {
                   path="/my-deployments"
                   element={<ProtectedRoute><MyDeployments /></ProtectedRoute>}
                 />
+                <Route
+                  path="/my-deployments/:id/monitor"
+                  element={<ProtectedRoute><UsageMonitor /></ProtectedRoute>}
+                />
+                <Route path="/deployments" element={<Navigate to="/my-deployments" replace />} />
                 <Route
                   path="/dashboard"
                   element={

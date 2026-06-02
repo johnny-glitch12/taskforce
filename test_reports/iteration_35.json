@@ -1,0 +1,36 @@
+{
+  "summary": "Iter35 verification: AdminGate P0 fix CONFIRMED (unauth /armory /studio /academy now show coming-soon-page, no /login redirect). All 3 new Usage Monitor backend endpoints (/run persist + /runs paginated + /analytics) PASS (11/11 pytest). Frontend UsageMonitor page renders all 11 expected testids, Run Now adds new row, LIVE toggle works, refresh + back-to-deployments work. Footer dark-mode sweep: light=rgb(244,244,245)/dark=rgb(9,9,11) — both correct, no pure-black bleed. Login CTA computed style: rgb(0,0,0) on rgb(34,211,238) cyan-400 — correct. Marketplace active pill renders dark text on cyan. /deployments alias correctly resolves (unauth → /login via ProtectedRoute).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter35_usage_monitor.py",
+    "/app/test_reports/pytest/iter35_usage_monitor.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AdminGate (App.js:45-50) is now clean: loading→null, !isAdmin→ComingSoon, else children. Public ComingSoon path verified.",
+    "POST /api/deployments/{id}/run now persists to deployment_runs with full shape (id, status, duration_ms, credits_spent, started_at, trigger) — verified via Create→GET cycle 3x.",
+    "Analytics percentile algorithm is the nearest-rank index method — for [100..1000] step 100, p50→500, p95→1000, p99→1000 confirmed by reproducing the formula in test_percentile_calculation_logic. Note: this is NOT linear interpolation; documenting for any downstream consumer expecting interpolated percentiles.",
+    "Analytics days param correctly clamped to [1, 90] (verified: days=0→1, days=500→90).",
+    "Zero-day daily buckets filled in correctly — 30 entries for default, with date/runs/success/failed shape.",
+    "Cross-user access: GET /runs and /analytics for non-owner deployment id return 404 (no info leak). Verified with random uuid.",
+    "Footer Light/Dark theme vars working — t-bg-sub renders rgb(244,244,245) in light, rgb(9,9,11) in dark.",
+    "Login CTA computed color is rgb(0,0,0) (text-black) on rgb(34,211,238) (cyan-400) — contrast bug fixed.",
+    "/deployments alias route works (Navigate to /my-deployments, ProtectedRoute then bounces unauth to /login as expected).",
+    "Minor: file /app/backend/routes/credits_and_more.py is 730 lines — approaches the 700-line guideline; consider splitting deployments/runs/analytics into a separate module in a future iteration."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter35_usage_monitor.py (new)"
+  ],
+  "success_rate": {"backend": "100% (11/11 new + 4/4 regression)", "frontend": "100% (all 14 listed UsageMonitor + dark-mode checks pass)"},
+  "test_credentials": "admin@nova.ai / admin123 (admin, unlimited). Used existing deployment id=9736667a4a2a4acca927acfb8de48a9c (admin's free bot).",
+  "seed_data_creation": "No new persistent seed data. Backend tests added a few simulated /run events (deployment_runs collection grew by ~6 docs across 2 test classes). Frontend test added 1 more /run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend URL: https://dark-mode-nova.preview.emergentagent.com. Run regression with `pytest backend/tests/test_iter35_usage_monitor.py -v`. Admin deployment id `9736667a4a2a4acca927acfb8de48a9c` now has ~9 runs in deployment_runs (was 5). Iter34's P0 AdminGate redirect is fixed and re-verified. All testids on UsageMonitor page (usage-monitor-page, kpi-*, usage-volume-chart, usage-runs-table, run-row-*, usage-monitor-run-now/live-toggle/refresh, back-to-deployments) are present and functional.",
+  "rca_of_the_issue": "N/A — iter34 P0 (AdminGate) was fixed by main agent (removed `if (!user) return <Navigate to=\"/login\">` on App.js:40-50). Re-verified: line 47 now only checks `if (!isAdmin) return <ComingSoon />` so both unauth and non-admin auth users see ComingSoon as spec requires."
+}

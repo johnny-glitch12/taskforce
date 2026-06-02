@@ -140,7 +140,7 @@ export default function SecurityDashboard() {
               onClick={() => setFilter(f)}
               data-testid={`filter-${f.toLowerCase()}`}
               className={`px-3 py-1.5 text-[12px] rounded-sm transition-all ${
-                filter === f ? "bg-cyan-400 text-white" : "t-text-sub"
+                filter === f ? "bg-cyan-400 text-black font-bold" : "t-text-sub"
               }`}
               style={filter !== f ? { background: 'var(--bg-card)', border: '1px solid var(--border)' } : {}}
             >

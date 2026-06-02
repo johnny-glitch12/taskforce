@@ -170,7 +170,7 @@ export default function CreatorDashboard() {
             <Link
               to="/studio"
               data-testid="goto-studio-btn"
-              className="px-4 py-2 bg-cyan-400 text-white text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all shadow-[0_0_15px_rgba(139,92,246,0.2)] flex items-center gap-2"
+              className="px-4 py-2 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all shadow-[0_0_15px_rgba(139,92,246,0.2)] flex items-center gap-2"
             >
               <Plus size={13} /> Build Agent
             </Link>
@@ -202,7 +202,7 @@ export default function CreatorDashboard() {
               <p className="text-[12px] t-text-dim mb-4">Build your first agent in The Armory and publish it to the marketplace.</p>
               <Link
                 to="/studio"
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-cyan-400 text-white text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all"
               >
                 <Plus size={14} /> Go to Studio
               </Link>
