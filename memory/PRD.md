@@ -23,7 +23,29 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
-### Phase 39 (Jun, 2026) — Credit Wallet · Promo Codes · Newsletter · Deployment System · Admin Gating
+### Phase 40 (Feb, 2026) — Usage Monitor + Dark Mode Sweep + AdminGate Fix
+- **AdminGate P0 fix** (`App.js:43-49`): Removed the `if (!user) return <Navigate to="/login">` redirect. Both unauthenticated AND non-admin authenticated users now see the `ComingSoon` page when visiting `/armory`, `/studio`, `/academy` — matches spec. `/deployments` added as an alias route → `/my-deployments`.
+- **Usage Monitor analytics dashboard** — new `/my-deployments/:id/monitor` route + `UsageMonitor.jsx` page:
+  - 4 KPI cards: Total Runs, Success Rate (color-coded healthy/watch/at-risk), P95 Latency (with P50/P99 subtitle), Credits Spent
+  - 30-day daily execution volume bar chart (success cyan + failed rose, stacked) with hover tooltips
+  - Monthly quota progress bar with near-limit warning
+  - Latency distribution panel (avg/min/max/P99)
+  - Recent errors strip (last 5 failures)
+  - Execution log table with paginated runs (status pill, trigger, duration, credits, timestamp)
+  - LIVE polling toggle (5s interval), Refresh, and Run Now buttons in header
+  - "Open Full Analytics" link added from each MyDeployments deployment card
+- **3 new backend endpoints** (`routes/credits_and_more.py`):
+  - `POST /api/deployments/{id}/run` — now also persists a `deployment_runs` doc per execution (simulated duration_ms 180-2400ms + success 95% baseline until real engine is wired). Returns `{allowed, run_count, limit, run_id, duration_ms, success}`.
+  - `GET /api/deployments/{id}/runs?limit=&skip=` — paginated execution log, capped 1-200, owner-scoped (404 cross-user)
+  - `GET /api/deployments/{id}/analytics?days=` — aggregates: totals (runs, successes, failures, success_rate, credits_spent), latency_ms (avg/p50/p95/p99/min/max nearest-rank percentiles), daily 30-day histogram (zero-days filled), monthly_quota (used/limit/remaining), recent_errors (max 5). days clamped 1-90.
+- **Dark mode sweep**:
+  - `Footer.jsx`: replaced hardcoded `bg-black` + `text-zinc-*` with theme-aware `t-bg-sub` / `t-text-sub` / `t-text-mute` / `t-text-dim` + CSS var borders. No more pure-black bleed in light mode.
+  - `Login.jsx`: 4 CTAs (login/signup/forgot/reset) changed from `bg-cyan-400 text-white` (poor contrast) → `bg-cyan-400 text-black font-bold` + proper cyan shadow color.
+  - `Marketplace.jsx`: active category pill + "Most Deployed" badge now use `text-black font-bold` on cyan.
+  - 7 additional pages auto-patched via sed (Dashboard, Academy, SecurityDashboard, AgentDetail, PaymentSuccess, Studio, CreatorDashboard) — all `bg-cyan-400 text-white` and `bg-emerald-*-text-white` → `text-black font-bold`.
+- **Verified live**: iter35 testing agent — backend 11/11 new + 4/4 regression pass; frontend 100% (all 14 UsageMonitor testids + theme computed-style checks pass). AdminGate P0 re-verified — unauth `/armory` shows ComingSoon, no /login redirect.
+
+
 - **Credit wallet** (`/app/backend/lib/credit_wallet.py`, NEW): Emergent-style balance system replaces the old monthly per-tier counter. `credit_balance` field on user doc, atomic `find_one_and_update` debits in `wallet.debit()`, immutable ledger in `credit_transactions`. Action costs: build_bot=5, workflow_run=1, bot_deploy=0. Admin role bypass returns balance=10⁹ (rendered as ∞). Tier monthly grants: free/recruit=50, cadet=500, operator=2000, pro=10000.
 - **Armory build-bot now debits credits**: `armory_builder.build_bot` swapped from `check_compute_credits` to `wallet_can_afford("build_bot")` (returns 402 INSUFFICIENT_CREDITS on empty wallet) → `wallet_debit("build_bot")` on success. Ledger entry written with `ref=project_id`.
 - **Top-up packs + Stripe** (`routes/credits_and_more.py`): 4 one-time packs (Starter $5/200cr, Builder $19/1000cr, Operator $79/5000cr, Agency $299/25000cr). `POST /api/credits/topup/checkout` mints a Stripe session, `POST /api/credits/topup/poll/{session_id}` is the idempotent success-page handler that grants credits after Stripe confirms `payment_status=paid`.
