@@ -23,6 +23,21 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 37 (Jun, 2026) — DirectPublish "Live Preview" UX Overhaul (cyber-luxury)
+- **Two-column live-preview layout** (DirectPublishModal Step 1): left = form, right = sticky `LivePreviewCard` that updates in real-time as the creator types. Modal width grew to `max-w-6xl` on Step 1 (other steps stay `max-w-3xl`).
+- **4 new marketplace metadata fields**:
+  - **Bot Avatar**: 12 lucide icons (Bot, Zap, Rocket, Brain, Sparkles, Shield, ShoppingBag, Mail, MessageCircle, Database, Code, Globe) + 8-color palette. Selected color propagates as a CSS `--glow` variable to every active field and the preview card border/header.
+  - **Required Integrations**: badge multi-select chip grid covering all 15 BYOK services. Selected chips render with avatar-color glow + ✓ icon.
+  - **Trigger Type**: 3-tile segmented control (Manual / Webhook / Schedule) with icon + sub-label.
+  - **Core Engine**: 4-tile segmented control (Gemini Flash / Gemini Pro / OpenAI BYOK / Claude BYOK) with descriptors.
+- **Cyber-luxury aesthetic**:
+  - New `.cy-input` class — glassmorphism (rgba 0.02 bg + backdrop-blur 6px), focus state glows in the avatar color via `box-shadow: 0 0 0 1px var(--glow), 0 0 18px var(--glow)`.
+  - Pricing inputs use JetBrains Mono with letter-spacing for the "tech-finance" look; **live 80% take-home calc** renders below each price (`$0.40 to you · /run`).
+  - Live Preview Card has a radial-gradient header in the avatar color, floating square avatar tile with avatar-color glow ring, formatted category breadcrumb, trigger+engine chips, integration badges (cap 6, overflow `+N`), monospace pricing row, disabled `DEPLOY` button styled in the avatar color.
+- **Backend extended** (`routes/exchange.py`): `DirectPublishRequest` gains `avatar_icon`, `avatar_color`, `required_integrations[]`, `trigger_type` (manual|webhook|schedule pattern-validated), `engine` (gemini-flash|gemini-pro|byok-openai|byok-claude pattern-validated). All 5 persisted on `exchange_listings` doc.
+- **Verified live**: POST /api/exchange/listings/direct with full payload returns status='draft' + all new fields echoed back; validation 422s on invalid trigger_type and short name. Screenshot confirms full UI renders correctly with purple Rocket avatar propagating glow to all active controls.
+- Ruff + eslint all green.
+
 ### Phase 36 (Feb, 2026) — BYOK "Test Connection" Probes
 - **15 sanity-probe handlers** (`/app/backend/lib/byok_probes.py`, NEW): One read-only API call per service to verify a stored credential is alive without writing data / charging / sending messages — Slack (POST empty payload, expects 400 'no_text'), SendGrid (`/v3/user/profile`), Gmail (`/users/me/profile`), Telegram (`/getMe`), Discord (`GET webhook`), Stripe (`/v1/balance`), Notion (`/users/me`), Google Sheets (`/oauth2/v1/tokeninfo`), Twilio (`/Accounts/{sid}.json`), GitHub (`/user`), OpenAI (`/v1/models`), Anthropic (1-token `/v1/messages` probe with claude-haiku), Instagram (`/me?fields=username`), Postgres (`SELECT version()` via asyncpg), MongoDB (`server_info()` via motor). Each returns `{ok, status_code, detail, latency_ms}`.
 - **NEW endpoint `POST /api/workflows/credentials/{service}/test`**: looks up the encrypted credential, decrypts, calls the matching probe, persists `last_probe` (ok/status_code/detail/latency_ms/checked_at) onto the credential doc, and returns the result.
