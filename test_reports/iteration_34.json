@@ -1,0 +1,45 @@
+{
+  "summary": "Iter39 E2E regression: 25/25 backend tests PASS covering credits wallet, Stripe top-up checkout, promo codes (mint/list/redeem/double-redeem block/delete), newsletter (subscribe/idempotent/admin-list/unsubscribe), deployments (me/free-404/paid checkout), armory auth gate, exchange public+422, BYOK Stripe roundtrip + masking + probe + whitelist + 5 service probes. Frontend smoke: admin login works, Credits page renders fully (balance card, promo input, all 4 packs), Credentials Vault renders TEST button + UNTESTED badge, Newsletter widget submits successfully. Two deviations from spec found (see frontend_issues).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AdminGate (App.js:47)", "issue": "Public unauthenticated visitor to /armory /studio /academy is REDIRECTED to /login instead of seeing the ComingSoon page. Spec explicitly required ComingSoon for non-admins (including not-logged-in users). Current logic: `if (!user) return <Navigate to=\"/login\" replace />;` should be removed so ComingSoon shows for both unauth and non-admin auth users.", "selector": "/armory /studio /academy public", "priority": "HIGH"},
+      {"component": "MyDeployments page", "issue": "Admin navigation to /deployments did not expose data-testid='my-deployments-page' within 2.5s — needs verification (could be slow lazy-load or auth guard issue). Page route may not be wired or initial fetch is failing silently.", "selector": "[data-testid='my-deployments-page']", "priority": "MEDIUM"},
+      {"component": "Armory/Studio canvas", "issue": "After admin login, /armory does NOT render the ComingSoon page (good) but the React Flow studio canvas was not found via [data-testid='studio-canvas'] or .react-flow class. Verify the canvas testid/class wiring on the actual Studio page.", "selector": "[data-testid='studio-canvas']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Navbar (admin)", "issues": ["After login, THE ARMORY and ACADEMY links correctly lose SOON badge, but LEADERBOARD still shows SOON. Verify this is intentional per spec (Leaderboard not yet unlocked for admin)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter39_credits_promo_deploy.py",
+    "/app/test_reports/pytest/iter39.xml"
+  ],
+  "action_items": [
+    "P0: Fix AdminGate in /app/frontend/src/App.js line 47 — remove the `if (!user) Navigate to /login` so unauthenticated public users see ComingSoon (matches spec).",
+    "P1: Verify /deployments route wiring and add data-testid='my-deployments-page' visibility on initial load (or extend skeleton/loading state).",
+    "P2: Confirm Studio canvas testid for admin view (add data-testid='studio-canvas' to the root React Flow wrapper for testability).",
+    "Note: review request mentioned testids like 'credits-balance', 'promo-code-input', 'topup-pack-*', 'coming-soon-lock' — actual code uses 'credit-balance-card', 'promo-input', 'pack-{id}', 'coming-soon-page'. Either update review docs OR align testids. No functional impact."
+  ],
+  "critical_code_review_comments": [
+    "AdminGate currently splits unauth → /login and non-admin auth → ComingSoon. Spec says public sees ComingSoon. Single behavior expected.",
+    "promo redemption double-redeem correctly returns 409 (atomic) — verified.",
+    "Stripe checkout returns real test-mode session_id + url for both /credits/topup/checkout and /deployments/checkout — verified, no actual payment attempted.",
+    "BYOK keys are masked in GET responses; whitelist rejects invalid services with 422 — verified.",
+    "Newsletter emails are normalized to lowercase server-side; clients should expect lowercased echoes (test updated)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter39_credits_promo_deploy.py (new)"
+  ],
+  "success_rate": {"backend": "100% (25/25)", "frontend": "~80% (5/7 smoke flows green; 2 deviations need main-agent fix)"},
+  "test_credentials": "admin@nova.ai / admin123 (admin, unlimited). Test users created on demand with TEST_iter39_<uuid>@test.com / Test12345!",
+  "seed_data_creation": "Created 1 promo code TEST_<hex> (now disabled), 1 paid listing TEST_paid_<hex>, 1 newsletter subscriber TEST_iter39_<hex>@example.com (then unsubscribed), and multiple BYOK fake credentials per test user.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend URL is https://dark-mode-nova.preview.emergentagent.com (read from /app/frontend/.env). Backend tests live in /app/backend/tests/test_iter39_credits_promo_deploy.py — run with `pytest backend/tests/test_iter39_credits_promo_deploy.py -v`. The AdminGate redirect-to-login bug (App.js:47) is the only P0. Once fixed, retest with playwright: incognito → /armory /studio /academy → expect [data-testid='coming-soon-page'] visible.",
+  "rca_of_the_issue": "AdminGate logic in /app/frontend/src/App.js was implemented as a strict auth-required + admin-required guard. The first branch `if (!user) return <Navigate to=\"/login\" replace />;` short-circuits unauthenticated users to /login, preventing the ComingSoon page from ever rendering for public visitors. Mitigation: replace lines 46-49 with `if (loading) return null; if (!isAdmin) return <ComingSoon feature={feature} subtitle={subtitle} />;` — this lets both anonymous and non-admin-authenticated users see ComingSoon, matching spec."
+}
