@@ -23,6 +23,22 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 39 (Jun, 2026) — Credit Wallet · Promo Codes · Newsletter · Deployment System · Admin Gating
+- **Credit wallet** (`/app/backend/lib/credit_wallet.py`, NEW): Emergent-style balance system replaces the old monthly per-tier counter. `credit_balance` field on user doc, atomic `find_one_and_update` debits in `wallet.debit()`, immutable ledger in `credit_transactions`. Action costs: build_bot=5, workflow_run=1, bot_deploy=0. Admin role bypass returns balance=10⁹ (rendered as ∞). Tier monthly grants: free/recruit=50, cadet=500, operator=2000, pro=10000.
+- **Armory build-bot now debits credits**: `armory_builder.build_bot` swapped from `check_compute_credits` to `wallet_can_afford("build_bot")` (returns 402 INSUFFICIENT_CREDITS on empty wallet) → `wallet_debit("build_bot")` on success. Ledger entry written with `ref=project_id`.
+- **Top-up packs + Stripe** (`routes/credits_and_more.py`): 4 one-time packs (Starter $5/200cr, Builder $19/1000cr, Operator $79/5000cr, Agency $299/25000cr). `POST /api/credits/topup/checkout` mints a Stripe session, `POST /api/credits/topup/poll/{session_id}` is the idempotent success-page handler that grants credits after Stripe confirms `payment_status=paid`.
+- **Promo codes**: Admin-only mint/list/disable (`POST/GET/DELETE /api/promo/codes`). Two kinds — `credits` (mint N credits on redeem) and `discount_pct` (apply at top-up checkout). One redemption per user per code enforced via `credit_transactions` lookup.
+- **Newsletter**: `POST /api/newsletter/subscribe` (public, dedupe via email upsert), `GET /api/newsletter/subscribers` (admin), `DELETE /api/newsletter/unsubscribe`. `NewsletterWidget.jsx` lives in the footer of every page.
+- **Delivery / Deployments system** (`user_bot_deployments` collection): 
+  - `POST /api/deployments/free` — instant provision for `rent_price==0 && buy_price==0` listings
+  - `POST /api/deployments/checkout` + `/poll/{session_id}` — Stripe one-time payment flow for paid listings (creator gets 80% via `creator_revenue_ledger`, platform 20%)
+  - `POST /api/deployments/{id}/upgrade` + `/upgrade-poll` — rent→buy upgrade via Stripe delta
+  - `GET /api/deployments/me`, `GET /:id`, `PATCH /:id` (customize name + vars + files + nodes/edges), `POST /:id/run` (usage counter, gated by per-deployment monthly limit)
+- **MyDeployments page** (`pages/MyDeployments.jsx`): Card grid with Monitor/Customize/Upgrade tabs per deployment. Live usage bar with near-limit red warning, Run Now button, editable name + env vars, upgrade-to-buy CTA. Avatar inherits listing's icon+color+url with glow border.
+- **Credits page** (`pages/Credits.jsx`): Balance card (∞ for admins), action costs sidebar, promo code input, 4 top-up pack tiles, recent transactions ledger.
+- **Admin gating**: `<AdminGate>` wrapper in `App.js`. `/armory`, `/studio`, `/academy` all gated. Non-admins land on `ComingSoon.jsx` with lock icon + waitlist hint. Navbar `CENTER_LINKS_PUBLIC` vs `CENTER_LINKS_ADMIN` branch shows SOON badges to non-admins on Armory/Leaderboard/Academy; admin-only access has the full set unlocked.
+- **Verified live**: Backend smoke run pass on all 4 new surfaces (credits/me, promo mint+redeem, newsletter subscribe+list, deploy free+checkout+patch+run). Screenshots confirm ComingSoon page renders for non-admins on `/armory`, Credits page renders with ∞ balance + all 4 packs + promo input + ledger for admin.
+
 ### Phase 38 (Jun, 2026) — Custom Photo Avatars for Direct Publish
 - **Custom photo upload slot** as the first tile of the Bot Avatar picker in `DirectPublishModal` Step 1: dashed-border upload tile with `UPLOAD` label that swaps to the local image preview (via `URL.createObjectURL`) with a `🗑` remove button. When active, the 12 lucide icons dim to 45% opacity to signal they are overridden, and a "Custom photo active · color tints accents only" hint appears.
 - **Live preview card** now renders the uploaded image inside the floating avatar tile (replacing the icon) so creators see exactly how the listing will look before publishing.

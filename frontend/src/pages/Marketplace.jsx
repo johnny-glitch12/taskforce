@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/App";
+import { toast } from "sonner";
 import DirectPublishModal from "../components/DirectPublishModal";
 import {
   Search, Heart, Star, Shield, ChevronRight, TrendingUp,
@@ -203,18 +204,17 @@ function AgentCard({ agent, index }) {
           </span>
         </div>
 
-        <div className="pt-3 flex items-center justify-between" style={{ borderTop: '1px solid var(--border)' }}>
-          <Link
-            to={`/agent/${agent.id}?demo=true`}
-            data-testid={`agent-live-demo-${agent.id}`}
-            className="flex items-center gap-1.5 text-[12px] text-cyan-400 hover:text-cyan-300 transition-colors font-medium"
-          >
-            <Play size={11} /> Live Demo
-          </Link>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] t-text-dim px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-card-hover)' }}>Rent</span>
-            <span className="text-[15px] font-semibold t-text">${agent.price}<span className="text-[11px] t-text-dim font-normal">/mo</span></span>
+        <div className="pt-3 flex items-center justify-between gap-2" style={{ borderTop: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[15px] font-semibold t-text font-mono">${agent.price}<span className="text-[11px] t-text-dim font-normal">/mo</span></span>
           </div>
+          <button
+            data-testid={`agent-deploy-${agent.id}`}
+            onClick={(e) => { e.stopPropagation(); window.deployFromCard?.(agent); }}
+            className="flex items-center gap-1 px-3 py-1.5 text-[10px] tracking-widest uppercase font-mono rounded-sm bg-cyan-400 text-black hover:bg-cyan-300 transition-colors"
+          >
+            <Play size={10} /> Deploy
+          </button>
         </div>
       </div>
     </div>
@@ -228,6 +228,33 @@ export default function Marketplace() {
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showPublish, setShowPublish] = useState(false);
+
+  // Make the card-level Deploy button work by attaching a global handler the
+  // grid's MarketplaceCard delegates to. Cleaned up on unmount.
+  useEffect(() => {
+    window.deployFromCard = async (agent) => {
+      if (!token) {
+        toast.error("Sign in to deploy.");
+        window.location.href = "/login";
+        return;
+      }
+      const isFree = (parseFloat(agent.price) || 0) === 0 && (parseFloat(agent.buy_price) || 0) === 0;
+      const endpoint = isFree ? "/api/deployments/free" : "/api/deployments/checkout";
+      try {
+        const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}${endpoint}`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ listing_id: agent.id, mode: isFree ? "free" : "rent" }),
+        });
+        const data = await res.json();
+        if (!res.ok) { toast.error(data.detail || "Deploy failed."); return; }
+        if (data.url) { window.location.href = data.url; return; }  // Stripe redirect
+        toast.success("Deployed.");
+        window.location.href = "/my-deployments";
+      } catch { toast.error("Network error."); }
+    };
+    return () => { delete window.deployFromCard; };
+  }, [token]);
 
   const fetchAgents = useCallback(async () => {
     setLoading(true);

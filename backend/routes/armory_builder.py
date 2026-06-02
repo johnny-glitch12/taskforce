@@ -22,7 +22,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from lib.compute_credits import check_compute_credits, increment_compute_usage
+from lib.credit_wallet import can_afford as wallet_can_afford, debit as wallet_debit
 
 router = APIRouter()
 
@@ -233,11 +233,11 @@ async def build_bot(req: BuildBotRequest, user=Depends(get_current_user())):
     db = get_db()
     user_id = str(user.get("id", user.get("email")))
 
-    # Compute credits gate
-    credit_check = await check_compute_credits(db, user)
-    if credit_check.get("allowed") is False:
+    # Credit wallet gate — Armory build costs 5 credits per bot.
+    credit_check = await wallet_can_afford(db, user, "build_bot")
+    if not credit_check.get("allowed"):
         from fastapi.responses import JSONResponse
-        return JSONResponse(status_code=200, content=credit_check)
+        return JSONResponse(status_code=402, content=credit_check)
 
     try:
         bot = await _generate_with_gemini(req.prompt)
@@ -300,7 +300,7 @@ async def build_bot(req: BuildBotRequest, user=Depends(get_current_user())):
         }
         await db.bot_projects.insert_one(doc)
 
-    await increment_compute_usage(db, user)
+    await wallet_debit(db, user, "build_bot", ref=project_id)
 
     project = await db.bot_projects.find_one({"id": project_id}, {"_id": 0})
     return {"success": True, "project_id": project_id, "project": project}

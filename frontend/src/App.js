@@ -21,6 +21,9 @@ import Pricing from "@/pages/Pricing";
 import CreatorDashboard from "@/pages/CreatorDashboard";
 import CredentialsVault from "@/pages/CredentialsVault";
 import Leaderboard from "@/pages/Leaderboard";
+import ComingSoon from "@/pages/ComingSoon";
+import Credits from "@/pages/Credits";
+import MyDeployments from "@/pages/MyDeployments";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -34,6 +37,15 @@ function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
+/** Admin-only route — non-admins see a ComingSoon page. */
+function AdminGate({ children, feature, subtitle }) {
+  const { user, isAdmin, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!isAdmin) return <ComingSoon feature={feature} subtitle={subtitle} />;
   return children;
 }
 
@@ -134,7 +146,10 @@ function App() {
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
-                <Route path="/academy" element={<Academy />} />
+                <Route
+                  path="/academy"
+                  element={<AdminGate feature="The Academy" subtitle="Free training videos, drops, and operator playbooks land here when we publicly open Task Force AI." />}
+                />
                 <Route path="/pricing" element={<Pricing />} />
                 <Route path="/exchange" element={<Marketplace />} />
                 <Route path="/leaderboard" element={<Leaderboard />} />
@@ -145,18 +160,29 @@ function App() {
                 <Route
                   path="/armory"
                   element={
-                    <ProtectedRoute>
+                    <AdminGate
+                      feature="The Armory"
+                      subtitle="Visual + code bot builder is in private beta. Public access opens with the v1 launch — join the waitlist below."
+                    >
                       <Studio />
-                    </ProtectedRoute>
+                    </AdminGate>
                   }
                 />
                 <Route
                   path="/studio"
                   element={
-                    <ProtectedRoute>
+                    <AdminGate feature="The Armory">
                       <Studio />
-                    </ProtectedRoute>
+                    </AdminGate>
                   }
+                />
+                <Route
+                  path="/credits"
+                  element={<ProtectedRoute><Credits /></ProtectedRoute>}
+                />
+                <Route
+                  path="/my-deployments"
+                  element={<ProtectedRoute><MyDeployments /></ProtectedRoute>}
                 />
                 <Route
                   path="/dashboard"

@@ -1900,6 +1900,10 @@ app.include_router(gmail_oauth_router, prefix="/api")
 from routes.armory_builder import router as armory_builder_router
 app.include_router(armory_builder_router, prefix="/api")
 
+# Include Credits + Promo + Newsletter + Deployments (iter39)
+from routes.credits_and_more import router as credits_and_more_router
+app.include_router(credits_and_more_router, prefix="/api")
+
 # Mount uploads dir for exchange listing media (videos + photos)
 UPLOADS_DIR = Path(__file__).parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)

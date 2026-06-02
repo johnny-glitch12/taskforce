@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import NewsletterWidget from "./NewsletterWidget";
 
 const ECOSYSTEM = [
   { to: "/exchange", label: "The Exchange" },
@@ -61,10 +62,19 @@ export default function Footer() {
               <span className="text-[13px] font-bold tracking-[0.1em] uppercase font-mono text-zinc-200">
                 Task<span className="text-cyan-400">Force</span>
               </span>
+              <span className="ml-1 px-1.5 py-0.5 text-[8px] font-bold tracking-[0.15em] uppercase font-mono rounded-sm text-cyan-300"
+                style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.35)' }}>
+                Beta
+              </span>
             </div>
-            <p className="text-[12px] text-zinc-600 leading-relaxed max-w-[200px]">
+            <p className="text-[12px] text-zinc-600 leading-relaxed max-w-[220px] mb-4">
               Build, deploy, and monetize autonomous AI agents.
             </p>
+            <div>
+              <p className="text-[10px] tracking-[0.2em] uppercase font-mono text-zinc-400 mb-2 font-semibold">The Briefing</p>
+              <NewsletterWidget />
+              <p className="text-[10px] text-zinc-600 mt-1.5 leading-relaxed">Weekly drops, leaderboard winners, integration news.</p>
+            </div>
           </div>
 
           {/* Ecosystem */}

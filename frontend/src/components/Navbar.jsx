@@ -1,10 +1,18 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/App";
 import { useTheme } from "@/lib/theme";
-import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, LogOut } from "lucide-react";
+import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, LogOut, Coins, Rocket } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
-const CENTER_LINKS = [
+const CENTER_LINKS_PUBLIC = [
+  { to: "/exchange", label: "The Exchange" },
+  { to: "/armory", label: "The Armory", soon: true },
+  { to: "/leaderboard", label: "Leaderboard", soon: true },
+  { to: "/academy", label: "Academy", soon: true },
+  { to: "/pricing", label: "Pricing" },
+];
+
+const CENTER_LINKS_ADMIN = [
   { to: "/exchange", label: "The Exchange" },
   { to: "/armory", label: "The Armory" },
   { to: "/leaderboard", label: "Leaderboard", soon: true },
@@ -25,6 +33,8 @@ function UserMenu({ user, logout, navigate }) {
 
   const menuItems = [
     { to: "/dashboard", label: "Command Center", icon: LayoutDashboard },
+    { to: "/credits", label: "Credits", icon: Coins },
+    { to: "/my-deployments", label: "My Deployments", icon: Rocket },
     ...(isAdmin ? [
       { to: "/overwatch", label: "Overwatch", icon: BarChart3, accent: true },
       { to: "/security", label: "Security", icon: Shield },
@@ -134,7 +144,7 @@ export default function Navbar() {
 
         {/* ── Center Links (Desktop) ── */}
         <div className="hidden md:flex items-center gap-0.5 absolute left-1/2 -translate-x-1/2">
-          {CENTER_LINKS.map((link) => (
+          {(user?.role === "admin" ? CENTER_LINKS_ADMIN : CENTER_LINKS_PUBLIC).map((link) => (
             <Link
               key={link.to}
               to={link.to}
@@ -216,7 +226,7 @@ export default function Navbar() {
           className="md:hidden px-6 py-5 flex flex-col gap-0.5 animate-fade-in"
           style={{ backgroundColor: "var(--bg-nav)", borderTop: "1px solid var(--border)" }}
         >
-          {CENTER_LINKS.map((link) => (
+          {(user?.role === "admin" ? CENTER_LINKS_ADMIN : CENTER_LINKS_PUBLIC).map((link) => (
             <Link key={link.to} to={link.to} onClick={() => setMobileOpen(false)}
               className={`py-2.5 px-3 text-[12px] tracking-[0.1em] uppercase font-mono font-medium rounded-sm transition-all ${
                 location.pathname === link.to ? "text-cyan-400 bg-cyan-400/5" : "text-zinc-500"
