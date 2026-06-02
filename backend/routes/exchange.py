@@ -90,6 +90,7 @@ class DirectPublishRequest(BaseModel):
     # Marketplace metadata (new in iter37)
     avatar_icon: str = Field(default="Bot", max_length=40)         # lucide-react icon name
     avatar_color: str = Field(default="#22d3ee", max_length=20)    # hex
+    avatar_url: Optional[str] = Field(default=None, max_length=500)  # overrides icon if set
     required_integrations: List[str] = Field(default_factory=list, max_length=20)
     trigger_type: str = Field(default="manual", pattern="^(manual|webhook|schedule)$")
     engine: str = Field(default="gemini-flash", pattern="^(gemini-flash|gemini-pro|byok-openai|byok-claude)$")
@@ -173,6 +174,7 @@ async def direct_publish(req: DirectPublishRequest, user=Depends(get_current_use
         # Marketplace metadata (iter37)
         "avatar_icon": req.avatar_icon,
         "avatar_color": req.avatar_color,
+        "avatar_url": req.avatar_url,
         "required_integrations": req.required_integrations[:20],
         "trigger_type": req.trigger_type,
         "engine": req.engine,
@@ -316,9 +318,9 @@ async def upload_media(
     file: UploadFile = File(...),
     user=Depends(get_current_user()),
 ):
-    """Upload a video (1 per listing) or a photo (max 5 per listing)."""
-    if kind not in ("video", "photo"):
-        raise HTTPException(status_code=400, detail="kind must be 'video' or 'photo'")
+    """Upload a video (1 per listing), photo (max 5), or avatar (1 per listing)."""
+    if kind not in ("video", "photo", "avatar"):
+        raise HTTPException(status_code=400, detail="kind must be 'video', 'photo', or 'avatar'")
 
     db = get_db()
     user_id = str(user.get("id", user.get("email")))
@@ -331,6 +333,10 @@ async def upload_media(
         if file.content_type not in ALLOWED_VIDEO_MIME:
             raise HTTPException(status_code=400, detail=f"Unsupported video MIME. Allowed: {sorted(ALLOWED_VIDEO_MIME)}")
         max_bytes = MAX_VIDEO_MB * 1024 * 1024
+    elif kind == "avatar":
+        if file.content_type not in ALLOWED_PHOTO_MIME:
+            raise HTTPException(status_code=400, detail=f"Unsupported avatar MIME. Allowed: {sorted(ALLOWED_PHOTO_MIME)}")
+        max_bytes = 2 * 1024 * 1024  # avatars: 2MB cap, smaller than full photos
     else:
         if file.content_type not in ALLOWED_PHOTO_MIME:
             raise HTTPException(status_code=400, detail=f"Unsupported photo MIME. Allowed: {sorted(ALLOWED_PHOTO_MIME)}")
@@ -374,6 +380,16 @@ async def upload_media(
             except Exception:
                 pass
         update["video_url"] = public_url
+    elif kind == "avatar":
+        # Replace any prior avatar file
+        prior = listing.get("avatar_url")
+        if prior:
+            prior_path = UPLOAD_ROOT.parent / "exchange" / prior.replace("/static/exchange/", "")
+            try:
+                Path(str(prior_path)).unlink(missing_ok=True)
+            except Exception:
+                pass
+        update["avatar_url"] = public_url
     else:
         photos = listing.get("photo_urls", [])
         photos.append(public_url)

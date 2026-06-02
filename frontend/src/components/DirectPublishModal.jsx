@@ -88,6 +88,8 @@ export default function DirectPublishModal({ open, onClose, onPublished }) {
   });
   const [files, setFiles] = useState(STARTER_FILES);
   const [activeFileIdx, setActiveFileIdx] = useState(0);
+  const [avatarFile, setAvatarFile] = useState(null);          // File picked at Step 1
+  const [avatarPreview, setAvatarPreview] = useState(null);    // local blob URL
 
   if (!open) return null;
 
@@ -155,6 +157,23 @@ export default function DirectPublishModal({ open, onClose, onPublished }) {
       }
       const data = await res.json();
       setListing(data);
+      // If a custom avatar photo was picked in Step 1, upload it now before stepping forward.
+      if (avatarFile) {
+        const fd = new FormData();
+        fd.append("kind", "avatar");
+        fd.append("file", avatarFile);
+        const up = await fetch(`${API}/api/exchange/listings/${data.id}/upload`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        });
+        if (up.ok) {
+          const fresh = await fetch(`${API}/api/exchange/listings/${data.id}`).then((r) => r.json());
+          setListing(fresh);
+        } else {
+          toast.error("Avatar upload failed (continuing anyway).");
+        }
+      }
       setStep(3);
       toast.success("Listing created. Now add screenshots + demo video.");
     } catch {
@@ -237,7 +256,23 @@ export default function DirectPublishModal({ open, onClose, onPublished }) {
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {/* ── Step 1: meta with live preview ── */}
           {step === 1 && (
-            <DetailsStep form={form} setForm={setForm} />
+            <DetailsStep
+              form={form}
+              setForm={setForm}
+              avatarPreview={avatarPreview}
+              onPickAvatar={(file) => {
+                if (!file) {
+                  setAvatarFile(null);
+                  if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+                  setAvatarPreview(null);
+                  return;
+                }
+                if (file.size > 2 * 1024 * 1024) { toast.error("Avatar must be ≤ 2MB."); return; }
+                if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+                setAvatarFile(file);
+                setAvatarPreview(URL.createObjectURL(file));
+              }}
+            />
           )}
 
           {/* ── Step 2: code files ── */}
@@ -412,7 +447,7 @@ function Field({ label, children }) {
 /* ──────────────────────────────────────────────────────────────────────
    Step 1 — DetailsStep: two-column live-preview marketplace metadata form
    ────────────────────────────────────────────────────────────────────── */
-function DetailsStep({ form, setForm }) {
+function DetailsStep({ form, setForm, avatarPreview, onPickAvatar }) {
   const update = (patch) => setForm({ ...form, ...patch });
   const toggleIntegration = (id) => {
     const cur = form.required_integrations || [];
@@ -431,27 +466,74 @@ function DetailsStep({ form, setForm }) {
 
         {/* Avatar picker */}
         <div>
-          <label className="block text-[10px] tracking-widest uppercase t-text-dim mb-2">Bot Avatar</label>
-          <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5 mb-3">
-            {AVATAR_OPTIONS.map(({ name, Icon }) => {
-              const active = form.avatar_icon === name;
-              return (
-                <button
-                  key={name}
-                  data-testid={`dp-avatar-${name}`}
-                  onClick={() => update({ avatar_icon: name })}
-                  className="aspect-square rounded-sm flex items-center justify-center transition-all"
-                  style={{
-                    background: active ? `${form.avatar_color}1f` : 'var(--bg-elevated)',
-                    border: `1px solid ${active ? form.avatar_color : 'var(--border)'}`,
-                    boxShadow: active ? `0 0 0 2px ${form.avatar_color}30, 0 0 12px ${form.avatar_color}40` : 'none',
-                  }}
-                >
-                  <Icon size={14} style={{ color: active ? form.avatar_color : 'var(--text-mute)' }} />
-                </button>
-              );
-            })}
+          <label className="block text-[10px] tracking-widest uppercase t-text-dim mb-2 flex items-center gap-2">
+            Bot Avatar
+            <span className="t-text-mute normal-case tracking-normal">— pick an icon or upload a custom photo</span>
+          </label>
+
+          {/* Custom photo slot + icon grid */}
+          <div className="flex items-stretch gap-2 mb-3">
+            {/* Custom photo tile */}
+            <label
+              data-testid="dp-avatar-photo-upload"
+              className="relative shrink-0 w-14 h-14 rounded-sm flex items-center justify-center cursor-pointer overflow-hidden transition-all"
+              style={{
+                background: avatarPreview ? `${form.avatar_color}10` : 'var(--bg-elevated)',
+                border: `1px dashed ${avatarPreview ? form.avatar_color : 'var(--border)'}`,
+                boxShadow: avatarPreview ? `0 0 0 2px ${form.avatar_color}30, 0 0 14px ${form.avatar_color}40` : 'none',
+              }}
+              title="Upload custom photo (max 2MB)"
+            >
+              {avatarPreview ? (
+                <>
+                  <img src={avatarPreview} alt="avatar" className="w-full h-full object-cover" />
+                  <button
+                    data-testid="dp-avatar-photo-remove"
+                    onClick={(e) => { e.preventDefault(); onPickAvatar(null); }}
+                    className="absolute top-0 right-0 p-0.5 rounded-bl-sm"
+                    style={{ background: 'rgba(0,0,0,0.7)' }}
+                  >
+                    <Trash2 size={9} className="text-red-400" />
+                  </button>
+                </>
+              ) : (
+                <div className="flex flex-col items-center gap-0.5">
+                  <Upload size={12} className="t-text-mute" />
+                  <span className="text-[8px] uppercase tracking-wider t-text-dim font-mono">UPLOAD</span>
+                </div>
+              )}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => onPickAvatar(e.target.files?.[0])}
+              />
+            </label>
+
+            {/* Icon grid */}
+            <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5 flex-1">
+              {AVATAR_OPTIONS.map(({ name, Icon }) => {
+                const active = !avatarPreview && form.avatar_icon === name;
+                return (
+                  <button
+                    key={name}
+                    data-testid={`dp-avatar-${name}`}
+                    onClick={() => update({ avatar_icon: name })}
+                    className="aspect-square rounded-sm flex items-center justify-center transition-all"
+                    style={{
+                      background: active ? `${form.avatar_color}1f` : 'var(--bg-elevated)',
+                      border: `1px solid ${active ? form.avatar_color : 'var(--border)'}`,
+                      boxShadow: active ? `0 0 0 2px ${form.avatar_color}30, 0 0 12px ${form.avatar_color}40` : 'none',
+                      opacity: avatarPreview ? 0.45 : 1,
+                    }}
+                  >
+                    <Icon size={14} style={{ color: active ? form.avatar_color : 'var(--text-mute)' }} />
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
           <div className="flex items-center gap-1.5">
             {AVATAR_COLORS.map((c) => {
               const active = form.avatar_color === c;
@@ -465,6 +547,11 @@ function DetailsStep({ form, setForm }) {
                 />
               );
             })}
+            {avatarPreview && (
+              <span className="ml-2 text-[9px] uppercase tracking-widest t-text-dim font-mono">
+                Custom photo active · color tints accents only
+              </span>
+            )}
           </div>
         </div>
 
@@ -633,7 +720,7 @@ function DetailsStep({ form, setForm }) {
 
       {/* ── RIGHT — live preview card ── */}
       <div className="lg:sticky lg:top-2 self-start">
-        <LivePreviewCard form={form} />
+        <LivePreviewCard form={form} avatarPreview={avatarPreview} />
       </div>
 
       {/* scoped styling for cyber inputs (glow on focus, glass) */}
@@ -695,7 +782,7 @@ function PriceInput({ dataTestId, label, value, onChange, takeHome, suffix, colo
   );
 }
 
-function LivePreviewCard({ form }) {
+function LivePreviewCard({ form, avatarPreview }) {
   const Icon = ICON_MAP[form.avatar_icon] || Bot;
   const tagList = form.tags.split(",").map((t) => t.trim()).filter(Boolean).slice(0, 4);
   const trigger = TRIGGER_TYPES.find((t) => t.id === form.trigger_type) || TRIGGER_TYPES[0];
@@ -727,14 +814,18 @@ function LivePreviewCard({ form }) {
             background: `linear-gradient(135deg, ${form.avatar_color}30 0%, transparent 60%), radial-gradient(circle at 80% 20%, ${form.avatar_color}25, transparent 50%)`,
           }}
         >
-          <div className="absolute -bottom-5 left-3 w-12 h-12 rounded-sm flex items-center justify-center"
+          <div className="absolute -bottom-5 left-3 w-12 h-12 rounded-sm flex items-center justify-center overflow-hidden"
             style={{
               background: 'var(--bg-card)',
               border: `1px solid ${form.avatar_color}`,
               boxShadow: `0 0 18px ${form.avatar_color}55`,
             }}
           >
-            <Icon size={20} style={{ color: form.avatar_color }} />
+            {avatarPreview ? (
+              <img src={avatarPreview} alt="avatar" className="w-full h-full object-cover" />
+            ) : (
+              <Icon size={20} style={{ color: form.avatar_color }} />
+            )}
           </div>
         </div>
 

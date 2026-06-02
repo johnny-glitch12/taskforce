@@ -23,6 +23,18 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 38 (Jun, 2026) — Custom Photo Avatars for Direct Publish
+- **Custom photo upload slot** as the first tile of the Bot Avatar picker in `DirectPublishModal` Step 1: dashed-border upload tile with `UPLOAD` label that swaps to the local image preview (via `URL.createObjectURL`) with a `🗑` remove button. When active, the 12 lucide icons dim to 45% opacity to signal they are overridden, and a "Custom photo active · color tints accents only" hint appears.
+- **Live preview card** now renders the uploaded image inside the floating avatar tile (replacing the icon) so creators see exactly how the listing will look before publishing.
+- **Persistence wiring**: on `createListing` (Step 2 → Step 3 transition), the file is uploaded via `POST /api/exchange/listings/{id}/upload` with `kind=avatar` immediately after the listing is created, and the listing is re-fetched so subsequent steps see the persisted `avatar_url`.
+- **Backend**:
+  - `routes/exchange.py` upload endpoint extended — `kind="avatar"` accepted (image/jpeg, image/png, image/webp) with a **2 MB cap** (smaller than the 10 MB photo cap). Prior avatar file is auto-deleted on replacement.
+  - `DirectPublishRequest` gets optional `avatar_url` field; persisted on the listing alongside `avatar_icon` + `avatar_color`.
+- **Verified live**:
+  - Backend smoke: create → upload kind=avatar → listing has `avatar_url` set → URL serves the image → oversized (2.15MB) PNG correctly rejected with `"File exceeds 2MB limit."`
+  - Frontend screenshot: custom photo slot first, icons dimmed, photo renders in preview card with purple border + glow
+  - Lint + ruff clean
+
 ### Phase 37 (Jun, 2026) — DirectPublish "Live Preview" UX Overhaul (cyber-luxury)
 - **Two-column live-preview layout** (DirectPublishModal Step 1): left = form, right = sticky `LivePreviewCard` that updates in real-time as the creator types. Modal width grew to `max-w-6xl` on Step 1 (other steps stay `max-w-3xl`).
 - **4 new marketplace metadata fields**:
