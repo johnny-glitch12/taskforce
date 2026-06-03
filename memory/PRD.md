@@ -23,6 +23,19 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 41 (Feb, 2026) — Site-Wide Auth Lock + Coming Soon Landing
+- **Pre-launch gate**: entire site now hidden behind authentication when `REACT_APP_SITE_LOCKED=true`. Unauthenticated visitors see ONLY a dark cyber `ComingSoonLanding.jsx` page on every route except the auth flows.
+- **`AppShell` reorg** (`App.js`): 3-state decision tree
+  - locked + unauth + non-auth route → `ComingSoonLanding` (no Navbar, no Footer)
+  - locked + unauth + auth route (`/login`, `/auth/login`, `/auth/register`, `/auth/forgot-password`, `/auth/reset-password`) → focused Login (no Navbar/Footer, catch-all to `/login`)
+  - else → normal full app shell
+- **`ComingSoonLanding.jsx`**: dark `#0A0A0A` background + radial cyan grid pattern + masked vignette + "Something Big Is **Deploying.**" hero (Rajdhani 7xl), eyebrow chip with pulse dot ("AUTONOMOUS AGENT INFRASTRUCTURE"), email input + "JOIN WAITLIST →" cyan CTA, success state with checkmark + emerald glow, live `operatives enlisted` counter pulled from `GET /api/waitlist/count`, "SIGN IN" header link, minimal copyright + Twitter/Discord/GitHub footer icons.
+- **Inline email validation**: regex check short-circuits before the API call — invalid emails show inline error without firing a network request.
+- **Env toggle**: `REACT_APP_SITE_LOCKED=true` (default). Flip to `false` + restart frontend to open the site to the public. No code change needed.
+- **Backend**: `/api/waitlist` (POST idempotent by email) and `/api/waitlist/count` (public) endpoints pre-existed from older phases — verified clean and reused.
+- **5 auth route aliases added** (`/auth/login`, `/auth/register`, `/auth/forgot-password`, `/auth/reset-password`) — all render the existing multi-mode `Login.jsx` so future deep-links work.
+- **Verified live**: iter36 — 100% pass (10/10 backend pytest + 13/13 frontend gating checks). Counter went 6→7 after a real waitlist submit during E2E; no leak path found for underlying pages; admin login still flows correctly through to `/armory` with full Navbar + Footer.
+
 ### Phase 40 (Feb, 2026) — Usage Monitor + Dark Mode Sweep + AdminGate Fix
 - **AdminGate P0 fix** (`App.js:43-49`): Removed the `if (!user) return <Navigate to="/login">` redirect. Both unauthenticated AND non-admin authenticated users now see the `ComingSoon` page when visiting `/armory`, `/studio`, `/academy` — matches spec. `/deployments` added as an alias route → `/my-deployments`.
 - **Usage Monitor analytics dashboard** — new `/my-deployments/:id/monitor` route + `UsageMonitor.jsx` page:
