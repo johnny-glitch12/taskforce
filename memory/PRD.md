@@ -23,6 +23,16 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 51 (Feb 2026) — Notifications Bell + Bounty Winner Badge (Bounty Loop Polish)
+- **`routes/notifications.py`** (new) — 4 endpoints:
+  - `GET /api/notifications?limit&unread_only` — paginated list of the authed user's notifications + unread count, newest-first.
+  - `GET /api/notifications/unread-count` — lightweight `{unread: int}` for the bell badge poller (30s interval).
+  - `POST /api/notifications/{id}/read` — flip `read=true` + `read_at`. Cross-user access returns 404 (no enumeration leak).
+  - `POST /api/notifications/mark-all-read` — bulk flip all unread for the user.
+- **Frontend `components/NotificationBell.jsx`** (new) — bell icon in the navbar to the left of UserMenu. Cyan unread-count badge overlays when `unread > 0`. Click toggles a dropdown with: header showing "NOTIFICATIONS" + "X NEW" chip + "Mark all read" link, scrollable list of up to 20 rows (icon by kind: Trophy for `bounty_won`, Target for `bounty_submission_new`, XCircle for `bounty_lost`), per-row relative time + cyan unread dot. Rows wrap in React Router `<Link>` when payload carries `bounty_id` — auto-navigate to `/bounties/{id}` on click. Click also marks the row read (opacity drops 100% → 55%, dot disappears). Click-outside closes via `mousedown` listener.
+- **`pages/Marketplace.jsx`** — listings map now forwards `bountyWinner`, `bountyTitle`, `bountyId`. `AgentCard` renders a gold gradient "BOUNTY WINNER" Trophy chip (lower-left of media area, with cyan glow box-shadow) when `agent.bountyWinner` is true. `title` attribute shows the bounty title on hover. `data-testid=bounty-winner-badge-{agent.id}` for QA.
+- **Verified (iter47)**: **8/8 new + 79 regression = 87/87 backend tests green**. Frontend Playwright covered: bell renders, unread badge appears with correct count, dropdown opens with header + rows + Mark-all-read link, row click navigates to /bounties/{id} AND flips read state, click-outside closes, marketplace badge renders only when listing carries `bounty_winner=true`. Zero bugs. Code-review notes (non-blocking): 30s polling acceptable for current scale (SSE upgrade path noted), fire-and-forget `_emit_notification` carries minor GC risk under heavy concurrency.
+
 ### Phase 50 (Feb 2026) — The Bounty Board (Prompt 9)
 - **New `routes/bounties.py`** (~656 lines) — demand-side marketplace endpoints:
   - `POST /api/bounties` — create with full Pydantic validation (title 8-120, description 20-10000, reward >= 50cr, deadline 3-30 days, category enum, max_submissions 1-50). Debits reward via `credit_wallet.debit(action="bounty_escrow", cost_override=reward_amount)` BEFORE inserting so a failed debit can't orphan a bounty. Returns 402 `INSUFFICIENT_CREDITS` for insolvent posters.
