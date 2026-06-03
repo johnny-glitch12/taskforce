@@ -11,10 +11,13 @@ Returns rolled-up totals + recent activity. Used by /pages/CreatorEarnings.jsx.
 """
 from __future__ import annotations
 
+import csv
+import io
 import logging
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 
 logger = logging.getLogger("creator_earnings")
 router = APIRouter()
@@ -193,35 +196,60 @@ async def earnings_ledger(
 
 @router.get("/creator/earnings/export.csv")
 async def export_csv(user=Depends(get_current_user())):
-    """Download the full earnings ledger as CSV."""
-    rows_resp = await earnings_ledger(limit=200, skip=0, user=user)
-    # Pull more (up to 1000) if there are more than 200 — simple paginate.
-    all_rows = rows_resp["items"]
-    if rows_resp["total"] > 200:
-        for skip in range(200, min(rows_resp["total"], 1000), 200):
-            more = await earnings_ledger(limit=200, skip=skip, user=user)
-            all_rows.extend(more["items"])
+    """Stream the full earnings ledger as CSV — no row cap. Streams chunks
+    of 500 rows at a time so a creator with 50k+ entries doesn't OOM the
+    server or wait minutes for the first byte."""
+    db = get_db()
+    user_id = _user_id(user)
 
-    import csv
-    import io
-    out = io.StringIO()
-    w = csv.writer(out)
-    w.writerow(["created_at", "kind", "label", "amount", "currency", "ref"])
-    for r in all_rows:
-        w.writerow([
-            r.get("created_at", ""),
-            r.get("kind", ""),
-            r.get("label", ""),
-            r.get("amount", 0),
-            r.get("currency", ""),
-            r.get("ref", ""),
-        ])
-    csv_text = out.getvalue()
-    return Response(
-        content=csv_text,
+    async def row_iter():
+        # Header
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(["created_at", "kind", "label", "amount", "currency", "ref"])
+        yield buf.getvalue()
+
+        async def emit(kind, label, amount, currency, ref, created_at):
+            b = io.StringIO()
+            csv.writer(b).writerow([
+                created_at or "", kind, label, amount, currency, ref or "",
+            ])
+            return b.getvalue()
+
+        # Stripe payouts (creator_revenue_ledger). No skip-limit pagination —
+        # motor cursor handles backpressure naturally.
+        async for r in db.creator_revenue_ledger.find({"creator_user_id": user_id}, {"_id": 0}).sort("created_at", -1):
+            yield await emit(
+                "exchange_payout",
+                f"{(r.get('mode') or 'rent').title()} payout · {r.get('agent_name') or 'agent'}",
+                float(r.get("creator_amount") or 0),
+                "USD",
+                r.get("payment_id"),
+                r.get("created_at"),
+            )
+
+        # Bounty wins (cash + credits) in one cursor.
+        async for b in db.bounties.find(
+            {"winner_id": user_id, "status": "awarded"}, {"_id": 0},
+        ).sort("awarded_at", -1):
+            is_cash = b.get("reward_type") == "cash"
+            yield await emit(
+                "bounty_won" if is_cash else "bounty_won_credits",
+                f"Bounty win · {b.get('title') or '(untitled)'}",
+                float(b.get("reward_amount") or 0),
+                "USD" if is_cash else "cr",
+                b.get("id"),
+                b.get("awarded_at"),
+            )
+
+    return StreamingResponse(
+        row_iter(),
         media_type="text/csv",
         headers={
             "Content-Disposition": f"attachment; filename=earnings_{_user_id(user)[:8]}.csv",
+            # Prevent intermediate proxies from buffering.
+            "Cache-Control": "no-store",
+            "X-Accel-Buffering": "no",
         },
     )
 

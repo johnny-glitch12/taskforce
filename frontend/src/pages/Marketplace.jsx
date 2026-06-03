@@ -284,6 +284,7 @@ export default function Marketplace() {
         // Map exchange listing schema → marketplace card schema
         const listings = (data.listings || []).map((l) => ({
           id: l.id,
+          title: l.name,
           shortTitle: l.name,
           description: l.description,
           category: l.category,

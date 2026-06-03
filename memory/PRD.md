@@ -23,7 +23,41 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 55 (Feb 2026) — P3 Carryover Sweep (Armory 404 toast · Demo listings · Reviews moderation · Schedule circuit breaker · Earnings CSV streaming)
+
+- **Armory project-404 toast** (`pages/Armory.jsx` `loadProject`) — when a session points to a deleted/foreign project the load no longer silently fails. Now surfaces "Build artifact no longer exists. Start a new conversation to rebuild." for 404 and "Couldn't load build (XX)" for other failures, clears the preview state instead of leaving a stale right panel.
+- **Demo Exchange listings seed** — new `routes/admin_seeds.py` with `POST /api/admin/seed-demo-listings` (admin-only, idempotent via `_seed_id`) inserting two production-quality demo agents:
+  1. **Triage-3 · Email Support Pilot** — 4-node email triage agent ($29/mo · $199 own · trust 92 · 47 deploys)
+  2. **FastQual · Inbound Lead Qualifier** — 5-node Typeform→GPT→HubSpot→Slack lead scorer ($49/mo · $349 own · trust 89 · 23 deploys)
+  Each carries full description (markdown), tags, avatar color, snapshot of nodes+edges so the `/listing/:id` Flow tab is non-empty. Companion `DELETE /api/admin/seed-demo-listings` for clean teardown. Companion **bug-fix** in `pages/Marketplace.jsx` — listings were mapping `name → shortTitle` only, but `AgentCard` reads `agent.title` → titles were silently blank. Now mapped to both `title` AND `shortTitle`.
+- **Reviews moderation (shadow-hide)** — `routes/reviews.py`:
+  - `POST /api/exchange/reviews/{id}/hide` (admin-only) toggles `hidden: bool`, stamps `hidden_by/at/reason`. Recomputes the listing's `aggregates` so hidden reviews stop counting toward star average + count + histogram.
+  - `GET /api/exchange/listings/{id}/reviews/all` (admin-only) moderation view surfacing ALL reviews including hidden.
+  - Public `GET /api/exchange/listings/{id}/reviews` and `_refresh_aggregates` now filter `hidden: {$ne: true}` everywhere.
+  - Hidden reviews remain in the DB (audit trail), so the author still sees their review in `my-review` (with the hidden flag).
+- **Schedule circuit breaker** — `routes/schedules.py` `tick_scheduled_runs`:
+  - New `schedule.consecutive_failures` counter — increments on `success=False` or exception, resets to 0 on success.
+  - `CIRCUIT_BREAKER_THRESHOLD = 3` — once tripped, the schedule auto-disables and records `last_disabled_reason="circuit_breaker"`.
+  - Distinct from the existing `limit_reached` reason so the FE can show a different toast/copy when applicable.
+- **Earnings CSV streaming** — `routes/creator_earnings.py`:
+  - Switched `/api/creator/earnings/export.csv` from a buffered `Response` (capped at 1000 rows) to `StreamingResponse` with an async generator iterating two motor cursors (`creator_revenue_ledger` + `bounties` for awarded wins) and yielding CSV rows on the fly. No row cap.
+  - Added `Cache-Control: no-store` + `X-Accel-Buffering: no` headers so proxies don't buffer the response.
+  - Order is "grouped by source (Stripe payouts then bounty wins), newest-first within each group" — a small UX trade-off vs. a cross-source merge, but makes the CSV more useful for tax/bookkeeping.
+
+**Verified manually** (curl + screenshots):
+- Seed inserts 2 demo listings; non-admin → 403; second invocation → `inserted:0, skipped:2`.
+- `/marketplace` renders cards with names "Triage-3 · Email Support Pilot" + "FastQual · Inbound Lead Qualifier" — confirmed via screenshot.
+- `/listing/{id}` shows full description, pricing, and Reviews panel with histogram.
+- CSV export GET returns `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename=earnings_…csv`, `Cache-Control: no-store`.
+- All 4 routes/*.py modules pass ruff with zero warnings.
+
+
 ### Phase 54 (Feb 2026) — The Armory Redesign (Prompt 11)
+
+Complete UI redesign of `/armory` — replaced legacy 1371-line `Studio.jsx` debug-style node editor with a premium 3-panel chat-based builder (Cursor/Linear quality). Old Studio kept reachable via `/armory/workflows/:projectId` for power users. See git diff iter50 for the full 9-component breakdown (SessionSidebar, ModelPicker, ChatPanel, ChatMessage, CodeGenerationCard, EmptyState, AgentPreview, AgentActionBar, Armory.jsx orchestrator + scoped Armory.css design tokens). New backend endpoint `POST /api/armory/bot-projects/{id}/test-run` reuses `execute_workflow_dag`. Custom inline-SVG flow preview (no new deps). Footer hidden on `/armory*`. ModelPicker correctly splits Platform vs Your Keys via `byok_service`. **Verified iter50: 8/8 new backend + 100% frontend Playwright PASS.**
+
+
+
 
 Complete UI redesign of `/armory` — replaced legacy 1371-line `Studio.jsx` debug-style node editor with a premium 3-panel chat-based builder (Cursor/Linear quality). Old Studio kept reachable via `/armory/workflows/:projectId` for power users.
 

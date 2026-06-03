@@ -54,9 +54,10 @@ class ReplyRequest(BaseModel):
 
 
 async def _refresh_aggregates(db, listing_id: str):
-    """Recompute `aggregates.reviews_count` and `reviews_avg` on the listing."""
+    """Recompute `aggregates.reviews_count` and `reviews_avg` on the listing.
+    Hidden (shadow-moderated) reviews are EXCLUDED from the aggregate."""
     cursor = db.agent_reviews.aggregate([
-        {"$match": {"listing_id": listing_id}},
+        {"$match": {"listing_id": listing_id, "hidden": {"$ne": True}}},
         {"$group": {
             "_id": None,
             "count": {"$sum": 1},
@@ -84,20 +85,21 @@ async def list_reviews(
     limit: int = Query(default=20, ge=1, le=100),
     skip: int = Query(default=0, ge=0, le=1000),
 ):
-    """Public list — anyone (auth or not) can browse reviews."""
+    """Public list — hidden reviews are always excluded.
+    Admins should use /listings/{id}/reviews/all for a moderation view."""
     db = get_db()
     listing = await db.exchange_listings.find_one({"id": listing_id}, {"_id": 0, "id": 1})
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found.")
-    total = await db.agent_reviews.count_documents({"listing_id": listing_id})
-    cursor = db.agent_reviews.find(
-        {"listing_id": listing_id}, {"_id": 0},
-    ).sort("created_at", -1).skip(skip).limit(limit)
+
+    base_q = {"listing_id": listing_id, "hidden": {"$ne": True}}
+    total = await db.agent_reviews.count_documents(base_q)
+    cursor = db.agent_reviews.find(base_q, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit)
     items = await cursor.to_list(length=limit)
     agg = await _refresh_aggregates(db, listing_id)
-    # Star distribution histogram (1..5)
+    # Star distribution histogram (1..5) — also excludes hidden.
     hist_cursor = db.agent_reviews.aggregate([
-        {"$match": {"listing_id": listing_id}},
+        {"$match": {"listing_id": listing_id, "hidden": {"$ne": True}}},
         {"$group": {"_id": "$stars", "n": {"$sum": 1}}},
     ])
     hist_rows = await hist_cursor.to_list(length=10)
@@ -105,6 +107,57 @@ async def list_reviews(
     for r in hist_rows:
         histogram[str(r["_id"])] = int(r["n"])
     return {"items": items, "total": total, "aggregate": agg, "histogram": histogram}
+
+
+@router.get("/listings/{listing_id}/reviews/all")
+async def list_reviews_admin(
+    listing_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    skip: int = Query(default=0, ge=0, le=5000),
+    user=Depends(get_current_user()),
+):
+    """Admin-only moderation view — surfaces ALL reviews including hidden."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    db = get_db()
+    listing = await db.exchange_listings.find_one({"id": listing_id}, {"_id": 0, "id": 1})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found.")
+    total = await db.agent_reviews.count_documents({"listing_id": listing_id})
+    cursor = db.agent_reviews.find({"listing_id": listing_id}, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit)
+    items = await cursor.to_list(length=limit)
+    return {"items": items, "total": total}
+
+
+class HideRequest(BaseModel):
+    hidden: bool = True
+    reason: str = Field(default="", max_length=500)
+
+
+@router.post("/reviews/{review_id}/hide")
+async def hide_review(review_id: str, body: HideRequest, user=Depends(get_current_user())):
+    """Admin-only — shadow-hide (or un-hide) a review.
+    Hidden reviews stay in the DB (audit trail) but are excluded from public
+    list + aggregate + histogram. Recomputes the listing's aggregates on toggle."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    db = get_db()
+    rv = await db.agent_reviews.find_one({"id": review_id})
+    if not rv:
+        raise HTTPException(status_code=404, detail="Review not found.")
+    await db.agent_reviews.update_one(
+        {"id": review_id},
+        {"$set": {
+            "hidden": bool(body.hidden),
+            "hidden_by": _user_id(user) if body.hidden else None,
+            "hidden_at": _now() if body.hidden else None,
+            "hidden_reason": body.reason.strip() if body.hidden else "",
+        }},
+    )
+    agg = await _refresh_aggregates(db, rv["listing_id"])
+    fresh = await db.agent_reviews.find_one({"id": review_id}, {"_id": 0})
+    logger.info(f"[reviews] review {review_id} hidden={body.hidden} by {user.get('email')} reason={body.reason!r}")
+    return {"success": True, "review": fresh, "aggregate": agg}
 
 
 @router.post("/listings/{listing_id}/reviews")

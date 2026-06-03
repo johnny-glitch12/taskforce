@@ -44,6 +44,10 @@ PRESETS = {
     "weekly":  ("Once a week",   60 * 24 * 7),
 }
 
+# Circuit-breaker: auto-disable a schedule after N consecutive failed runs
+# (run-level errors OR successful runs that returned success=False).
+CIRCUIT_BREAKER_THRESHOLD = 3
+
 
 def get_current_user():
     from server import get_current_user as _u
@@ -169,31 +173,57 @@ async def tick_scheduled_runs(db) -> int:
         try:
             run = await run_deployment_real(db, d, trigger="schedule", input_payload={})
             dispatched += 1
+            success = bool(run.get("success"))
             interval = int(sched.get("interval_minutes") or 60)
             next_run = (_now_dt() + timedelta(minutes=interval)).isoformat()
+
+            # Track consecutive failures for the circuit breaker.
+            cur_fails = int(sched.get("consecutive_failures") or 0)
+            new_fails = 0 if success else cur_fails + 1
+
+            update = {
+                "schedule.next_run_at": next_run,
+                "schedule.last_run_at": _now(),
+                "schedule.last_run_id": run["id"],
+                "schedule.last_run_success": success,
+                "schedule.consecutive_failures": new_fails,
+                "schedule.updated_at": _now(),
+            }
+            # Circuit breaker: trip after N consecutive failures.
+            if new_fails >= CIRCUIT_BREAKER_THRESHOLD:
+                update["schedule.enabled"] = False
+                update["schedule.last_disabled_reason"] = "circuit_breaker"
+                logger.warning(
+                    f"[sched] circuit breaker tripped for deployment {d['id']} "
+                    f"after {new_fails} consecutive failures — schedule auto-disabled"
+                )
             await db.user_bot_deployments.update_one(
                 {"id": d["id"]},
-                {"$set": {
-                    "schedule.next_run_at": next_run,
-                    "schedule.last_run_at": _now(),
-                    "schedule.last_run_id": run["id"],
-                    "schedule.last_run_success": bool(run.get("success")),
-                    "schedule.updated_at": _now(),
-                }},
+                {"$set": update},
             )
         except Exception as e:
             logger.warning(f"[sched] run failed for deployment {d['id']}: {e}")
-            # Don't disable — try again next tick. Bump next_run forward so
-            # we don't hammer a broken deployment in tight loop.
+            # Treat exceptions as failures for the circuit breaker too.
+            cur_fails = int(sched.get("consecutive_failures") or 0)
+            new_fails = cur_fails + 1
             interval = int(sched.get("interval_minutes") or 60)
             next_run = (_now_dt() + timedelta(minutes=interval)).isoformat()
+            update = {
+                "schedule.next_run_at": next_run,
+                "schedule.last_error": str(e)[:500],
+                "schedule.consecutive_failures": new_fails,
+                "schedule.updated_at": _now(),
+            }
+            if new_fails >= CIRCUIT_BREAKER_THRESHOLD:
+                update["schedule.enabled"] = False
+                update["schedule.last_disabled_reason"] = "circuit_breaker"
+                logger.warning(
+                    f"[sched] circuit breaker tripped for deployment {d['id']} "
+                    f"after {new_fails} consecutive exceptions — schedule auto-disabled"
+                )
             await db.user_bot_deployments.update_one(
                 {"id": d["id"]},
-                {"$set": {
-                    "schedule.next_run_at": next_run,
-                    "schedule.last_error": str(e)[:500],
-                    "schedule.updated_at": _now(),
-                }},
+                {"$set": update},
             )
     return dispatched
 

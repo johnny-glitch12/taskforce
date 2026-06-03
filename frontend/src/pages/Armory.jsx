@@ -120,14 +120,26 @@ export default function Armory() {
     }
     try {
       const r = await fetch(`${API}/api/armory/bot-projects/${projectId}`, { headers });
-      if (!r.ok) return;
+      if (!r.ok) {
+        // Project was deleted, archived, or doesn't belong to this user.
+        if (r.status === 404) {
+          toast.error("Build artifact no longer exists. Start a new conversation to rebuild.");
+        } else {
+          toast.error(`Couldn't load build (${r.status}). Try again.`);
+        }
+        setProject(null); setFiles([]); setNodes([]); setEdges([]); setPreviewOpen(false);
+        return;
+      }
       const proj = await r.json();
       setProject(proj);
       setFiles(proj.files || []);
       setNodes(proj.nodes || []);
       setEdges(proj.edges || []);
       setPreviewOpen(true);
-    } catch { /* ignore */ }
+    } catch {
+      toast.error("Couldn't reach the server while loading the build.");
+      setProject(null); setFiles([]); setNodes([]); setEdges([]); setPreviewOpen(false);
+    }
   }, [headers]);
 
   const loadSession = useCallback(async (sid) => {

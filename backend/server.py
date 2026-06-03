@@ -2014,6 +2014,9 @@ app.include_router(creator_earnings_router, prefix="/api")
 from routes.public_api import router as public_api_router
 app.include_router(public_api_router, prefix="/api")
 
+from routes.admin_seeds import router as admin_seeds_router
+app.include_router(admin_seeds_router, prefix="/api")
+
 # Mount uploads dir for exchange listing media (videos + photos)
 UPLOADS_DIR = Path(__file__).parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
