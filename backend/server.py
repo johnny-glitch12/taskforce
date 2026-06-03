@@ -1990,6 +1990,9 @@ app.include_router(external_agents_router, prefix="/api")
 from routes.webhooks import router as webhooks_router
 app.include_router(webhooks_router, prefix="/api")
 
+from routes.hosting import router as hosting_router
+app.include_router(hosting_router, prefix="/api")
+
 # Mount uploads dir for exchange listing media (videos + photos)
 UPLOADS_DIR = Path(__file__).parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)

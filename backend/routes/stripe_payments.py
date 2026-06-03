@@ -202,6 +202,16 @@ async def stripe_webhook(request: Request):
                         )
                         logger.info(f"Top-up credited via webhook: +{credits} to user {tx['user_id']}")
 
+                # Hosting subscription paid → flip to 'paid' only; the row is
+                # provisioned by POST /hosting/activate (idempotent) so the
+                # creator gets a clear UI confirmation step.
+                if tx.get("type") == "hosting":
+                    logger.info(
+                        f"Hosting payment confirmed for session {event.session_id} "
+                        f"(tier={tx.get('tier')}, user={tx.get('user_id')}). "
+                        "Awaiting activate call from /payment/success."
+                    )
+
         return {"status": "ok"}
     except Exception as e:
         logger.error(f"Webhook error: {e}")

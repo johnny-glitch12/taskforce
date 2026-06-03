@@ -510,6 +510,14 @@ async def run_package(package_id: str, body: RunBody, user=Depends(get_current_u
         {"$inc": {"usage.run_count": 1, "usage.failures": 0 if result.get("success") else 1},
          "$set": {"usage.last_run_at": _now_iso(), "updated_at": _now_iso()}},
     )
+    # Best-effort: increment the creator's hosting subscription execution count
+    # (silently skipped if the creator has no active hosting tier — Part 3
+    # enforcement is opt-in for v1; the counter just helps creators monitor caps).
+    try:
+        from routes.hosting import increment_executions
+        await increment_executions(db, user_id, by=1)
+    except Exception:
+        pass
     # Strip the heavy `_id` before returning.
     run_doc.pop("_id", None)
     run_doc["credits_remaining"] = debit.get("balance")
