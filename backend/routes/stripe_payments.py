@@ -212,6 +212,17 @@ async def stripe_webhook(request: Request):
                         "Awaiting activate call from /payment/success."
                     )
 
+                # Cash bounty paid → same pattern. The frontend polls
+                # /api/bounties/{id}/activate from /payment/success?type=bounty
+                # to flip the bounty's status from pending_payment → open and
+                # persist the Stripe charge_id for later refunds/transfers.
+                if tx.get("type") == "bounty":
+                    logger.info(
+                        f"Cash bounty payment confirmed for session {event.session_id} "
+                        f"(bounty_id={tx.get('bounty_id')}, user={tx.get('user_id')}). "
+                        "Awaiting activate call."
+                    )
+
         return {"status": "ok"}
     except Exception as e:
         logger.error(f"Webhook error: {e}")
