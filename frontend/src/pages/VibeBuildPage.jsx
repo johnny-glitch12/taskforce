@@ -4,7 +4,7 @@ import Editor from "@monaco-editor/react";
 import { toast } from "sonner";
 import {
   Send, Sparkles, Loader2, Zap, Bot, User, Plus, Trash2,
-  ChevronLeft, Lock, ChevronDown, FileCode2, Coins, Clock, ArrowRight,
+  ChevronLeft, ChevronDown, FileCode2, Coins, Clock, ArrowRight,
 } from "lucide-react";
 import { useAuth } from "@/App";
 
@@ -25,24 +25,20 @@ function ModelPicker({ models, selected, onSelect }) {
     <div data-testid="model-picker" className="flex gap-2 overflow-x-auto py-2">
       {models.map((m) => {
         const active = m.id === selected;
-        const locked = !m.available;
         return (
           <button
             key={m.id}
             data-testid={`model-${m.id}`}
-            onClick={() => !locked && onSelect(m.id)}
-            disabled={locked}
-            className="shrink-0 min-w-[160px] rounded-sm p-2.5 text-left transition-all hover:translate-y-[-1px]"
+            onClick={() => onSelect(m.id)}
+            className="shrink-0 min-w-[160px] rounded-sm p-2.5 text-left transition-all hover:translate-y-[-1px] cursor-pointer"
             style={{
               background: active ? "rgba(34,211,238,0.08)" : "var(--bg-card)",
               border: `1px solid ${active ? "#22d3ee" : "var(--border)"}`,
-              opacity: locked ? 0.55 : 1, cursor: locked ? "not-allowed" : "pointer",
             }}
           >
             <div className="flex items-center justify-between mb-1">
               <span className="text-[10px] font-mono uppercase tracking-widest t-text-dim">{m.provider}</span>
-              {locked && <Lock size={9} className="t-text-dim" />}
-              {active && !locked && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />}
+              {active && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />}
             </div>
             <div className="text-[12px] t-text font-bold truncate">{m.label}</div>
             <div className="flex items-center gap-1 mt-1 text-[9px] font-mono uppercase tracking-wider">
@@ -54,8 +50,14 @@ function ModelPicker({ models, selected, onSelect }) {
               <Coins size={9} className="text-amber-400" />
               <span className="t-text-sub">{m.chat_cost}cr chat · {m.build_cost}cr build</span>
             </div>
-            {locked && (
-              <div className="text-[9px] text-amber-400 mt-1.5 truncate font-mono">Add key in Vault →</div>
+            {m.using_byok && (
+              <div
+                data-testid={`byok-badge-${m.id}`}
+                className="mt-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[8px] font-bold tracking-widest uppercase font-mono text-emerald-300"
+                style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.3)" }}
+              >
+                ✓ Your key
+              </div>
             )}
           </button>
         );

@@ -1,0 +1,23 @@
+{
+  "summary": "Iter40 — Platform Keys Default + BYOK Optional Override. Backend: 12/12 pytest tests passed in test_iter40_platform_keys_byok.py. All 6 models (gemini-2.5-flash, gemini-2.5-pro, gpt-4o, gpt-4o-mini, claude-sonnet, claude-haiku) report available=true / needs_byok=false from /api/vibe/models. Platform-keyed /api/vibe/chat succeeds for all 6 models, returning key_source='platform' and credits_used=1; previous 402 BYOK_REQUIRED gate is gone. BYOK silent override verified: saving a fake openai key flips using_byok flag on gpt-4o/4o-mini and resolution routes through BYOK (502 from upstream is expected with fake key). Corrupted ciphertext (enc:v1:<bogus>) falls back silently to platform key (key_source='platform', HTTP 200). api_model field correctly hidden from /vibe/models response. Build costs per model: flash=3, pro=5, 4o=5, mini=2, sonnet=5, haiku=2 — all match spec. Admin credit bypass still active. Frontend: model picker on /build has all 6 cards clickable, no Lock icon, no 'Add key in Vault' text, no disabled state, no opacity-50; YOUR KEY badges appear on gpt-4o + gpt-4o-mini after saving an openai BYOK credential and disappear on the other 4 cards.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter40_platform_keys_byok.py",
+    "/app/test_reports/pytest/iter40.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "decrypt_key in /app/backend/lib/byok_crypto.py returns legacy plaintext as-is when no 'enc:' prefix is present. Means any legacy/plaintext key stored will be used verbatim — acceptable for migration but should be removed once all credentials have been re-encrypted. Consider adding a one-time migration script and then making 'enc:' prefix mandatory.",
+    "Per-model build cost is mirrored in /api/vibe/models response (build_cost). Good — single source of truth.",
+    "_resolve_api_key correctly distinguishes openai (gpt-*) and anthropic (claude-*) service strings. Gemini routes via platform Emergent key only (no BYOK lookup) — that matches the spec since Emergent universal key already fronts Gemini cheaply."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter40_platform_keys_byok.py"],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100%"},
+  "test_credentials": "Admin admin@nova.ai / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created 1 throwaway user (iter40_u1_<hex>@test.com) via /api/auth/register for BYOK isolation. byok_credentials docs added/removed during test; auto-cleaned at end of each test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter40 complete. /vibe/chat response now includes key_source ('platform'|'byok'). BYOK badge data-testid pattern: byok-badge-{model_id}. POST /api/workflows/credentials and DELETE /api/workflows/credentials/{service} are the BYOK CRUD endpoints; the underlying collection is byok_credentials (singular). Frontend localStorage token key is 'taskforce_token'. /vibe/generate per-model debit (mini=2, haiku=2, sonnet=5, etc.) was verified by inspecting /vibe/models build_cost field rather than running actual generate calls (each generate call takes 30-60s).",
+  "rca of the issue": "N/A — no defects found."
+}

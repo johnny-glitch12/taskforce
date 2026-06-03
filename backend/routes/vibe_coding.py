@@ -34,12 +34,12 @@ EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
 
 # Model registry — single source of truth for picker, dispatch, and pricing.
 MODELS = {
-    "gemini-2.5-flash":  {"label": "Gemini 2.5 Flash", "provider": "google",   "speed": "fast",   "quality": "good",      "build_cost": 3, "platform": True,  "byok_service": None,       "engine": "gemini"},
-    "gemini-2.5-pro":    {"label": "Gemini 2.5 Pro",   "provider": "google",   "speed": "medium", "quality": "excellent", "build_cost": 5, "platform": True,  "byok_service": None,       "engine": "gemini"},
-    "gpt-4o":            {"label": "GPT-4o",            "provider": "openai",    "speed": "medium", "quality": "excellent", "build_cost": 5, "platform": False, "byok_service": "openai",   "engine": "openai"},
-    "gpt-4o-mini":       {"label": "GPT-4o Mini",       "provider": "openai",    "speed": "fast",   "quality": "good",      "build_cost": 2, "platform": False, "byok_service": "openai",   "engine": "openai"},
-    "claude-sonnet":     {"label": "Claude Sonnet",     "provider": "anthropic", "speed": "medium", "quality": "excellent", "build_cost": 5, "platform": False, "byok_service": "anthropic","engine": "anthropic"},
-    "claude-haiku":      {"label": "Claude Haiku",      "provider": "anthropic", "speed": "fast",   "quality": "good",      "build_cost": 2, "platform": False, "byok_service": "anthropic","engine": "anthropic"},
+    "gemini-2.5-flash":  {"label": "Gemini 2.5 Flash", "provider": "google",   "speed": "fast",   "quality": "good",      "build_cost": 3, "platform": True,  "byok_service": None,       "engine": "gemini",    "api_model": "gemini-2.5-flash"},
+    "gemini-2.5-pro":    {"label": "Gemini 2.5 Pro",   "provider": "google",   "speed": "medium", "quality": "excellent", "build_cost": 5, "platform": True,  "byok_service": None,       "engine": "gemini",    "api_model": "gemini-2.5-pro"},
+    "gpt-4o":            {"label": "GPT-4o",            "provider": "openai",    "speed": "medium", "quality": "excellent", "build_cost": 5, "platform": True,  "byok_service": "openai",   "engine": "openai",    "api_model": "gpt-4o"},
+    "gpt-4o-mini":       {"label": "GPT-4o Mini",       "provider": "openai",    "speed": "fast",   "quality": "good",      "build_cost": 2, "platform": True,  "byok_service": "openai",   "engine": "openai",    "api_model": "gpt-4o-mini"},
+    "claude-sonnet":     {"label": "Claude Sonnet",     "provider": "anthropic", "speed": "medium", "quality": "excellent", "build_cost": 5, "platform": True,  "byok_service": "anthropic","engine": "anthropic", "api_model": "claude-sonnet-4-5-20250929"},
+    "claude-haiku":      {"label": "Claude Haiku",      "provider": "anthropic", "speed": "fast",   "quality": "good",      "build_cost": 2, "platform": True,  "byok_service": "anthropic","engine": "anthropic", "api_model": "claude-haiku-4-5-20251001"},
 }
 
 DEFAULT_MODEL = "gemini-2.5-flash"
@@ -158,15 +158,54 @@ def _extract_json(text: str) -> dict:
     raise ValueError("Unbalanced JSON object in LLM output")
 
 
-async def _call_platform_llm(*, model: str, system_prompt: str, history: list, user_message: str, session_key: str) -> str:
-    """Dispatch a chat call to a platform model via the Emergent LLM Key.
+async def _resolve_api_key(db, user_id: str, model: str) -> dict:
+    """Resolve which API key to use for a given model.
+    Returns {"api_key": str, "source": "platform" | "byok"}.
+    Silent BYOK override — if user has a key for this provider, use it (saves us cost).
+    Otherwise fall back to the Emergent Universal Key (every model always works)."""
+    info = MODELS[model]
+    byok_service = info["byok_service"]  # "openai" | "anthropic" | None for gemini
+
+    if byok_service:
+        # Use the actual BYOK collection (byok_credentials, not user_credentials).
+        doc = await db.byok_credentials.find_one(
+            {"user_id": user_id, "service": byok_service},
+            {"api_key": 1, "_id": 0},
+        )
+        if doc and doc.get("api_key"):
+            from routes.workflow_executor import decrypt_key
+            try:
+                plain = decrypt_key(doc["api_key"])
+                if plain:
+                    return {"api_key": plain, "source": "byok"}
+            except Exception:
+                pass  # fall through to platform key
+
+    return {"api_key": EMERGENT_LLM_KEY, "source": "platform"}
+
+
+async def _get_byok_providers(db, user_id: str) -> set:
+    """Return the set of byok provider services the user has stored keys for."""
+    out = set()
+    cursor = db.byok_credentials.find(
+        {"user_id": user_id, "service": {"$in": ["openai", "anthropic", "google"]}},
+        {"service": 1, "_id": 0},
+    )
+    async for d in cursor:
+        out.add(d["service"])
+    return out
+
+
+async def _call_platform_llm(*, model: str, system_prompt: str, history: list, user_message: str, session_key: str, api_key: Optional[str] = None) -> str:
+    """Dispatch a chat call to a model — uses the supplied api_key (BYOK or Emergent).
     History is injected as transcript text in a single user message — emergentintegrations
     creates fresh sessions per LlmChat instance, so replaying turns one-by-one would
-    fan-out into N LLM round-trips (blowing past the 60s ingress timeout). One call is enough."""
+    fan-out into N LLM round-trips (blowing past the 60s ingress timeout)."""
     from emergentintegrations.llm.chat import LlmChat, UserMessage
     info = MODELS[model]
-    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_key, system_message=system_prompt).with_model(
-        info["engine"], model
+    key = api_key or EMERGENT_LLM_KEY
+    chat = LlmChat(api_key=key, session_id=session_key, system_message=system_prompt).with_model(
+        info["engine"], info["api_model"]
     )
     if history:
         transcript = "\n".join(
@@ -181,10 +220,10 @@ async def _call_platform_llm(*, model: str, system_prompt: str, history: list, u
 
 
 async def _get_byok_status(db, user_id: str) -> dict:
-    """Return {service: bool_has_key} for the BYOK-required services."""
+    """Return {service: bool_has_key} for the BYOK-overridable services."""
     services = {"openai", "anthropic"}
     out = {s: False for s in services}
-    cursor = db.user_credentials.find({"user_id": user_id, "service": {"$in": list(services)}}, {"service": 1, "_id": 0})
+    cursor = db.byok_credentials.find({"user_id": user_id, "service": {"$in": list(services)}}, {"service": 1, "_id": 0})
     async for doc in cursor:
         out[doc["service"]] = True
     return out
@@ -193,19 +232,23 @@ async def _get_byok_status(db, user_id: str) -> dict:
 # ─── Routes ───
 @router.get("/vibe/models")
 async def list_models(user=Depends(get_current_user())):
-    """Return the available models with availability flags per user."""
+    """Return the full model catalogue. EVERY model is always available — platform key
+    fronts the call by default, silent BYOK override kicks in when the user has their
+    own key saved (and `using_byok=true` is set so the UI can render an optional badge)."""
     db = get_db()
     user_id = str(user.get("id", user.get("email")))
     byok = await _get_byok_status(db, user_id)
     out = []
     for mid, m in MODELS.items():
-        available = m["platform"] or byok.get(m["byok_service"], False)
+        using_byok = bool(m["byok_service"] and byok.get(m["byok_service"]))
         out.append({
             "id": mid, "label": m["label"], "provider": m["provider"],
             "speed": m["speed"], "quality": m["quality"],
             "chat_cost": 1, "build_cost": m["build_cost"],
-            "platform": m["platform"], "available": available,
-            "byok_service": m["byok_service"], "needs_byok": (not m["platform"]) and not available,
+            "platform": m["platform"], "available": True,            # always available now
+            "byok_service": m["byok_service"],
+            "using_byok": using_byok,                                  # optional UX badge
+            "needs_byok": False,                                       # legacy field, always false
         })
     return {"models": out, "default": DEFAULT_MODEL}
 
@@ -266,24 +309,9 @@ def _verify_model(model: str):
         raise HTTPException(status_code=400, detail=f"Unknown model '{model}'. Valid: {list(MODELS.keys())}")
 
 
-async def _verify_model_available(db, user_id: str, model: str):
-    info = MODELS[model]
-    if info["platform"]:
-        return
-    # BYOK model — require a saved credential.
-    has = await db.user_credentials.find_one(
-        {"user_id": user_id, "service": info["byok_service"]}, {"_id": 1}
-    )
-    if not has:
-        raise HTTPException(
-            status_code=402,
-            detail={
-                "error": "BYOK_REQUIRED",
-                "service": info["byok_service"],
-                "message": f"This model needs your {info['provider'].title()} API key in the Credentials Vault.",
-                "vault_url": "/credentials",
-            },
-        )
+# NOTE: BYOK is no longer a gate — every model is always available. If the user has
+# their own key, _resolve_api_key uses it silently. Otherwise the platform key fronts
+# the call. The legacy _verify_model_available helper has been removed.
 
 
 @router.post("/vibe/chat")
@@ -292,7 +320,6 @@ async def vibe_chat(req: VibeChatRequest, user=Depends(get_current_user())):
     db = get_db()
     user_id = str(user.get("id", user.get("email")))
     _verify_model(req.model)
-    await _verify_model_available(db, user_id, req.model)
 
     # Credit gate
     check = await wallet_can_afford(db, user, "vibe_chat")
@@ -302,12 +329,15 @@ async def vibe_chat(req: VibeChatRequest, user=Depends(get_current_user())):
     session = await _ensure_session(db, user_id, user.get("email"), req.session_id, req.model, req.message)
     history = session.get("messages", [])
 
-    # Call the model
+    # Silent BYOK override — uses user's key when stored, else platform key.
+    key_info = await _resolve_api_key(db, user_id, req.model)
+
     try:
         ai_text = await _call_platform_llm(
             model=req.model, system_prompt=VIBE_PLANNING_PROMPT,
             history=history, user_message=req.message,
             session_key=f"vibe-{session['id']}",
+            api_key=key_info["api_key"],
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM call failed: {str(e)[:200]}")
@@ -317,7 +347,7 @@ async def vibe_chat(req: VibeChatRequest, user=Depends(get_current_user())):
 
     now = _now_iso()
     user_msg = {"role": "user", "content": req.message, "timestamp": now}
-    ai_msg = {"role": "assistant", "content": ai_text, "timestamp": now, "type": "chat", "credits_used": debit["cost"], "model": req.model}
+    ai_msg = {"role": "assistant", "content": ai_text, "timestamp": now, "type": "chat", "credits_used": debit["cost"], "model": req.model, "key_source": key_info["source"]}
     await db.vibe_sessions.update_one(
         {"id": session["id"]},
         {"$push": {"messages": {"$each": [user_msg, ai_msg]}},
@@ -328,6 +358,7 @@ async def vibe_chat(req: VibeChatRequest, user=Depends(get_current_user())):
         "session_id": session["id"], "type": "chat",
         "response": ai_text, "credits_used": debit["cost"],
         "balance_remaining": debit["balance"], "model": req.model,
+        "key_source": key_info["source"],
     }
 
 
@@ -337,7 +368,6 @@ async def vibe_generate(req: VibeGenerateRequest, user=Depends(get_current_user(
     db = get_db()
     user_id = str(user.get("id", user.get("email")))
     _verify_model(req.model)
-    await _verify_model_available(db, user_id, req.model)
 
     # Credit gate against per-model build cost (NOT the flat ACTION_COSTS['build_bot']).
     per_model_cost = MODELS[req.model]["build_cost"]
@@ -350,12 +380,16 @@ async def vibe_generate(req: VibeGenerateRequest, user=Depends(get_current_user(
         raise HTTPException(status_code=404, detail="Session not found.")
     history = session.get("messages", [])
 
+    # Silent BYOK override
+    key_info = await _resolve_api_key(db, user_id, req.model)
+
     # Generate
     try:
         raw = await _call_platform_llm(
             model=req.model, system_prompt=VIBE_BUILD_PROMPT,
             history=history, user_message=req.message,
             session_key=f"vibe-gen-{session['id']}",
+            api_key=key_info["api_key"],
         )
         payload = _extract_json(raw)
     except json.JSONDecodeError as je:
@@ -373,7 +407,6 @@ async def vibe_generate(req: VibeGenerateRequest, user=Depends(get_current_user(
 
     # Debit at per-model cost AFTER successful LLM call.
     debit = await wallet_debit(db, user, "build_bot", ref=session["id"], cost_override=per_model_cost)
-
     now = _now_iso()
     commit_id = uuid.uuid4().hex[:12]
     commit_entry = {
@@ -416,4 +449,5 @@ async def vibe_generate(req: VibeGenerateRequest, user=Depends(get_current_user(
         "project_id": project_id, "name": name, "description": description,
         "files": files, "nodes": nodes, "edges": edges,
         "credits_used": debit["cost"], "balance_remaining": debit["balance"], "model": req.model,
+        "key_source": key_info["source"],
     }
