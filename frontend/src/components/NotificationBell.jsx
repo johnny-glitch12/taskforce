@@ -146,10 +146,13 @@ export default function NotificationBell() {
         <div
           ref={dropdownRef}
           data-testid="notification-dropdown"
-          className="absolute right-0 mt-2 w-96 max-h-[28rem] overflow-hidden rounded-sm shadow-2xl z-50 flex flex-col"
+          className="absolute right-0 mt-2 w-96 max-h-[28rem] overflow-hidden rounded-sm shadow-2xl z-50 flex flex-col notif-dropdown-solid"
           style={{
-            background: "var(--bg-card)",
+            /* Solid background — the global --bg-card is rgba(.,.02) (almost
+               fully transparent). --bg-elevated is fully opaque per theme. */
+            background: "var(--bg-elevated)",
             border: "1px solid var(--border)",
+            backdropFilter: "none",
           }}
         >
           {/* Header */}

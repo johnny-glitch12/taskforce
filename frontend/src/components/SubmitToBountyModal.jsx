@@ -81,7 +81,7 @@ export default function SubmitToBountyModal({ bounty, onClose, onSubmitted }) {
         example_use_case: bounty.example_use_case,
       }));
     } catch { /* ignore */ }
-    navigate("/build");
+    navigate("/armory");
   }
 
   return (

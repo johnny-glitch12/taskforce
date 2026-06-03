@@ -26,7 +26,7 @@ import ComingSoonLanding from "@/pages/ComingSoonLanding";
 import Credits from "@/pages/Credits";
 import MyDeployments from "@/pages/MyDeployments";
 import UsageMonitor from "@/pages/UsageMonitor";
-import VibeBuildPage from "@/pages/VibeBuildPage";
+import VibeBuildPage from "@/pages/VibeBuildPage"; // legacy — kept for direct linking; /build route removed
 import ExternalAgents from "@/pages/ExternalAgents";
 import HostingPlans from "@/pages/HostingPlans";
 import BountyBoard from "@/pages/BountyBoard";
@@ -274,7 +274,8 @@ function AppShell() {
             }
           />
           <Route path="/credits" element={<ProtectedRoute><Credits /></ProtectedRoute>} />
-          <Route path="/build" element={<ProtectedRoute><VibeBuildPage /></ProtectedRoute>} />
+          {/* /build legacy route removed — Armory is the single builder now */}
+          <Route path="/build" element={<Navigate to="/armory" replace />} />
           <Route path="/external-agents" element={<ProtectedRoute><ExternalAgents /></ProtectedRoute>} />
           <Route path="/hosting" element={<ProtectedRoute><HostingPlans /></ProtectedRoute>} />
           <Route path="/bounties" element={<BountyBoard />} />

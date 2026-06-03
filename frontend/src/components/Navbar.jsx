@@ -6,20 +6,18 @@ import { useState, useRef, useEffect } from "react";
 import NotificationBell from "@/components/NotificationBell";
 
 const CENTER_LINKS_PUBLIC = [
-  { to: "/build", label: "Build", accent: true },
+  { to: "/armory", label: "The Armory", accent: true },
   { to: "/exchange", label: "The Exchange" },
   { to: "/bounties", label: "Bounty Board" },
-  { to: "/armory", label: "The Armory" },
   { to: "/leaderboard", label: "Leaderboard", soon: true },
   { to: "/academy", label: "Academy", soon: true },
   { to: "/pricing", label: "Pricing" },
 ];
 
 const CENTER_LINKS_ADMIN = [
-  { to: "/build", label: "Build", accent: true },
+  { to: "/armory", label: "The Armory", accent: true },
   { to: "/exchange", label: "The Exchange" },
   { to: "/bounties", label: "Bounty Board" },
-  { to: "/armory", label: "The Armory" },
   { to: "/leaderboard", label: "Leaderboard", soon: true },
   { to: "/academy", label: "Academy" },
   { to: "/pricing", label: "Pricing" },
