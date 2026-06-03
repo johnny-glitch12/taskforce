@@ -23,7 +23,15 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
-### Phase 44 (Feb, 2026) — Vibe Coding (Chat-Driven Bot Builder + LLM Picker)
+### Phase 45 (Feb, 2026) — Platform Keys Default + Silent BYOK Override
+- **Every model works for every user immediately.** Removed the 402 `BYOK_REQUIRED` gate from `/vibe/chat` and `/vibe/generate`. All 6 models (Gemini Flash/Pro, GPT-4o/Mini, Claude Sonnet/Haiku) front their call through the Emergent Universal Key by default — same key already handled Gemini, also routes OpenAI + Anthropic.
+- **Silent BYOK override** (`_resolve_api_key`): if the user has a stored credential in `byok_credentials` for the model's provider (openai or anthropic), the decrypted key fronts the call and `key_source="byok"` lands in the response. Otherwise platform key + `key_source="platform"`. Corrupted ciphertext falls through silently — never blocks the user.
+- **Model ID decoupling**: user-facing IDs (`claude-sonnet`, `claude-haiku`, etc.) stay stable in the API contract while internal `api_model` field maps to versioned provider IDs (`claude-sonnet-4-5-20250929`, `claude-haiku-4-5-20251001`). Fixed the prior bug where `claude-sonnet` was sent verbatim and rejected by Anthropic.
+- **`using_byok` flag** on `GET /api/vibe/models` per model when the user has the provider's key — surfaces in the UI as a small green "✓ YOUR KEY" badge.
+- **Frontend ModelPicker simplified**: removed `disabled`, lock icon, "Add key in Vault →" CTA, reduced opacity, and `cursor:not-allowed`. Every card is now plain selectable. Only addition: the BYOK badge.
+- **Verified live**: iter40 — backend 12/12 pytest pass, frontend 100%. All 6 models return non-empty chat responses with `key_source="platform"`. After saving a fake openai BYOK key, resolution flips to `key_source="byok"` for gpt-4o/4o-mini; UI displays "YOUR KEY" badge on those two cards only.
+
+
 - **New `/build` page (`VibeBuildPage.jsx`)** — Emergent-style chat-driven bot builder. Split layout: 60% chat panel left + 42% generated-file preview right (Monaco read-only with tabs). Collapsible session sidebar shows past builds; click to resume. Suggestion chips for empty state. Multiline textarea with Enter-to-send and Shift+Enter newline.
 - **6-model picker** — Gemini 2.5 Flash (3cr build) + Gemini 2.5 Pro (5cr) on the platform (Emergent LLM Key); GPT-4o (5cr), GPT-4o Mini (2cr), Claude Sonnet (5cr), Claude Haiku (2cr) gated by BYOK with Lock icon + "Add key in Vault →" CTA. Per-model cards show speed/quality badges + chat-cost + build-cost.
 - **Backend `routes/vibe_coding.py`** — `MODELS` registry as single source of truth. Routes: `GET /vibe/models` (with availability flags per user's BYOK keys), `GET/DELETE /vibe/sessions[/:id]`, `POST /vibe/chat` (1cr per AI reply), `POST /vibe/generate` (per-model build_cost). Wallet debit happens AFTER successful LLM call — failed calls don't charge. BYOK gate returns 402 `{error: BYOK_REQUIRED, service, vault_url}`.
