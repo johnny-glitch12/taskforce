@@ -2107,6 +2107,19 @@ async def startup():
 
     # Start Supernova scheduler (runs daily at midnight)
     scheduler.add_job(evaluate_supernovas, 'interval', hours=24, id='supernova_eval', replace_existing=True)
+
+    # Hosting subscription janitor — runs hourly; flips cancelled/active rows whose
+    # current_period_end has passed to status='expired' so cap enforcement engages.
+    async def _expire_hosting_subs():
+        try:
+            from routes.hosting import expire_lapsed_subscriptions
+            n = await expire_lapsed_subscriptions(db)
+            if n:
+                logger.info(f"[hosting-janitor] expired {n} lapsed subscription(s)")
+        except Exception as e:
+            logger.warning(f"[hosting-janitor] failed: {e}")
+    scheduler.add_job(_expire_hosting_subs, 'interval', hours=1, id='hosting_expire', replace_existing=True)
+
     if not scheduler.running:
         scheduler.start()
         logger.info("Supernova scheduler started")

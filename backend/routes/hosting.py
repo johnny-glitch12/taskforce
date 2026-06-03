@@ -418,8 +418,47 @@ async def increment_agents(db, creator_id: str, listing_id: str, by: int = 1) ->
     )
 
 
+async def decrement_agents(db, creator_id: str, listing_id: str) -> Optional[dict]:
+    """Reverse of increment_agents — clamps to 0 and pulls listing_id from the set.
+    Idempotent: removing an already-removed listing leaves the row untouched."""
+    sub = await db.hosting_subscriptions.find_one(
+        {"creator_id": str(creator_id), "status": "active"},
+        sort=[("created_at", -1)],
+    )
+    if not sub:
+        return None
+    if listing_id not in (sub.get("agents_published") or []):
+        return sub  # nothing to decrement
+    new_count = max(0, int(sub.get("agents_used") or 0) - 1)
+    return await db.hosting_subscriptions.find_one_and_update(
+        {"id": sub["id"]},
+        {"$set": {"agents_used": new_count, "updated_at": _now()},
+         "$pull": {"agents_published": listing_id}},
+        return_document=True,
+    )
+
+
+async def expire_lapsed_subscriptions(db) -> int:
+    """Scheduled job — flip status='cancelled' rows whose current_period_end is in
+    the past to status='expired'. Also flips 'active' rows past their period_end
+    (defensive: should only happen if the row hasn't been renewed yet).
+
+    Returns the total number of rows flipped."""
+    now_iso = _now()
+    res1 = await db.hosting_subscriptions.update_many(
+        {"status": "cancelled", "current_period_end": {"$lt": now_iso}},
+        {"$set": {"status": "expired", "expired_at": now_iso, "updated_at": now_iso}},
+    )
+    res2 = await db.hosting_subscriptions.update_many(
+        {"status": "active", "current_period_end": {"$lt": now_iso}},
+        {"$set": {"status": "expired", "expired_at": now_iso, "updated_at": now_iso}},
+    )
+    return (res1.modified_count or 0) + (res2.modified_count or 0)
+
+
 __all__ = [
     "router", "HOSTING_TIERS", "PERIOD_DAYS",
     "get_active_subscription", "can_publish",
-    "increment_executions", "increment_agents",
+    "increment_executions", "increment_agents", "decrement_agents",
+    "expire_lapsed_subscriptions",
 ]

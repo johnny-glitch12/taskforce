@@ -47,6 +47,46 @@ def get_db():
     return db
 
 
+async def _enforce_publish_quota(db, user, listing_id: str) -> None:
+    """Enforce the creator's hosting-plan cap when a listing transitions to
+    'published'. Raises 403 (or 402-style hosting upsell) when no plan or cap hit.
+    On success, atomically increments the active subscription's agents_used + appends
+    the listing_id to agents_published. Idempotent via $addToSet.
+
+    Admin users bypass enforcement (still increments the counter for visibility)."""
+    from routes.hosting import can_publish, increment_agents
+    creator_id = str(user.get("id", user.get("email")))
+    if user.get("role") != "admin":
+        check = await can_publish(db, creator_id)
+        if not check.get("allowed"):
+            if check.get("reason") == "no_subscription":
+                raise HTTPException(status_code=402, detail={
+                    "error": "NO_HOSTING_PLAN",
+                    "message": check.get("message"),
+                    "upgrade_url": "/hosting",
+                })
+            raise HTTPException(status_code=403, detail={
+                "error": check.get("reason") or "QUOTA",
+                "message": check.get("message"),
+                "tier": check.get("tier"),
+                "agents_used": check.get("agents_used"),
+                "max_agents": check.get("max_agents"),
+                "upgrade_url": "/hosting",
+            })
+    # Bump the counter (admins included — gives the dashboard a count).
+    await increment_agents(db, creator_id, listing_id)
+
+
+async def _release_publish_quota(db, user_id: str, listing_id: str) -> None:
+    """Mirror of _enforce_publish_quota for delist / delete. Best-effort —
+    failure to decrement should NOT block the user's delete operation."""
+    try:
+        from routes.hosting import decrement_agents
+        await decrement_agents(db, user_id, listing_id)
+    except Exception:
+        pass
+
+
 # ── Pydantic models ──
 class PublishListingRequest(BaseModel):
     workflow_id: str = Field(min_length=1)
@@ -289,6 +329,17 @@ async def update_listing(listing_id: str, req: UpdateListingRequest, user=Depend
         raise HTTPException(status_code=404, detail="Listing not found.")
 
     patch = {k: v for k, v in req.model_dump(exclude_unset=True).items() if v is not None}
+
+    # Hosting-quota enforcement: only when status is actually transitioning.
+    old_status = doc.get("status")
+    new_status = patch.get("status")
+    if new_status and new_status != old_status:
+        if new_status == "published":
+            await _enforce_publish_quota(db, user, listing_id)
+        elif old_status == "published":
+            # delisted or back to draft → release a slot.
+            await _release_publish_quota(db, user_id, listing_id)
+
     if patch:
         patch["updated_at"] = datetime.now(timezone.utc).isoformat()
         await db.exchange_listings.update_one({"_id": doc["_id"]}, {"$set": patch})
@@ -300,13 +351,17 @@ async def update_listing(listing_id: str, req: UpdateListingRequest, user=Depend
 async def delete_listing(listing_id: str, user=Depends(get_current_user())):
     db = get_db()
     user_id = str(user.get("id", user.get("email")))
+    doc = await db.exchange_listings.find_one({"id": listing_id, "user_id": user_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Listing not found.")
+    # Release the hosting slot BEFORE deleting the row so the listing_id is still in scope.
+    if doc.get("status") == "published":
+        await _release_publish_quota(db, user_id, listing_id)
     # Delete files
     listing_dir = UPLOAD_ROOT / listing_id
     if listing_dir.exists():
         shutil.rmtree(listing_dir, ignore_errors=True)
-    res = await db.exchange_listings.delete_one({"id": listing_id, "user_id": user_id})
-    if res.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Listing not found.")
+    await db.exchange_listings.delete_one({"id": listing_id, "user_id": user_id})
     return {"success": True}
 
 
@@ -397,6 +452,7 @@ async def upload_media(
 
     # Auto-promote draft → published once at least video OR 1 photo is uploaded
     if listing.get("status") == "draft":
+        await _enforce_publish_quota(db, user, listing_id)
         update["status"] = "published"
 
     await db.exchange_listings.update_one({"_id": listing["_id"]}, {"$set": update})

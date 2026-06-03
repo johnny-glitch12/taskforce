@@ -1,0 +1,47 @@
+{
+  "summary": "Iter45 backend testing of hosting quota enforcement on Exchange publish flow + APScheduler janitor (expire_lapsed_subscriptions). All 9 iter45 enforcement/janitor tests pass + 54/54 regression tests (iter42 webhooks/onboarding, iter43 runtime, iter44 hosting part3) remain green.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter45_hosting_enforcement.py",
+    "/app/test_reports/pytest/iter45_enforcement.xml",
+    "/app/test_reports/pytest/iter45_regression.xml"
+  ],
+  "tests_executed": {
+    "iter45_enforcement": "9/9 PASS (6.97s)",
+    "iter44_p7_part3_hosting + iter43_p7_part2_runtime + iter42_p7_webhooks_onboarding": "54/54 PASS (43.93s)"
+  },
+  "p0_coverage_verified": [
+    "PUT /api/exchange/listings/{id} status=published with no sub -> 402 detail.error=NO_HOSTING_PLAN + upgrade_url=/hosting (freeuser)",
+    "Starter sub cap=1, used=0: publish 200 + agents_used=1 + listing_id in agents_published",
+    "Second publish hits cap -> 403 detail.error=agent_cap, max_agents=1; second listing remains draft",
+    "DELETE published listing decrements agents_used by 1, pulls listing_id from agents_published; second DELETE 404 (no negative)",
+    "PUT status=draft on published listing releases slot (agents_used -= 1)",
+    "Expired sub treated as no-subscription -> publish 402 NO_HOSTING_PLAN",
+    "expire_lapsed_subscriptions: cancelled past period_end -> expired (with expired_at); active past period_end -> expired (defensive); active w/ future period_end untouched",
+    "decrement_agents idempotent: second call on same listing_id does not push below floor",
+    "Admin (role=admin) bypasses cap; counter still bumps to track activity",
+    "Scheduler job id='hosting_expire' interval=hours=1 registered in /app/backend/server.py line 2121 (verified via grep of scheduler.add_job)"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "hosting.py:441 expire_lapsed_subscriptions is correct but does not skip rows already status='expired' explicitly - relies on status filter for cancelled/active. Safe but worth noting.",
+    "exchange.py:455 in upload_media auto-promote branch: _enforce_publish_quota is called BEFORE setting status=published. If quota check raises, the uploaded media file is already saved on disk but listing remains draft - the file is retained which is acceptable but means orphan media on quota-blocked uploads. Minor.",
+    "exchange.py:359 DELETE path correctly releases quota before delete - good. The 404 path (already-deleted listing) returns 404 from initial find_one without touching counter - matches idempotency requirement.",
+    "_release_publish_quota swallows ALL exceptions silently (line 86) which is intentional but could mask DB issues. Consider logging."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "admin@nova.ai/admin123 (admin), freeuser@test.com/test123 (user) - confirmed valid",
+  "seed_data_creation": "Tests self-seed hosting_subscriptions via _seed_active_sub() and clean up via _clear_subs() in finally blocks. Post-run DB inspection confirmed zero leftover rows for freeuser@test.com.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter45 hosting enforcement + janitor fully green. Scheduler job 'hosting_expire' confirmed registered. No frontend changes in this iteration. Mongo schema: hosting_subscriptions.status now supports 'expired' with expired_at timestamp; exchange_listings unchanged."
+}
