@@ -29,6 +29,8 @@ import UsageMonitor from "@/pages/UsageMonitor";
 import VibeBuildPage from "@/pages/VibeBuildPage";
 import ExternalAgents from "@/pages/ExternalAgents";
 import HostingPlans from "@/pages/HostingPlans";
+import BountyBoard from "@/pages/BountyBoard";
+import BountyDetail from "@/pages/BountyDetail";
 import OnboardingModal from "@/components/OnboardingModal";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -264,6 +266,8 @@ function AppShell() {
           <Route path="/build" element={<ProtectedRoute><VibeBuildPage /></ProtectedRoute>} />
           <Route path="/external-agents" element={<ProtectedRoute><ExternalAgents /></ProtectedRoute>} />
           <Route path="/hosting" element={<ProtectedRoute><HostingPlans /></ProtectedRoute>} />
+          <Route path="/bounties" element={<BountyBoard />} />
+          <Route path="/bounties/:id" element={<ProtectedRoute><BountyDetail /></ProtectedRoute>} />
           <Route path="/my-deployments" element={<ProtectedRoute><MyDeployments /></ProtectedRoute>} />
           <Route path="/my-deployments/:id/monitor" element={<ProtectedRoute><UsageMonitor /></ProtectedRoute>} />
           <Route path="/deployments" element={<Navigate to="/my-deployments" replace />} />

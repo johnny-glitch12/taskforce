@@ -7,6 +7,7 @@ import { useState, useRef, useEffect } from "react";
 const CENTER_LINKS_PUBLIC = [
   { to: "/build", label: "Build", accent: true },
   { to: "/exchange", label: "The Exchange" },
+  { to: "/bounties", label: "Bounty Board" },
   { to: "/armory", label: "The Armory", soon: true },
   { to: "/leaderboard", label: "Leaderboard", soon: true },
   { to: "/academy", label: "Academy", soon: true },
@@ -16,6 +17,7 @@ const CENTER_LINKS_PUBLIC = [
 const CENTER_LINKS_ADMIN = [
   { to: "/build", label: "Build", accent: true },
   { to: "/exchange", label: "The Exchange" },
+  { to: "/bounties", label: "Bounty Board" },
   { to: "/armory", label: "The Armory" },
   { to: "/leaderboard", label: "Leaderboard", soon: true },
   { to: "/academy", label: "Academy" },

@@ -1993,6 +1993,9 @@ app.include_router(webhooks_router, prefix="/api")
 from routes.hosting import router as hosting_router
 app.include_router(hosting_router, prefix="/api")
 
+from routes.bounties import router as bounties_router
+app.include_router(bounties_router, prefix="/api")
+
 # Mount uploads dir for exchange listing media (videos + photos)
 UPLOADS_DIR = Path(__file__).parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
@@ -2119,6 +2122,18 @@ async def startup():
         except Exception as e:
             logger.warning(f"[hosting-janitor] failed: {e}")
     scheduler.add_job(_expire_hosting_subs, 'interval', hours=1, id='hosting_expire', replace_existing=True)
+
+    # Bounty Board janitor — hourly. Flips open→in_review when deadline lapses
+    # and auto-refunds the escrow back to the poster once the 7-day grace is up.
+    async def _expire_bounties():
+        try:
+            from routes.bounties import expire_lapsed_bounties
+            n = await expire_lapsed_bounties(db)
+            if n:
+                logger.info(f"[bounty-janitor] processed {n} lapsed bounty/-ies")
+        except Exception as e:
+            logger.warning(f"[bounty-janitor] failed: {e}")
+    scheduler.add_job(_expire_bounties, 'interval', hours=1, id='bounty_expire', replace_existing=True)
 
     if not scheduler.running:
         scheduler.start()
