@@ -6,8 +6,11 @@
 import { Lock, Zap, Crown, ExternalLink } from "lucide-react";
 
 export default function ModelPicker({ models, model, onChange }) {
-  const platform = (models || []).filter((m) => m.platform);
-  const byok = (models || []).filter((m) => !m.platform);
+  // A model belongs to "Your Keys" when it has an upstream BYOK service
+  // (gpt-4o, claude-sonnet …) — even though the platform key still fronts it
+  // by default. Models with no byok_service (gemini-flash/pro) are platform-only.
+  const platform = (models || []).filter((m) => !m.byok_service);
+  const byok = (models || []).filter((m) => !!m.byok_service);
 
   if (!models?.length) {
     return (

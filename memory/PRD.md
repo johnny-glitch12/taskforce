@@ -23,6 +23,35 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 54 (Feb 2026) — The Armory Redesign (Prompt 11)
+
+Complete UI redesign of `/armory` — replaced legacy 1371-line `Studio.jsx` debug-style node editor with a premium 3-panel chat-based builder (Cursor/Linear quality). Old Studio kept reachable via `/armory/workflows/:projectId` for power users.
+
+**New layout** (`pages/Armory.jsx` orchestrator + scoped CSS tokens in `pages/Armory.css`):
+- **SessionSidebar (240px, collapsible to 48px)** — search input, `+ New Build` cyan CTA, sessions grouped by Today / Yesterday / This Week / Older with active-row cyan left-border, hover-reveal delete, sticky **ModelPicker** at bottom (Platform group + Your Keys group split by `byok_service` field, with build-cost chip), credits card showing `subscription / monthly` + `+top-up`.
+- **ChatPanel (flex-grow)** — header with session title + status pill (`Draft/Building/Ready/Deployed`) + Open in Workflows escape hatch. Scrollable thread with new bubble system: user messages right-aligned (cyan avatar, dark surface), assistant messages left-aligned with bot avatar (no bubble — just text), error messages with red-left-border card, build results as a special **CodeGenerationCard** ("✅ Generated: Bot · 5 files · 4 nodes · 1.2s + [View Code] [Open in Workflows]"). Auto-grow textarea (1–6 lines) with Cmd/Ctrl-Enter to chat, Chat + Generate Code buttons in toolbar showing live credit cost.
+- **EmptyState** — "What do you want to build?" hero + 4 prompt suggestion cards (Customer Support / Data Pipeline / Slack Daily Summary / Lead Qualifier) — click to prefill the input.
+- **AgentPreview (380px, slides in when project exists)** — header card with agent icon + name + version + Draft/Ready/Deployed pill + Trust Score chip. Three tabs:
+  - **Files**: vs-dark Monaco editor with file tabs, JetBrains Mono 12px.
+  - **Flow**: custom inline-SVG mini graph (cyan triggers · purple LLM · amber conditions · green actions) with grid backdrop + arrow markers — zero new deps (React Flow not in package.json so I wrote a 90-line layout component).
+  - **Config**: project meta + last 5 commits.
+- **AgentActionBar (bottom of preview)** — Test Run (amber, calls new `POST /armory/bot-projects/{id}/test-run`) · Deploy (cyan primary, opens DirectPublishModal) · Publish (purple) · Export (downloads `.tfagent.json` blob client-side). Inline pass/fail result panel with first 280 chars of output.
+
+**Backend addition**:
+- `POST /api/armory/bot-projects/{id}/test-run` (16 lines, in `routes/armory_builder.py`) — reuses `routes/workflow_executor.execute_workflow_dag`, gated by `lib/compute_credits.check_compute_credits` + `increment_compute_usage`. Returns `{success, run_id, duration_ms, output, error, node_results}`. Empty-node project → 400, non-owner → 404, cap-hit → standard credit-gate dict.
+
+**Design tokens** (scoped under `.armory-shell` so the rest of the app's `--bg-card` etc. is unaffected):
+- Dark default: `#0A0A0A` bg · `#111` panels · `#1A1A1A` cards · `#2A2A2A` borders · `#00E5CC` accent · `#F3F4F6` text. Light-mode override via `html.light .armory-shell` (kept code blocks dark per editor convention). Fonts: Inter 14px body, JetBrains Mono 13px code, Rajdhani 500 for headings, mono 11px uppercase 1px letter-spacing for nav labels. Animations: 150ms fade-in on new messages, 1.4s pulse on "Generating…" indicator. Responsive: < 1100px → preview becomes bottom sheet; < 800px → sidebar fixed-overlay.
+
+**App.js + Navbar wiring**:
+- `/armory` route: was `AdminGate(Studio)` private-beta gated → now `ProtectedRoute(Armory)` open to all auth'd users.
+- `/armory/workflows/:projectId` route: `AdminGate(Studio)` for the "Open in Workflows" CTA.
+- Removed `soon: true` flag from the navbar's Armory link.
+- Footer hidden when on `/armory*` so the chat layout consumes full viewport.
+
+**Verified (iter50)**: **8/8 new backend tests + 100% frontend Playwright PASS**. Test agent found and fixed 1 CRITICAL backend import bug (compute-credit helper imported from wrong module — now `from lib.compute_credits import ...`). 1 cosmetic deviation flagged (single Platform group instead of two) → main agent fixed by switching ModelPicker grouping criterion to `byok_service`. Final smoke confirms both PLATFORM + YOUR KEYS groups now render correctly. Existing regression (iter46+47+48+49 = 37/39 + 27/27 P2) intact.
+
+
 ### Phase 53 (Feb 2026) — 5-Feature P2 Batch (Build-in-Armory · Schedules · Reviews · Earnings · Public API)
 
 **P2-1: Build-in-Armory round-trip**
@@ -62,6 +91,8 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 **Verified (iter49)**: **27/27 NEW backend tests PASS (schedules 6/6, reviews 7/7, earnings 4/4, api keys 4/4, public API 6/6 incl. 429 rate-limit)**. Regression: 37/39 (the 2 fails are the parked iter48 Stripe Connect platform-enablement op-item, unrelated). Frontend Playwright: all 5 features render cleanly with full data-testid coverage. Zero defects, zero critical issues.
 
+
+### Phase 52 (Feb 2026) — Cash Bounties via Stripe Connect (Prompt 9 P2)
 
 - **`routes/bounties.py` cash branch** in `create_bounty`: when `reward_type='cash'`, validates `cash_amount_usd` ∈ [$10, $10,000] + requires `origin_url`, creates the bounty doc with `status='pending_payment'` + `escrow_status='pending'`, mints a Stripe Checkout Session via `emergentintegrations.payments.stripe.checkout` (USD, success_url=/payment/success?type=bounty), and inserts a parallel `payment_transactions` row of `type='bounty'` so the existing webhook + status poller plumbing picks it up. Returns `{bounty, checkout_url, session_id}` for the frontend redirect.
 - **`POST /api/bounties/{id}/activate`** — frontend polls this after the Stripe redirect. Verifies poster identity, confirms the linked `payment_transactions.payment_status == 'paid'`, retrieves the `charge_id` via `stripe.checkout.Session.retrieve(expand=['payment_intent'])`, and flips the bounty to `status='open'` + `escrow_status='held'` with the persisted `stripe_charge_id` + `stripe_payment_intent_id`. Idempotent (returns `{already_active: true}` on re-call). 402 if payment not confirmed; 403 if not the poster.
