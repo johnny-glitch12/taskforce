@@ -229,6 +229,61 @@ async def _get_byok_status(db, user_id: str) -> dict:
     return out
 
 
+class RecommendRequest(BaseModel):
+    prompt: str = Field(min_length=3, max_length=4000)
+
+
+RECOMMEND_SYSTEM = """You are a model-selection router for Task Force AI's bot builder.
+Given a user's request below, pick ONE model that best fits the job — balance quality, speed, and cost.
+
+AVAILABLE MODELS (id → strengths):
+- gemini-2.5-flash : fastest + cheapest (3cr build). Best for simple bots, text transforms, single-API integrations.
+- gemini-2.5-pro   : top-tier reasoning (5cr build). Best for complex multi-step logic with branching.
+- gpt-4o           : excellent generalist (5cr build). Best when the bot needs tool/function calling or strict JSON outputs.
+- gpt-4o-mini      : fast + cheap (2cr build). Best for short text classification, validation, or shallow transforms.
+- claude-sonnet    : best long-context coder (5cr build). Best for multi-file agents with deep system-design needs.
+- claude-haiku     : fast (2cr build). Best for high-volume agents where latency matters more than depth.
+
+RETURN STRICTLY THIS JSON, no markdown fences, no prose:
+{"model": "<one of the 6 ids>", "reason": "<10-25 word justification>", "complexity": "simple|medium|complex"}"""
+
+
+@router.post("/vibe/recommend-model")
+async def recommend_model(req: RecommendRequest, user=Depends(get_current_user())):
+    """Cheap auto-pick. Uses Gemini Flash (1cr) to classify the request and recommend
+    one of the 6 catalogue models. Returns {model, reason, complexity} or falls back
+    to gemini-2.5-flash if the LLM output can't be parsed."""
+    db = get_db()
+    check = await wallet_can_afford(db, user, "vibe_chat")
+    if not check.get("allowed"):
+        return JSONResponse(status_code=402, content=check)
+
+    try:
+        raw = await _call_platform_llm(
+            model="gemini-2.5-flash", system_prompt=RECOMMEND_SYSTEM,
+            history=[], user_message=req.prompt,
+            session_key=f"vibe-recommend-{user.get('id', user.get('email'))}",
+        )
+        parsed = _extract_json(raw)
+    except Exception:
+        parsed = {}
+
+    pick = parsed.get("model") if parsed.get("model") in MODELS else DEFAULT_MODEL
+    reason = parsed.get("reason") or "Fast and cheap — good fit for most tasks."
+    complexity = parsed.get("complexity") or "medium"
+
+    debit = await wallet_debit(db, user, "vibe_chat", ref=f"recommend:{pick}")
+    return {
+        "model": pick,
+        "label": MODELS[pick]["label"],
+        "build_cost": MODELS[pick]["build_cost"],
+        "reason": reason,
+        "complexity": complexity,
+        "credits_used": debit["cost"],
+        "balance_remaining": debit["balance"],
+    }
+
+
 # ─── Routes ───
 @router.get("/vibe/models")
 async def list_models(user=Depends(get_current_user())):

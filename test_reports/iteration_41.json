@@ -1,0 +1,30 @@
+{
+  "summary": "Iter41 — Auto-Pick model recommendation. Backend: 12/12 pytest tests passed in test_iter41_recommend_model.py covering happy path, validation (<3 / >4000 chars → 422), credit gate (0 credits → 402 INSUFFICIENT_CREDITS), admin bypass (no real debit), credit_transactions logging (kind='vibe_chat' ref='recommend:<model>'), common-prompt sanity (markdown→HTML, complex research bot, email classifier all returned valid in-catalogue picks), and regression (all 6 models still available, /vibe/chat still works). Frontend: AUTO button (data-testid=vibe-auto-pick) disabled when empty (opacity=0.4, title='Type your idea first'); enabled with text; click triggers /api/vibe/recommend-model and shows auto-pick-hint banner with cyan uppercase complexity tag + reason; recommended model becomes selected (top-bar label updated to 'Claude Sonnet'; GENERATE button cost auto-updated from 3CR→5CR); × button dismisses the hint; loading state shows Loader2 spinner with darker bg rgba(34,211,238,0.18). Toast 'Auto-picked … · -1cr' fires via toast.success(). All iter40 regressions intact.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter41_recommend_model.py",
+    "/app/test_reports/pytest/iter41.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Validation works at Pydantic layer (Field(min_length=3, max_length=4000)) — FastAPI returns 422 cleanly. Good.",
+    "wallet_can_afford → 402 JSONResponse short-circuits before any LLM call, so insufficient-credit users are NOT billed and don't burn tokens. Correct order of operations.",
+    "Fallback path (parsed={} on _extract_json error) still debits 1 credit and returns model='gemini-2.5-flash' with default reason — endpoint never 500s. Verified by code review (the try/except around _call_platform_llm + _extract_json sets parsed={}).",
+    "Per-call credit debit uses ref=f'recommend:{pick}' — distinguishable from session-bound vibe_chat debits. Verified via credit_transactions doc lookup.",
+    "Top-bar AUTO button placement (LEFT of msg-count) matches spec. Hint banner inserted between title row and ModelPicker matches spec.",
+    "Minor: hint auto-dismiss timer is set via setTimeout but not cleared on component unmount — could fire setAutoPickHint on an unmounted component if user navigates away within 12s. Cosmetic only (React just warns), but consider useEffect cleanup."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter41_recommend_model.py"],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100%"},
+  "test_credentials": "Admin admin@nova.ai / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created 2 throwaway users for iter41: iter41_u1_<hex>@test.com (20 sub credits, used for debit-and-txn-log assertion) and iter41_u2_<hex>@test.com (0/0 credits, used for 402 gate). Both fall back to direct DB insert when /api/auth/register hits IP cap.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter41 complete. /api/vibe/recommend-model is a 1cr auto-pick endpoint that picks one of 6 models via Gemini Flash classifier. Returns {model,label,build_cost,reason,complexity,credits_used,balance_remaining}. Validation: prompt 3-4000 chars. Falls back to gemini-2.5-flash + 'Fast and cheap — good fit for most tasks.' / complexity='medium' if LLM parse fails. credit_transactions doc kind='vibe_chat', ref='recommend:<model_id>'. Frontend test ids: vibe-auto-pick (button), auto-pick-hint (banner). Hint dismiss button uses aria-label='Dismiss'. Top-bar active label format: '<N> msgs · <ModelLabel>'.",
+  "rca of the issue": "N/A — no defects."
+}

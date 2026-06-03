@@ -225,7 +225,8 @@ export default function VibeBuildPage() {
   const [previewProject, setPreviewProject] = useState(null);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [busyMode, setBusyMode] = useState(null); // "chat" | "build"
+  const [busyMode, setBusyMode] = useState(null); // "chat" | "build" | "auto"
+  const [autoPickHint, setAutoPickHint] = useState(null); // {model, reason, complexity}
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const chatEndRef = useRef(null);
 
@@ -288,6 +289,33 @@ export default function VibeBuildPage() {
     toast.success("Session deleted");
     if (sid === currentSession?.id) newSession();
     refreshSessions();
+  };
+
+  const autoPick = async () => {
+    if (!input.trim() || busy) {
+      toast.error("Type your idea first so the auto-picker has something to work with.");
+      return;
+    }
+    setBusy(true); setBusyMode("auto");
+    try {
+      const res = await fetch(`${API}/api/vibe/recommend-model`, {
+        method: "POST", headers, body: JSON.stringify({ prompt: input.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || data.message || "Couldn't recommend a model");
+        return;
+      }
+      setModel(data.model);
+      setAutoPickHint({ model: data.model, reason: data.reason, complexity: data.complexity });
+      toast.success(`Auto-picked ${data.label} (${data.complexity}) · -${data.credits_used}cr`);
+      // Auto-dismiss hint after 12s so it doesn't clutter the UI
+      setTimeout(() => setAutoPickHint(null), 12000);
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setBusy(false); setBusyMode(null);
+    }
   };
 
   const send = async (mode /* "chat" | "build" */) => {
@@ -364,10 +392,48 @@ export default function VibeBuildPage() {
                 {currentSession?.title || "New Build Session"}
               </span>
             </div>
-            <span className="text-[10px] font-mono t-text-dim">
-              {messages.length} msgs · {activeModel?.label || model}
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                data-testid="vibe-auto-pick"
+                onClick={autoPick}
+                disabled={busy || !input.trim()}
+                title={!input.trim() ? "Type your idea first" : "Auto-pick the best model (1cr)"}
+                className="px-2.5 py-1 text-[9px] font-bold tracking-[0.18em] uppercase font-mono rounded-sm transition-all flex items-center gap-1 disabled:opacity-40"
+                style={{
+                  background: busyMode === "auto" ? "rgba(34,211,238,0.18)" : "rgba(34,211,238,0.06)",
+                  border: "1px solid rgba(34,211,238,0.4)",
+                  color: "#22d3ee",
+                }}
+              >
+                {busyMode === "auto" ? <Loader2 size={9} className="animate-spin" /> : <Sparkles size={9} />}
+                Auto · 1cr
+              </button>
+              <span className="text-[10px] font-mono t-text-dim">
+                {messages.length} msgs · {activeModel?.label || model}
+              </span>
+            </div>
           </div>
+          {autoPickHint && (
+            <div
+              data-testid="auto-pick-hint"
+              className="mb-2 px-2.5 py-1.5 rounded-sm flex items-start gap-2 text-[10px] font-mono"
+              style={{
+                background: "rgba(34,211,238,0.06)",
+                border: "1px solid rgba(34,211,238,0.3)",
+              }}
+            >
+              <Sparkles size={10} className="text-cyan-400 mt-0.5 shrink-0" />
+              <div className="flex-1 t-text-sub leading-relaxed">
+                <span className="text-cyan-400 font-bold uppercase tracking-widest mr-1.5">{autoPickHint.complexity}</span>
+                {autoPickHint.reason}
+              </div>
+              <button
+                onClick={() => setAutoPickHint(null)}
+                className="t-text-dim hover:t-text shrink-0"
+                aria-label="Dismiss"
+              >×</button>
+            </div>
+          )}
           <ModelPicker models={models} selected={model} onSelect={setModel} />
         </div>
 
