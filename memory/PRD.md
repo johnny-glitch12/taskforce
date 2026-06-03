@@ -23,6 +23,20 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 49 (Feb 2026) — Hosting Quota Enforcement + Lapsed-Subscription Janitor
+- **`routes/exchange.py` — `_enforce_publish_quota(db, user, listing_id)` helper** runs on every draft→published transition. Imports `routes.hosting.can_publish` + `increment_agents`. Non-admin users without a sub get HTTP 402 `{error: NO_HOSTING_PLAN, upgrade_url: /hosting}`; over-cap users get HTTP 403 `{error: agent_cap, tier, agents_used, max_agents, upgrade_url}`. Admin users bypass the cap (still counter-bumped for ops visibility).
+- **`_release_publish_quota(db, user_id, listing_id)` helper** decrements + pulls listing_id on the reverse transition (published→draft / delisted) and on DELETE. Best-effort with silent except — never blocks the delete.
+- **Wired into 3 transition points**:
+  - `PUT /api/exchange/listings/{id}` — when `status` field is patched and differs from current status.
+  - `POST /api/exchange/listings/{id}/upload` — quota check moved to the TOP of the handler before writing media to disk (fixes the orphan-media risk flagged by iter45 testing agent). Auto-promote branch at the bottom now just flips status since quota was already enforced.
+  - `DELETE /api/exchange/listings/{id}` — releases slot before file/row deletion.
+- **New helpers in `routes/hosting.py`**:
+  - `decrement_agents(db, creator_id, listing_id)` — idempotent reverse of `increment_agents`. Clamps `agents_used` to 0 and `$pull`s from `agents_published`. No-op if listing_id isn't in the set.
+  - `expire_lapsed_subscriptions(db)` — flips `cancelled` rows whose `current_period_end` is in the past to `status='expired'` with `expired_at` timestamp. Also flips `active` rows past period_end (defensive — Stripe one-month checkouts don't auto-renew, so this catches forgotten renewals). Returns total flipped count.
+- **APScheduler job `hosting_expire`** registered in `server.py` startup at 1-hour interval. Runs `expire_lapsed_subscriptions(db)` and logs the count when non-zero. Coexists with the existing daily `supernova_eval` job.
+- **Expired subscriptions === no subscription** for `can_publish` purposes (`get_active_subscription` only matches `status='active'`), so published-cap enforcement engages automatically once the janitor flips a row to expired.
+- **Verified (iter45)**: **9/9 enforcement+janitor tests + 54/54 regression (iter42-44) = 63/63 backend green**. Coverage: no-sub 402, under-cap success + counter bump, at-cap 403, delete releases slot, delist releases slot, expired sub blocks publish, janitor flips 2 rows + leaves future-period row untouched, decrement_agents idempotency, admin bypass + counter still bumps, scheduler job registered. Testing subagent flagged orphan-media on quota-blocked upload (now FIXED by moving the check to the top of upload_media).
+
 ### Phase 48 (Feb 2026) — Hosting Subscription Tiers (Prompt 7 Part 3)
 - **New `routes/hosting.py`** (~430 lines) — full CRUD for the creator-side hosting subscription system, separate from the existing user-tier subscriptions (recruit/cadet/operator/...).
   - **4-tier catalogue** in `HOSTING_TIERS`: Starter $9 (1 agent, 1k runs, 10s runtime), Pro $29 (3 agents, 10k runs, 30s, **highlighted as Most Popular**), Growth $99 (10 agents, 50k runs, 60s + SLA), Scale $299 (unlimited agents = `max_agents:0`, 250k runs).

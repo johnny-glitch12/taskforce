@@ -383,6 +383,12 @@ async def upload_media(
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found.")
 
+    # If this upload will auto-promote draft → published, enforce the hosting
+    # quota BEFORE writing media to disk so a 402/403 rejection doesn't orphan
+    # a bunch of bytes in /app/backend/uploads/exchange/.
+    if listing.get("status") == "draft":
+        await _enforce_publish_quota(db, user, listing_id)
+
     # MIME + size validation
     if kind == "video":
         if file.content_type not in ALLOWED_VIDEO_MIME:
@@ -450,9 +456,10 @@ async def upload_media(
         photos.append(public_url)
         update["photo_urls"] = photos
 
-    # Auto-promote draft → published once at least video OR 1 photo is uploaded
+    # Auto-promote draft → published once at least video OR 1 photo is uploaded.
+    # Quota was already enforced + bumped at the top of this handler, so we just
+    # flip the status here.
     if listing.get("status") == "draft":
-        await _enforce_publish_quota(db, user, listing_id)
         update["status"] = "published"
 
     await db.exchange_listings.update_one({"_id": listing["_id"]}, {"$set": update})
