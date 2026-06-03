@@ -123,25 +123,60 @@ RULES:
 
 
 def _extract_json(text: str) -> dict:
-    """Pull the first balanced JSON object out of an LLM response."""
-    m = re.search(r"\{.*\}", text, re.DOTALL)
-    if not m:
+    """Pull the first balanced JSON object out of an LLM response.
+    Tolerates: markdown ```json fences, leading/trailing prose, and control chars
+    (newlines/tabs) inside string values (common when files contain real source code)."""
+    s = text.strip()
+    # Strip markdown code fences if present.
+    s = re.sub(r"^```(?:json|JSON)?\s*", "", s)
+    s = re.sub(r"\s*```\s*$", "", s)
+    # Walk to the first {...} balanced object.
+    start = s.find("{")
+    if start < 0:
         raise ValueError("No JSON object found in LLM output")
-    return json.loads(m.group(0))
+    depth = 0
+    in_str = False
+    esc = False
+    for i in range(start, len(s)):
+        c = s[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif c == "\\":
+                esc = True
+            elif c == '"':
+                in_str = False
+            continue
+        if c == '"':
+            in_str = True
+        elif c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return json.loads(s[start:i + 1], strict=False)
+    raise ValueError("Unbalanced JSON object in LLM output")
 
 
 async def _call_platform_llm(*, model: str, system_prompt: str, history: list, user_message: str, session_key: str) -> str:
-    """Dispatch a chat call to a platform model via the Emergent LLM Key."""
+    """Dispatch a chat call to a platform model via the Emergent LLM Key.
+    History is injected as transcript text in a single user message — emergentintegrations
+    creates fresh sessions per LlmChat instance, so replaying turns one-by-one would
+    fan-out into N LLM round-trips (blowing past the 60s ingress timeout). One call is enough."""
     from emergentintegrations.llm.chat import LlmChat, UserMessage
     info = MODELS[model]
     chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_key, system_message=system_prompt).with_model(
         info["engine"], model
     )
-    # Replay prior history so the model has context.
-    for m in history[-12:]:  # last 12 turns is plenty
-        if m.get("role") == "user":
-            await chat.send_message(UserMessage(text=m.get("content", "")))
-    resp = await chat.send_message(UserMessage(text=user_message))
+    if history:
+        transcript = "\n".join(
+            f"{m.get('role', '?').upper()}: {(m.get('content') or '').strip()[:2000]}"
+            for m in history[-12:]
+        )
+        composite = f"CONVERSATION SO FAR:\n{transcript}\n\n--- NEW USER MESSAGE ---\n{user_message}"
+    else:
+        composite = user_message
+    resp = await chat.send_message(UserMessage(text=composite))
     return str(resp)
 
 
@@ -304,8 +339,9 @@ async def vibe_generate(req: VibeGenerateRequest, user=Depends(get_current_user(
     _verify_model(req.model)
     await _verify_model_available(db, user_id, req.model)
 
-    # Credit gate against build_bot cost.
-    check = await wallet_can_afford(db, user, "build_bot")
+    # Credit gate against per-model build cost (NOT the flat ACTION_COSTS['build_bot']).
+    per_model_cost = MODELS[req.model]["build_cost"]
+    check = await wallet_can_afford(db, user, "build_bot", cost_override=per_model_cost)
     if not check.get("allowed"):
         return JSONResponse(status_code=402, content=check)
 
@@ -335,8 +371,8 @@ async def vibe_generate(req: VibeGenerateRequest, user=Depends(get_current_user(
     if not files or not nodes:
         raise HTTPException(status_code=502, detail="Generated bot has no files or nodes — clarify your request.")
 
-    # Debit and persist
-    debit = await wallet_debit(db, user, "build_bot", ref=session["id"])
+    # Debit at per-model cost AFTER successful LLM call.
+    debit = await wallet_debit(db, user, "build_bot", ref=session["id"], cost_override=per_model_cost)
 
     now = _now_iso()
     commit_id = uuid.uuid4().hex[:12]

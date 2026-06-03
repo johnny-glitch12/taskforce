@@ -155,9 +155,10 @@ async def get_balance(db, user: dict) -> Dict[str, Any]:
     }
 
 
-async def can_afford(db, user: dict, action: str) -> Dict[str, Any]:
-    """Non-mutating check — does the user have enough credits for `action`?"""
-    cost = ACTION_COSTS.get(action, 1)
+async def can_afford(db, user: dict, action: str, cost_override: Optional[int] = None) -> Dict[str, Any]:
+    """Non-mutating check — does the user have enough credits for `action`?
+    `cost_override` lets callers (e.g. vibe per-model pricing) override the ACTION_COSTS default."""
+    cost = ACTION_COSTS.get(action, 1) if cost_override is None else int(cost_override)
     if user.get("role") == "admin":
         return {"allowed": True, "cost": cost, "balance": ADMIN_UNLIMITED, "unlimited": True}
     info = await get_balance(db, user)
@@ -183,11 +184,13 @@ async def can_afford(db, user: dict, action: str) -> Dict[str, Any]:
     }
 
 
-async def debit(db, user: dict, action: str, ref: Optional[str] = None) -> Dict[str, Any]:
+async def debit(db, user: dict, action: str, ref: Optional[str] = None,
+                cost_override: Optional[int] = None) -> Dict[str, Any]:
     """Dual-pool atomic debit. Consumes `subscription_credits` first, then `topup_credits`.
     Returns {balance, sub_remaining, topup_remaining, cost, unlimited}.
-    Raises ValueError on insufficient funds (call `can_afford` first for a clean error)."""
-    cost = ACTION_COSTS.get(action, 1)
+    Raises ValueError on insufficient funds (call `can_afford` first for a clean error).
+    `cost_override` lets callers (e.g. vibe per-model pricing) override the ACTION_COSTS default."""
+    cost = ACTION_COSTS.get(action, 1) if cost_override is None else int(cost_override)
 
     if user.get("role") == "admin":
         await _ledger(db, user, action, ref, sub_deducted=0, topup_deducted=0,
@@ -237,7 +240,7 @@ async def debit(db, user: dict, action: str, ref: Optional[str] = None) -> Dict[
     )
     if not res:
         # Race condition — retry once with fresh snapshot.
-        return await debit(db, user, action, ref=ref)
+        return await debit(db, user, action, ref=ref, cost_override=cost_override)
 
     sub_remaining = int(res.get("subscription_credits") or 0)
     topup_remaining = int(res.get("topup_credits") or 0)
