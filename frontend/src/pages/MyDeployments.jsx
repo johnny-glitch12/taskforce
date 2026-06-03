@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Rocket, ShoppingCart, BarChart3, Settings, ArrowUpRight, Bot, Loader2,
-  Play, Clock, CheckCircle2, AlertCircle, Zap,
+  Play, Clock, CheckCircle2, AlertCircle, Zap, Calendar,
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -135,6 +135,7 @@ function DeploymentCard({ deployment: d, token, onUpdate }) {
         {[
           { id: "monitor", Icon: BarChart3, label: "MONITOR" },
           { id: "customize", Icon: Settings, label: "CUSTOMIZE" },
+          { id: "schedule", Icon: Calendar, label: "SCHEDULE" },
           { id: "upgrade", Icon: ArrowUpRight, label: "UPGRADE" },
         ].map(({ id, Icon, label }) => {
           const active = tab === id;
@@ -194,6 +195,10 @@ function DeploymentCard({ deployment: d, token, onUpdate }) {
 
         {tab === "customize" && (
           <CustomizeTab deployment={d} token={token} onUpdate={onUpdate} color={color} />
+        )}
+
+        {tab === "schedule" && (
+          <ScheduleTab deployment={d} token={token} onUpdate={onUpdate} color={color} />
         )}
 
         {tab === "upgrade" && (
@@ -279,3 +284,99 @@ function CustomizeTab({ deployment, token, onUpdate, color }) {
     </>
   );
 }
+
+const PRESET_OPTIONS = [
+  { id: "hourly",  label: "Every hour" },
+  { id: "6h",      label: "Every 6 hours" },
+  { id: "daily",   label: "Once a day" },
+  { id: "weekly",  label: "Once a week" },
+];
+
+function ScheduleTab({ deployment, token, onUpdate, color }) {
+  const [sched, setSched] = useState(deployment.schedule || { enabled: false, preset: null });
+  const [busy, setBusy] = useState(false);
+  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
+  const enabled = !!sched?.enabled;
+  const preset = sched?.preset || "daily";
+
+  const save = async (next) => {
+    setBusy(true);
+    try {
+      const res = await fetch(`${API}/api/deployments/${deployment.id}/schedule`, {
+        method: "PUT", headers,
+        body: JSON.stringify(next),
+      });
+      const body = await res.json();
+      if (!res.ok) { toast.error(body.detail || "Save failed"); return; }
+      setSched(body.schedule);
+      toast.success(next.enabled ? "Schedule enabled" : "Schedule disabled");
+      onUpdate();
+    } catch (e) { toast.error(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <div className="text-[10px] uppercase tracking-widest t-text-dim mb-2 font-mono inline-flex items-center gap-1">
+        <Calendar size={9} /> Auto-run schedule
+      </div>
+      <div className="rounded-sm p-2 mb-3" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+        <label className="flex items-center justify-between cursor-pointer mb-2">
+          <span className="text-[11px] t-text">Enable scheduled runs</span>
+          <input
+            type="checkbox"
+            data-testid={`sched-toggle-${deployment.id}`}
+            checked={enabled}
+            disabled={busy}
+            onChange={(e) => save({ enabled: e.target.checked, preset: e.target.checked ? preset : null })}
+            className="accent-cyan-400"
+          />
+        </label>
+        {enabled && (
+          <>
+            <div className="grid grid-cols-2 gap-1.5" data-testid={`sched-presets-${deployment.id}`}>
+              {PRESET_OPTIONS.map((p) => (
+                <button
+                  key={p.id}
+                  data-testid={`sched-preset-${deployment.id}-${p.id}`}
+                  disabled={busy}
+                  onClick={() => save({ enabled: true, preset: p.id })}
+                  className="px-2 py-1.5 text-[10px] font-mono uppercase tracking-[0.12em] rounded-sm transition-all"
+                  style={{
+                    background: preset === p.id ? color : 'transparent',
+                    color: preset === p.id ? '#0a0e1a' : 'var(--text-mute)',
+                    border: `1px solid ${preset === p.id ? color : 'var(--border)'}`,
+                    opacity: busy ? 0.5 : 1,
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 text-[10px] t-text-dim font-mono space-y-0.5">
+              {sched?.next_run_at && (
+                <div data-testid={`sched-next-${deployment.id}`}>Next run: {new Date(sched.next_run_at).toLocaleString()}</div>
+              )}
+              {sched?.last_run_at && (
+                <div>
+                  Last run: {new Date(sched.last_run_at).toLocaleString()}
+                  {sched.last_run_success === true && <span className="text-emerald-400 ml-1">· ok</span>}
+                  {sched.last_run_success === false && <span className="text-rose-400 ml-1">· failed</span>}
+                </div>
+              )}
+              {sched?.last_disabled_reason === "limit_reached" && (
+                <div className="text-rose-400">Auto-disabled: monthly run limit reached.</div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+      <div className="text-[10px] t-text-dim font-mono leading-relaxed">
+        Scheduled runs consume your deployment's monthly run quota.
+        If you hit the cap the schedule auto-disables — upgrade or wait for the next cycle.
+      </div>
+    </>
+  );
+}
+

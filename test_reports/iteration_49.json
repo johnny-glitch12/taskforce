@@ -1,0 +1,35 @@
+{
+  "summary": "Iter49 P2 batch (5 features) — 27/27 NEW backend tests PASSED in test_iter49_p2_batch.py (schedules 6/6, reviews 7/7, creator earnings 4/4, api keys 4/4, public API 6/6 incl. rate-limit 429 confirmed). Regression: iter46+iter47+iter48 = 37/39 passed (2 remaining Stripe Connect onboard failures are the known iter48 external platform-enablement issue, NOT a regression). Frontend Playwright smokes confirmed: /earnings page renders with all 11 data-testids (earnings-page, window-toggle, export-csv-btn, lifetime-usd/credits, window-runs, 4 mini stats, empty-ledger); /keys page renders with mint flow producing fresh-key-card + copy-fresh-key + api-docs; Schedule tab on /my-deployments toggles + sets daily preset + sched-next shows future timestamp (~24h ahead); ListingDetail /listing/:id renders reviews-panel + reviews-empty; VibeBuildPage /build shows bounty-prefill-banner with title 'TEST bounty prefill demo' and prefills the textarea. No console errors observed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter49_p2_batch.py",
+    "/app/test_reports/pytest/iter49.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "schedules.py.tick_scheduled_runs: catches Exception broadly then bumps next_run_at forward — good for not hammering, but no max-consecutive-failure circuit breaker. ENH: auto-disable after N consecutive failures so a permanently broken bot doesn't churn forever.",
+    "public_api.py rate limiter is in-process (collections.deque). Acceptable for single-replica per main agent's note, but already documented as a future ENH — fine to ship.",
+    "creator_earnings.export_csv: pulls up to 1000 rows by calling earnings_ledger in a loop; if a creator has >1000 events some entries silently drop. Add total + 'truncated_at' header field, or use a streaming response.",
+    "reviews.py.create_review: order-of-checks puts pydantic schema validation (422) BEFORE owner check (403) thanks to FastAPI; verified by test_short_comment_422 returning 422 on own listing. Good.",
+    "Marketplace.jsx fetches only published listings — if zero listings exist, `agent-title-link` won't render; not a defect, but main agent should consider seeding 1-2 demo listings for marketplace UX walkthroughs.",
+    "VibeBuildPage prefill requires both `bounty_id` AND `title` fields in sessionStorage payload — keep this contract documented at the SubmitToBountyModal write-site to avoid silent prefill drops."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter49_p2_batch.py"
+  ],
+  "success_rate": {"backend": "100% (27/27 iter49 + 37/39 regression incl. 2 parked Stripe Connect tests)", "frontend": "100% (all 5 features verified)"},
+  "test_credentials": "admin@nova.ai / admin123 ; freeuser@test.com / test123 (from /app/memory/test_credentials.md — current, no changes needed)",
+  "seed_data_creation": "Each test class creates+cleans-up its own resources (listings, API keys, reviews). No persistent seed needed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter49 added 5 P2 features (schedules, reviews, earnings, api keys, public API). All endpoints under /api prefix; reviews under /api/exchange. Admin deployment id 9736667a4a2a4acca927acfb8de48a9c is the test target for schedule + public-API run tests. Public API rate limit is 60/min sliding window IN-PROCESS — tests should use light GET /runs (not /run) to avoid burning real bot runs. Bounty prefill schema requires {bounty_id, title, description?, reward_amount?, reward_type?} in sessionStorage('tfai_bounty_prefill').",
+  "rca of the issue": "N/A — no defects found. The 2 failing iter48 tests (test_stripe_connect_onboard_creates_and_is_idempotent + test_stripe_connect_account_after_onboard) are the documented external-environment issue (Stripe Connect platform not enabled on test account) explicitly parked by main agent."
+}

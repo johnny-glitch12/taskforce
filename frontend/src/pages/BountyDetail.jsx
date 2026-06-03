@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/App";
 import { toast } from "sonner";
 import {
@@ -24,6 +24,7 @@ export default function BountyDetail() {
   const { id } = useParams();
   const { token, user } = useAuth() || {};
   const navigate = useNavigate();
+  const [search, setSearch] = useSearchParams();
   const auth = { Authorization: `Bearer ${token}` };
   const [b, setB] = useState(null);
   const [subs, setSubs] = useState(null);
@@ -50,6 +51,19 @@ export default function BountyDetail() {
     }
   }
   useEffect(() => { refresh(); /* eslint-disable-next-line */ }, [id]);
+
+  // Auto-open the submit modal when arriving via ?submit=1 (e.g. from the
+  // VibeBuildPage post-build CTA).
+  useEffect(() => {
+    if (!loading && b && search.get("submit") === "1" && !b.is_poster && !b.my_submission && b.status === "open") {
+      setShowSubmit(true);
+      // Clean the param so refresh doesn't keep reopening it.
+      const next = new URLSearchParams(search);
+      next.delete("submit");
+      setSearch(next, { replace: true });
+    }
+    // eslint-disable-next-line
+  }, [loading, b]);
 
   async function award(sub) {
     const isCash = b.reward_type === "cash";

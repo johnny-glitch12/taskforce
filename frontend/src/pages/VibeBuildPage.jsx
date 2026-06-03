@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   Send, Sparkles, Loader2, Zap, Bot, User, Plus, Trash2,
   ChevronLeft, ChevronDown, FileCode2, Coins, Clock, ArrowRight,
+  Target, X,
 } from "lucide-react";
 import { useAuth } from "@/App";
 
@@ -228,7 +229,29 @@ export default function VibeBuildPage() {
   const [busyMode, setBusyMode] = useState(null); // "chat" | "build" | "auto"
   const [autoPickHint, setAutoPickHint] = useState(null); // {model, reason, complexity}
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [bountyPrefill, setBountyPrefill] = useState(null); // {bounty_id, title, reward_type, reward_amount} | null
+  const [lastBuild, setLastBuild] = useState(null); // {project_id, name} once a build succeeds
   const chatEndRef = useRef(null);
+
+  // On mount, read the bounty hand-off written by SubmitToBountyModal "Build in Armory" tab.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("tfai_bounty_prefill");
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (data?.bounty_id && data?.title) {
+        setBountyPrefill(data);
+        if (!input) {
+          setInput(
+            `Build me an agent for the bounty "${data.title}".\n\n` +
+            `${data.description ? `Spec:\n${data.description.slice(0, 1200)}\n\n` : ""}` +
+            `Please give the agent a clear main.py, a README, and use any required integrations the bounty calls out.`,
+          );
+        }
+      }
+    } catch { /* ignore malformed sessionStorage */ }
+    // eslint-disable-next-line
+  }, []);
 
   // Load models + sessions
   useEffect(() => {
@@ -364,6 +387,7 @@ export default function VibeBuildPage() {
       if (mode === "build") {
         setPreviewFiles(data.files || []);
         setPreviewProject(data.project_id);
+        setLastBuild({ project_id: data.project_id, name: data.name });
         toast.success(`Generated ${data.files?.length || 0} files (-${data.credits_used}cr)`);
       }
       refreshSessions();
@@ -388,6 +412,44 @@ export default function VibeBuildPage() {
 
       {/* Center: chat */}
       <div className="flex-1 flex flex-col min-w-0" style={{ borderRight: "1px solid var(--border)" }}>
+        {/* Bounty context banner — shown when the user arrived from a bounty submit flow */}
+        {bountyPrefill && (
+          <div
+            data-testid="bounty-prefill-banner"
+            className="shrink-0 px-4 py-2 flex items-center gap-3"
+            style={{ background: "rgba(34,211,238,0.06)", borderBottom: "1px solid rgba(34,211,238,0.3)" }}
+          >
+            <Target size={14} className="text-cyan-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-cyan-400 mb-0.5">Building for bounty</div>
+              <div className="text-[12px] t-text font-medium truncate" title={bountyPrefill.title}>
+                {bountyPrefill.title}
+              </div>
+            </div>
+            {lastBuild && (
+              <button
+                data-testid="submit-to-bounty-cta"
+                onClick={() => {
+                  sessionStorage.removeItem("tfai_bounty_prefill");
+                  navigate(`/bounties/${bountyPrefill.bounty_id}?submit=1`);
+                }}
+                className="shrink-0 px-3 py-1.5 rounded-sm text-[10px] font-bold uppercase tracking-[0.15em] font-mono inline-flex items-center gap-1.5"
+                style={{ background: "#22d3ee", color: "#0a0e1a" }}
+                title="Publish this build first, then submit it from the bounty page"
+              >
+                <ArrowRight size={11} /> Submit to bounty
+              </button>
+            )}
+            <button
+              data-testid="bounty-prefill-clear"
+              onClick={() => { sessionStorage.removeItem("tfai_bounty_prefill"); setBountyPrefill(null); }}
+              className="shrink-0 t-text-dim hover:text-rose-400"
+              title="Dismiss"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
         {/* Top bar with model picker */}
         <div className="shrink-0 px-4 py-2" style={{ background: "var(--bg-sub)", borderBottom: "1px solid var(--border)" }}>
           <div className="flex items-center justify-between mb-2">

@@ -202,7 +202,7 @@ function AgentCard({ agent, index }) {
 
       {/* Content */}
       <div className="px-4 pb-4">
-        <Link to={`/agent/${agent.id}`} data-testid={`agent-title-link-${agent.id}`}>
+        <Link to={`/listing/${agent.id}`} data-testid={`agent-title-link-${agent.id}`}>
           <h3 className="text-[14px] font-medium t-text leading-snug mb-2.5 line-clamp-2 hover:text-cyan-300 transition-colors cursor-pointer" style={{ fontFamily: "'Outfit', sans-serif" }}>
             {agent.title}
           </h3>

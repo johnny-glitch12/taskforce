@@ -2002,6 +2002,18 @@ app.include_router(notifications_router, prefix="/api")
 from routes.stripe_connect import router as stripe_connect_router
 app.include_router(stripe_connect_router, prefix="/api")
 
+from routes.schedules import router as schedules_router
+app.include_router(schedules_router, prefix="/api")
+
+from routes.reviews import router as reviews_router
+app.include_router(reviews_router, prefix="/api/exchange")
+
+from routes.creator_earnings import router as creator_earnings_router
+app.include_router(creator_earnings_router, prefix="/api")
+
+from routes.public_api import router as public_api_router
+app.include_router(public_api_router, prefix="/api")
+
 # Mount uploads dir for exchange listing media (videos + photos)
 UPLOADS_DIR = Path(__file__).parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
@@ -2140,6 +2152,19 @@ async def startup():
         except Exception as e:
             logger.warning(f"[bounty-janitor] failed: {e}")
     scheduler.add_job(_expire_bounties, 'interval', hours=1, id='bounty_expire', replace_existing=True)
+
+    # Scheduled deployment runs — every 5 minutes the tick scans
+    # user_bot_deployments.schedule.enabled and runs any whose next_run_at <= now.
+    async def _tick_scheduled_runs():
+        try:
+            from routes.schedules import tick_scheduled_runs
+            n = await tick_scheduled_runs(db)
+            if n:
+                logger.info(f"[sched-tick] dispatched {n} scheduled run(s)")
+        except Exception as e:
+            logger.warning(f"[sched-tick] failed: {e}")
+    scheduler.add_job(_tick_scheduled_runs, 'interval', minutes=5,
+                      id='scheduled_runs_tick', replace_existing=True)
 
     if not scheduler.running:
         scheduler.start()
