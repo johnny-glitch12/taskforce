@@ -23,7 +23,19 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
-### Phase 42 (Feb, 2026) — Dual-Pool Credit Wallet (Emergent-Style)
+### Phase 43 (Feb, 2026) — Signup Bonus + IP Anti-Abuse + Admin Overwatch
+- **50-credit signup bonus**: every new account gets `topup_credits=50` (never expires) on registration — enough for ~10 chat messages or ~10 workflow runs to experience the product. Signup ledger entry `kind="signup_bonus", pool="topup", note="+50 welcome bonus"` with `metadata.ip` recorded.
+- **IP tracking** on every register + login. `registration_ip` (immutable, set on register) + `last_login_ip` + `last_login_at` (updated each login). Resolved from `X-Forwarded-For` (Kubernetes ingress) first IP, falls back to `X-Real-IP`, then socket peer.
+- **Anti-abuse cap**: `MAX_ACCOUNTS_PER_IP_24H = 3`. 4th register from same IP within 24h → HTTP 429 with detail `"Too many accounts created from your network. Try again in 24 hours."` Cutoff uses ISO-string `$gte` (lexicographically sortable). Verified end-to-end with `X-Forwarded-For: 203.0.113.99` — 3 success + 1 rejected.
+- **Admin Overwatch** — 2 new endpoints in `server.py`:
+  - `GET /api/admin/ip-abuse?min_accounts=3` (admin-only) → `{groups: [{ip, count, accounts: [...] }], banned_ips: [...], policy}` — accounts grouped by `registration_ip` with co-traveller detection (any IP touched by a banned user appears in `banned_ips`)
+  - `POST /api/admin/ip-abuse/action` with `{user_id, action: flag|unflag|ban|unban}` — toggles `flagged_for_abuse` and `banned` booleans on user docs. Pydantic `Field(pattern=...)` rejects unknown actions with 422.
+- **`vibe_chat` cost 0 → 1**: every AI chat message now debits 1 credit (was free). Frontend label `"AI chat (vibe)" → "AI chat message"`.
+- **MongoDB indexes**: `users.registration_ip` + `users.last_login_ip` added (non-unique).
+- **`ensure_indexes()` refactor**: extracted all `create_index` calls out of `seed_database()` (which early-returns on already-seeded DBs) into an unconditional standalone async function called from the startup hook. New indexes now picked up on every existing deployment without re-seed. Verified: `users` index list = `['_id', 'email', 'id', 'registration_ip', 'last_login_ip']`.
+- **Verified live**: iter38 — backend 10/11 pytest pass on first run, the only fail (index gap on seeded DBs) was the iter38 finding which is now fixed by `ensure_indexes()` extraction. Frontend label update verified statically.
+
+
 - **Full rewrite of `lib/credit_wallet.py`**: split single `credit_balance` into two pools on the user doc:
   - `subscription_credits` — monthly allocation, **resets each billing cycle**
   - `subscription_credits_max` — current tier's allocation (for UI ring + reset target)

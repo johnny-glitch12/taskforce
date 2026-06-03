@@ -714,7 +714,13 @@ async def seed_database():
     ]
     await db.waitlist.insert_many(waitlist_seed)
 
-    # Create indexes
+    await ensure_indexes()
+    return {"message": "Database seeded successfully", "agents": len(agents_data)}
+
+
+async def ensure_indexes():
+    """Idempotent index creation — runs on every startup, separate from seed gate
+    so existing deployments still pick up new indexes (e.g. registration_ip)."""
     await db.users.create_index("email", unique=True)
     await db.users.create_index("id", unique=True)
     await db.users.create_index("registration_ip")
@@ -746,12 +752,6 @@ async def seed_database():
     await db.n8n_workflow_map.create_index([("user_id", 1), ("n8n_workflow_id", 1)], unique=True)
     await db.n8n_credentials.create_index([("user_id", 1), ("name", 1)], unique=True)
     await db.n8n_executions.create_index("user_id")
-
-    # Run initial supernova evaluation
-    await evaluate_supernovas()
-
-    logger.info("Database seeded successfully")
-    return {"message": "Database seeded", "agents": len(agents_data), "creators": len(creators_data), "reviews": len(reviews_data)}
 
 # ─── Dashboard & Custom Agent Models ───
 
@@ -2068,6 +2068,13 @@ async def startup():
 
     # Ensure csdrop_executions collection index
     await db.csdrop_executions.create_index("user_id")
+
+    # Unconditional index creation — picks up new indexes on already-seeded DBs.
+    try:
+        await ensure_indexes()
+        logger.info("[startup] Indexes ensured (including registration_ip + last_login_ip).")
+    except Exception as e:
+        logger.warning(f"[startup] ensure_indexes failed: {e}")
 
     # Start Supernova scheduler (runs daily at midnight)
     scheduler.add_job(evaluate_supernovas, 'interval', hours=24, id='supernova_eval', replace_existing=True)
