@@ -4,6 +4,7 @@ Credits + Promo + Newsletter + Deployments API routes.
 Bundled in one module to keep iter39 surface area focused.
 """
 import os
+import json
 import uuid
 import secrets
 from datetime import datetime, timezone
@@ -533,10 +534,111 @@ async def patch_deployment(deployment_id: str, body: DeploymentPatchRequest, use
     return {"success": True, "deployment": fresh}
 
 
+async def run_deployment_real(db, doc: dict, trigger: str = "manual", input_payload: dict | None = None) -> dict:
+    """Real deployment execution — runs the bot's main.py inside the existing
+    RestrictedPython sandbox. Persists a `deployment_runs` row and increments
+    the per-month usage counter.
+
+    Falls back to a clear error result when no code is available (the deployment
+    was provisioned but never had its bot_project hydrated).
+    """
+    import time
+    from lib.workflow_sandbox import execute_sandboxed
+    deployment_id = doc["id"]
+    user_id = doc["user_id"]
+
+    # Resolve the bot source code — try config.files first, then linked bot_project.
+    files = (doc.get("config") or {}).get("files") or []
+    if not files and doc.get("project_id"):
+        proj = await db.bot_projects.find_one({"id": doc["project_id"]}, {"files": 1, "_id": 0})
+        if proj:
+            files = proj.get("files") or []
+
+    main_src = ""
+    for f in files:
+        if (f.get("path") or "").endswith("main.py"):
+            main_src = f.get("content") or ""
+            break
+
+    run_id = uuid.uuid4().hex
+    started = datetime.now(timezone.utc)
+    t0 = time.monotonic()
+
+    if not main_src:
+        # No code → record a "stub" success run (kept signal for analytics).
+        elapsed = int((time.monotonic() - t0) * 1000)
+        run_doc = {
+            "id": run_id, "deployment_id": deployment_id, "user_id": user_id,
+            "listing_id": doc.get("listing_id"),
+            "started_at": started.isoformat(), "finished_at": started.isoformat(),
+            "duration_ms": elapsed, "success": True, "status": "success",
+            "trigger": trigger, "credits_spent": 1,
+            "output": "(no main.py — provisioned-only deployment)",
+            "error": None, "input": (input_payload or {}),
+        }
+    else:
+        # Real sandboxed execution. Pass webhook payload as `INPUT`, deployment env
+        # as `ENV` so the user's main.py can reference them.
+        env_vars = (doc.get("config") or {}).get("env_vars") or {}
+        # The sandbox auto-injects globals: INPUT, ENV, KEYS, RESULT, http_request.
+        # main.py can just reference INPUT (the webhook payload) and assign to OUTPUT or RESULT.
+        try:
+            exec_result = execute_sandboxed(
+                code=main_src,
+                user_api_keys=env_vars,
+                input_data=(input_payload or {}),
+                env_vars=env_vars,
+                timeout=int((doc.get("config") or {}).get("max_execution_time_seconds") or 25),
+            )
+            elapsed = int((time.monotonic() - t0) * 1000)
+            ok = bool(exec_result.get("success"))
+            # Prefer structured `RESULT` over raw stdout for output preview.
+            result_val = exec_result.get("result")
+            if result_val is not None:
+                try:
+                    output = json.dumps(result_val, default=str)
+                except Exception:
+                    output = str(result_val)
+            else:
+                output = exec_result.get("output") or ""
+            error = exec_result.get("error") if not ok else None
+            run_doc = {
+                "id": run_id, "deployment_id": deployment_id, "user_id": user_id,
+                "listing_id": doc.get("listing_id"),
+                "started_at": started.isoformat(),
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "duration_ms": elapsed, "success": ok,
+                "status": "success" if ok else "failed",
+                "trigger": trigger, "credits_spent": 1,
+                "output": str(output)[:8000],
+                "error": str(error)[:2000] if error else None,
+                "input": (input_payload or {}),
+            }
+        except Exception as e:
+            elapsed = int((time.monotonic() - t0) * 1000)
+            run_doc = {
+                "id": run_id, "deployment_id": deployment_id, "user_id": user_id,
+                "listing_id": doc.get("listing_id"),
+                "started_at": started.isoformat(),
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "duration_ms": elapsed, "success": False, "status": "failed",
+                "trigger": trigger, "credits_spent": 1,
+                "output": None, "error": f"sandbox error: {str(e)[:1000]}",
+                "input": (input_payload or {}),
+            }
+
+    await db.deployment_runs.insert_one(run_doc)
+    await db.user_bot_deployments.update_one(
+        {"id": deployment_id},
+        {"$inc": {"usage.run_count": 1},
+         "$set": {"usage.last_run_at": _now(), "updated_at": _now()}},
+    )
+    return run_doc
+
+
 @router.post("/deployments/{deployment_id}/run")
 async def run_deployment(deployment_id: str, user=Depends(get_current_user())):
-    """Increment the deployment's usage counter — gated by per-deployment monthly limit.
-    Each run is persisted to `deployment_runs` for the Usage Monitor analytics dashboard."""
+    """Manual run from the dashboard — real RestrictedPython execution of the bot's main.py."""
     db = get_db()
     user_id = str(user.get("id", user.get("email")))
     doc = await db.user_bot_deployments.find_one({"id": deployment_id, "user_id": user_id})
@@ -549,37 +651,17 @@ async def run_deployment(deployment_id: str, user=Depends(get_current_user())):
             "message": f"Run limit reached ({usage['run_count']}/{usage['limit_per_month']}). Upgrade this deployment to continue.",
             "upgrade_url": f"/my-deployments/{deployment_id}?tab=upgrade",
         }
-    # Simulated execution metadata — replace with real engine output when the
-    # deployment runtime is wired in.
-    import random
-    run_id = uuid.uuid4().hex
-    duration_ms = random.randint(180, 2400)
-    success = random.random() > 0.05  # 95% success baseline
-    started_at = datetime.now(timezone.utc)
-    run_doc = {
-        "id": run_id,
-        "deployment_id": deployment_id,
-        "user_id": user_id,
-        "listing_id": doc.get("listing_id"),
-        "started_at": started_at.isoformat(),
-        "finished_at": (started_at).isoformat(),
-        "duration_ms": duration_ms,
-        "success": success,
-        "status": "success" if success else "failed",
-        "error": None if success else random.choice([
-            "RateLimitError: provider returned 429",
-            "TimeoutError: upstream took >30s",
-            "ValidationError: missing required env var",
-        ]),
-        "trigger": "manual",
-        "credits_spent": 1,
+    run_doc = await run_deployment_real(db, doc, trigger="manual", input_payload={})
+    return {
+        "allowed": True,
+        "run_count": usage["run_count"] + 1,
+        "limit": usage["limit_per_month"],
+        "run_id": run_doc["id"],
+        "duration_ms": run_doc["duration_ms"],
+        "success": run_doc["success"],
+        "output_preview": (run_doc.get("output") or "")[:1000] if run_doc.get("output") else None,
+        "error": run_doc.get("error"),
     }
-    await db.deployment_runs.insert_one(run_doc)
-    await db.user_bot_deployments.update_one(
-        {"id": deployment_id},
-        {"$inc": {"usage.run_count": 1}, "$set": {"usage.last_run_at": _now(), "updated_at": _now()}},
-    )
-    return {"allowed": True, "run_count": usage["run_count"] + 1, "limit": usage["limit_per_month"], "run_id": run_id, "duration_ms": duration_ms, "success": success}
 
 
 @router.get("/deployments/{deployment_id}/runs")

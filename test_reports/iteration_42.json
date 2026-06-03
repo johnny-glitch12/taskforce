@@ -1,0 +1,34 @@
+{
+  "summary": "Iter42 batch validation: P7 Part 1 (.tfagent upload + AST scan), External Webhooks (info/rotate/fire/HMAC/events), Real bot runtime, Onboarding endpoints + UI modal. 29/29 backend tests passed. Frontend OnboardingModal verified end-to-end (auto-show, step CTAs, Skip button, persistence on reload, admin role gate). One minor backend bug fixed (run_id key mismatch in webhook response).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/webhooks/{deployment_id}", "issue": "Response field 'run_id' was always null because webhooks.py read result.get('run_id') but run_deployment_real returns the run document with key 'id'. Same bug also affected webhook_events.run_id persistence. FIXED by adding fallback result.get('run_id') or result.get('id') in routes/webhooks.py."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter42_p7_webhooks_onboarding.py",
+    "/app/test_reports/pytest/iter42_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/external_agents.py is ~600 lines and routes/credits_and_more.py is now 829 lines after run_deployment_real was added; consider splitting credits_and_more.py into focused modules (credits.py, runs.py, deployments.py) when it next needs edits.",
+    "Webhook signature uses hmac-sha256 against raw body — good. Confirm that any reverse proxy in production does not re-encode JSON before reaching FastAPI (would break signature)."
+  ],
+  "updated_files": [
+    "/app/backend/routes/webhooks.py (fixed run_id key mismatch — used or-fallback to result.get('id'))",
+    "/app/backend/tests/test_iter42_p7_webhooks_onboarding.py (new test file, 29 tests)"
+  ],
+  "success_rate": {"backend": "100% (29/29)", "frontend": "100% on tested onboarding flow"},
+  "test_credentials": "admin@nova.ai/admin123, freeuser@test.com/test123 (was used after onboarded flag reset in DB to test Skip + Complete flows). Fresh registration via /api/auth/register hit IP rate-limit ('Too many accounts created from your network. Try again in 24 hours.') — this is expected anti-abuse behavior, not a bug.",
+  "seed_data_creation": "Temporarily unset users.onboarded for freeuser@test.com twice via mongo (once to test Complete flow, once to test Skip flow). Uploaded one .tfagent package which was then deleted via the API.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Reusable backend regression file: /app/backend/tests/test_iter42_p7_webhooks_onboarding.py (29 tests, all pass). It covers: external-agents whitelist, valid .tfagent upload, corrupt-zip/missing-manifest/missing-field rejection, disallowed-package list, AST violations (subprocess, socket, from os import system, eval, __subclasses__), entry_function-missing scan, package list/get/delete/cross-user-404, onboarding GET/POST, webhook info, webhook fire (correct key, no key, wrong key, unknown deployment, HMAC correct, HMAC wrong), webhook event persistence, key rotation, real runtime /run. Frontend OnboardingModal verified via Playwright: auto-shows on /armory after login for non-admin user with onboarded=false, 4 steps advance with CTA labels ['Show me what I can do','Continue','Continue','Let's build →'], final step navigates to /build, Skip button works and persists, modal does not reappear on reload. Admin gate verified via code review (OnboardingGate at App.js:147 early-returns when user.role==='admin').",
+  "rca_of_the_issue": "Webhook bug RCA: routes/credits_and_more.py:run_deployment_real returns a dict shaped like {id, deployment_id, status, ...} representing the deployment_runs row. routes/webhooks.py expected result['run_id'] which never existed, so client got run_id: null and webhook_events.run_id was never populated. Fix uses `result.get('run_id') or result.get('id')` so both legacy and new shapes work."
+}

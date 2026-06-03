@@ -27,6 +27,7 @@ import Credits from "@/pages/Credits";
 import MyDeployments from "@/pages/MyDeployments";
 import UsageMonitor from "@/pages/UsageMonitor";
 import VibeBuildPage from "@/pages/VibeBuildPage";
+import OnboardingModal from "@/components/OnboardingModal";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -138,6 +139,21 @@ function App() {
 /** Routes considered "public" (always accessible even when SITE_LOCKED=true). */
 const AUTH_ROUTES = ["/login", "/auth/login", "/auth/register", "/auth/forgot-password", "/auth/reset-password"];
 
+/** Auto-shows OnboardingModal once per user (first login after register). */
+function OnboardingGate() {
+  const { token, user } = useAuth();
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    if (!token || !user || user.role === "admin") return;
+    fetch(`${API}/api/onboarding/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((d) => { if (d && !d.onboarded) setShow(true); })
+      .catch(() => {});
+  }, [token, user]);
+  if (!show) return null;
+  return <OnboardingModal onClose={() => setShow(false)} />;
+}
+
 function AppShell() {
   const { user, loading } = useAuth();
   const location = useLocation();
@@ -189,6 +205,7 @@ function AppShell() {
   return (
     <div className="min-h-screen t-bg flex flex-col" style={{ transition: "background-color 0.3s ease" }}>
       <Navbar />
+      {user && <OnboardingGate />}
       <Toaster
         position="bottom-right"
         toastOptions={{

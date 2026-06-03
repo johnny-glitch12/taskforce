@@ -1210,6 +1210,23 @@ async def repair_status():
     }
 
 
+@api_router.get("/onboarding/me")
+async def get_onboarding_state(user=Depends(get_current_user)):
+    """Return whether the current user has completed onboarding."""
+    db_user = await db.users.find_one({"id": user["id"]}, {"onboarded": 1, "_id": 0})
+    return {"onboarded": bool((db_user or {}).get("onboarded"))}
+
+
+@api_router.post("/onboarding/complete")
+async def complete_onboarding(user=Depends(get_current_user)):
+    """Mark onboarding as complete (called when user finishes or skips the tour)."""
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"onboarded": True, "onboarded_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"ok": True}
+
+
 @api_router.get("/admin/ip-abuse")
 async def admin_ip_abuse(min_accounts: int = 3, user=Depends(get_current_user)):
     """Admin Overwatch — list IPs that have created `min_accounts` or more user accounts (potential abuse).
@@ -1966,6 +1983,12 @@ app.include_router(credits_and_more_router, prefix="/api")
 
 from routes.vibe_coding import router as vibe_router
 app.include_router(vibe_router, prefix="/api")
+
+from routes.external_agents import router as external_agents_router
+app.include_router(external_agents_router, prefix="/api")
+
+from routes.webhooks import router as webhooks_router
+app.include_router(webhooks_router, prefix="/api")
 
 # Mount uploads dir for exchange listing media (videos + photos)
 UPLOADS_DIR = Path(__file__).parent / "uploads"
