@@ -23,7 +23,46 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
-### Phase 52 (Feb 2026) — Cash Bounties via Stripe Connect (Prompt 9 P2)
+### Phase 53 (Feb 2026) — 5-Feature P2 Batch (Build-in-Armory · Schedules · Reviews · Earnings · Public API)
+
+**P2-1: Build-in-Armory round-trip**
+- `pages/VibeBuildPage.jsx` reads `sessionStorage('tfai_bounty_prefill')` on mount and renders a cyan **bounty context banner** (`data-testid='bounty-prefill-banner'`) with the bounty title + Target icon. The first prompt textarea is auto-prefilled with a templated "Build me an agent for the bounty …" message including the spec body (capped at 1200 chars).
+- After a successful Vibe build (`lastBuild` set on `build` mode success), the banner reveals a green **"Submit to bounty"** CTA (`data-testid='submit-to-bounty-cta'`) that clears the sessionStorage and navigates to `/bounties/<id>?submit=1`.
+- `pages/BountyDetail.jsx` now reads `?submit=1` and auto-opens the SubmitToBountyModal for non-poster users on `status='open'` bounties; the param is stripped on open to keep refresh idempotent.
+
+**P2-2: Scheduled executions (4 preset intervals)**
+- New `routes/schedules.py`: `GET/PUT /api/deployments/{id}/schedule` with 4 hardcoded presets (`hourly` 60min · `6h` 360min · `daily` 1440min · `weekly` 10080min). Persisted on `user_bot_deployments.schedule = {enabled, preset, interval_minutes, next_run_at, last_run_at, last_run_id, last_run_success}`.
+- **APScheduler tick** (`tick_scheduled_runs`) runs every 5 minutes via `server.py` — scans `schedule.enabled=true AND schedule.next_run_at<=now`, dispatches via `run_deployment_real(trigger='schedule')`, bumps `next_run_at` forward by `interval_minutes`. Per-month run-cap enforced — when hit, the schedule auto-disables with `last_disabled_reason='limit_reached'`.
+- `pages/MyDeployments.jsx` gains a 4th **"Schedule" tab** (`Calendar` icon) per deployment card: enable/disable checkbox, 4 preset buttons (`sched-preset-{id}-{preset}`), live next-run timestamp + last-run status pill.
+
+**P2-3: Reviews & ratings**
+- New `routes/reviews.py` mounted under `/api/exchange`: `GET /listings/{id}/reviews` (public, paginated + aggregate + 1-5 star histogram), `POST /listings/{id}/reviews` (5-star + 10–1500-char comment, one per user per listing, self-review 403'd, duplicate 409'd), `DELETE /reviews/{id}` (author or admin only), `POST /reviews/{id}/reply` (listing owner only, one-time reply, second attempt 409'd), `GET /listings/{id}/reviews/my-review` (for FE state).
+- Aggregates denormalised onto `exchange_listings.aggregates.{reviews_count, reviews_avg}` for fast card-grid sort. Star histogram computed live for the detail page.
+- New `components/ReviewsPanel.jsx` (~330 LoC) — reusable widget with aggregate header card (big avg + 5-row histogram bars), star picker submit form, "my review" summary chip, owner reply UI (collapsed → textarea), threaded reply rendering with cyan accent border.
+- New `pages/ListingDetail.jsx` at `/listing/:id` route — replaces the broken legacy `/agent/:id` flow for real Exchange listings. Header card with avatar/name/bounty-winner badge/pricing + the ReviewsPanel below. Marketplace cards now link to `/listing/:id`.
+
+**P2-4: Creator earnings dashboard**
+- New `routes/creator_earnings.py`: `GET /api/creator/earnings/summary?days=N` returns rolled-up `{window:{usd_total, stripe_usd, cash_bounty_usd, credit_bounty_total, deploy_runs, …}, lifetime:{usd_total, stripe_usd, cash_bounty_usd, credit_bounty_total}}`. Sources: `creator_revenue_ledger` (Stripe 80% take-home), `bounties` (cash + credit wins), `deployment_runs` (listing exec counts).
+- `GET /api/creator/earnings/ledger?limit=N&skip=M` — combined chronological feed of every earning event (kind=`exchange_payout` · `bounty_won` · `bounty_won_credits`), newest-first.
+- `GET /api/creator/earnings/export.csv` — text/csv with attachment Content-Disposition, full ledger up to 1000 rows.
+- New `pages/CreatorEarnings.jsx` at `/earnings` — 3 big stat cards (lifetime USD/credits/runs in window), 4 mini stats, window toggle 7/30/90/365 days, CSV export button, scrollable ledger table with kind-coded icons (Trophy for bounty wins, ArrowDownRight for Stripe payouts).
+
+**P2-5: Public API + keys**
+- New `routes/public_api.py`:
+  - **Key management (JWT)**: `POST /api/keys` mints `tfai_<64hex>` (stores SHA256 hash only, plaintext returned ONCE), `GET /api/keys` (lists without hashes/plaintext), `DELETE /api/keys/{id}` revokes.
+  - **Public endpoints (X-API-Key)**: `POST /api/public/v1/deployments/{id}/run` (body `{input: {…}}`) returns `{run_id, success, duration_ms, output, error, started_at, finished_at}` via `run_deployment_real(trigger='api')`; `GET /api/public/v1/deployments/{id}/runs?limit=N&skip=M` returns run history.
+  - **Rate limit**: 60 req/min per key, in-process sliding window via `collections.deque` (Redis HA is a documented future ENH). Returns 429 with `retry_after_seconds` on excess. Per-call `last_used_at` + `call_count` bumps.
+  - **Auth errors**: 401 `MISSING_API_KEY` (no header) · 401 `INVALID_API_KEY` (unknown/revoked) · 404 `DEPLOYMENT_NOT_FOUND` (cross-tenant) · 429 `RUN_LIMIT_REACHED` (monthly cap).
+- New `pages/ApiKeys.jsx` at `/keys` (renamed from `/api-keys` — that path collided with the `/api/*` ingress rule). Mint form, fresh-key reveal card with copy button + "saved it" dismiss, list of active keys with prefix + call count + last_used, revoke button, Quick Start curl docs.
+
+**Routing + Nav additions** (`App.js` + `Navbar.jsx`):
+- New routes: `/earnings`, `/keys`, `/listing/:id`.
+- New dropdown menu items: **Earnings** (`TrendingUp` icon) + **API Keys** (`Key` icon).
+- Marketplace agent cards updated to link to `/listing/:id` (was `/agent/:id`).
+
+**Verified (iter49)**: **27/27 NEW backend tests PASS (schedules 6/6, reviews 7/7, earnings 4/4, api keys 4/4, public API 6/6 incl. 429 rate-limit)**. Regression: 37/39 (the 2 fails are the parked iter48 Stripe Connect platform-enablement op-item, unrelated). Frontend Playwright: all 5 features render cleanly with full data-testid coverage. Zero defects, zero critical issues.
+
+
 - **`routes/bounties.py` cash branch** in `create_bounty`: when `reward_type='cash'`, validates `cash_amount_usd` ∈ [$10, $10,000] + requires `origin_url`, creates the bounty doc with `status='pending_payment'` + `escrow_status='pending'`, mints a Stripe Checkout Session via `emergentintegrations.payments.stripe.checkout` (USD, success_url=/payment/success?type=bounty), and inserts a parallel `payment_transactions` row of `type='bounty'` so the existing webhook + status poller plumbing picks it up. Returns `{bounty, checkout_url, session_id}` for the frontend redirect.
 - **`POST /api/bounties/{id}/activate`** — frontend polls this after the Stripe redirect. Verifies poster identity, confirms the linked `payment_transactions.payment_status == 'paid'`, retrieves the `charge_id` via `stripe.checkout.Session.retrieve(expand=['payment_intent'])`, and flips the bounty to `status='open'` + `escrow_status='held'` with the persisted `stripe_charge_id` + `stripe_payment_intent_id`. Idempotent (returns `{already_active: true}` on re-call). 402 if payment not confirmed; 403 if not the poster.
 - **`routes/stripe_connect.py`** (NEW, ~300 lines) — full Stripe Connect Express integration using the raw `stripe` SDK 14.4.1 (emergentintegrations only handles one-shot Checkouts):
