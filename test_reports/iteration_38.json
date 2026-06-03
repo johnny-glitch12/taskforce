@@ -1,0 +1,44 @@
+{
+  "summary": "Iter38 — Signup bonus + IP tracking + anti-abuse cap + Admin Overwatch + vibe_chat cost (0→1) verified end-to-end via 11 pytest cases (10 PASS, 1 FAIL on index check — see RCA). Backend: new user via /api/auth/register lands with subscription_credits=50 / topup_credits=50 (50 welcome bonus) / tier=recruit, credit_reset_date≈+30d; /api/credits/me returns balance=100 with action_costs.vibe_chat=1; signup_bonus ledger row appended with pool=topup delta=+50 note containing 'welcome bonus'. registration_ip + last_login_ip persisted from X-Forwarded-For (first IP from comma list). /api/auth/login updates last_login_ip + last_login_at on every login. Anti-abuse cap: 4th register from same IP returns HTTP 429 with detail 'Too many accounts created from your network. Try again in 24 hours.'; 24h window correctly excludes accounts older than 24h (verified by seeding 3 records with created_at = now-25h then issuing register → 200). Admin Overwatch: /admin/ip-abuse returns {groups[], banned_ips[], policy} with policy.max_accounts_per_ip_24h=3; non-admin → 403 'Admin only.'; unauth → 401/403. /admin/ip-abuse/action flag/unflag/ban/unban each toggle the user.flagged_for_abuse/banned booleans and return {ok:true,...}; banned user's IP correctly surfaces in banned_ips (co-traveller path); invalid action → 422; non-existent user_id → 404. Frontend label change verified statically in Credits.jsx (labelMap.vibe_chat='AI chat message'); UI render check blocked by preview 'Wake up servers' gate so not exercised in browser. Auth regression: admin login + /auth/me + /auth/forgot-password all pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "startup/seed_database()",
+        "issue": "The new indexes for users.registration_ip + users.last_login_ip (server.py:720-721) are inside seed_database() which short-circuits with `if count>0: return` (server.py:653). On any already-seeded environment the indexes are never created — pymongo confirms users only has {_id, email, id}. Functional impact today is small (collection is tiny) but the anti-abuse count_documents({registration_ip, created_at}) query will table-scan as the users collection grows. Fix: move index creation out of seed_database() to a dedicated `ensure_indexes()` called unconditionally on startup."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter38_antiabuse_signup.py",
+    "/app/test_reports/pytest/iter38.xml"
+  ],
+  "action_items": [
+    "Move users.registration_ip + users.last_login_ip create_index() calls out of seed_database() (which early-returns on seeded DBs) into an unconditional ensure_indexes() / startup hook so existing deployments get the indexes too. Same applies retroactively to all other indexes in that block (email/id/etc are protected by `unique=True` so they were created elsewhere, but the new non-unique ones aren't)."
+  ],
+  "critical_code_review_comments": [
+    "Anti-abuse implementation in routes/auth.py:74-86 is clean — uses ISO-string $gte cutoff which works because created_at is stored as ISO-8601 (lexicographically sortable). count_documents is O(n) without the index (see minor issue above).",
+    "_client_ip helper splits 'X-Forwarded-For' on comma and trims — correct behaviour. Falls back to X-Real-IP then request.client.host then 'unknown' which is properly excluded in the admin aggregation ($nin: [None, 'unknown', '']).",
+    "/admin/ip-abuse action endpoint uses Pydantic Field(pattern='^(flag|unflag|ban|unban)$') which yields 422 on invalid values — good. Hard-coded dict lookup {flag:..., unflag:..., ...} is safe because pattern already gated it.",
+    "Signup bonus ledger entry (auth.py:108-125) carries metadata.ip — useful for fraud forensics. balance_after=100 is correctly precomputed.",
+    "policy field in /admin/ip-abuse hard-codes max_accounts_per_ip_24h:3 instead of importing from routes.auth.MAX_ACCOUNTS_PER_IP_24H — minor DRY issue: changing the constant won't update the admin response."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter38_antiabuse_signup.py (NEW — 11 pytest cases)"
+  ],
+  "success_rate": {
+    "backend": "91% (10/11 pytest — 1 fail is the seed_database index registration gap described above; all functional iter38 features pass)",
+    "frontend": "N/A — UI render blocked by preview wake-up gate; static source verification of Credits.jsx labelMap confirms 'AI chat message' label change"
+  },
+  "test_credentials": "Admin: admin@nova.ai / admin123 (verified working).",
+  "seed_data_creation": "Per-test ephemeral users with iter38_<tag>_<hex>@test.com email prefix. Anti-abuse cap test seeds 3 direct-DB user rows on a random 192.0.2.X IP then issues 1 /register → 429. 24h-window test seeds 3 rows with created_at=now-25h. Group-listing test seeds 3 rows on 203.0.113.X. All seeded rows are deleted in fixture cleanup; live /register users (bonus, loginip, nonadmin, targetact) remain in DB with iter38_ prefix for traceability.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter38 anti-abuse + signup bonus + admin overwatch are functionally solid — only outstanding gap is the missing indexes on already-seeded DBs (since seed_database short-circuits). The /auth/register rate limit (5/600s) still applies; use direct DB insert when bulk-creating users beyond 5. Frontend UI verification requires waking up the preview environment ('Wake up servers' button on app.emergent.sh wrapper). action_costs.vibe_chat is now 1 (was 0) — any tests that rely on free vibe chat must be updated.",
+  "rca of the issue": "Index gap: server.py:651-654 seed_database() returns early when `db.agents.count_documents({}) > 0`. The new index lines 720-721 (registration_ip, last_login_ip — both non-unique) are positioned inside this function after that guard. On already-seeded environments (which is every deployed env), the indexes are NEVER created. Verified via `db.users.list_indexes()` which only returns ['_id', 'email', 'id']. Reproduction: pytest TestIndexes::test_users_collection_has_ip_indexes asserts 'registration_ip' in idx keys → fails on existing DBs. Mitigation: extract index creation into an `async def ensure_indexes()` and call it unconditionally on startup (not gated behind seed). As an interim, manually run `db.users.create_index('registration_ip')` + `db.users.create_index('last_login_ip')` on production. Functional behaviour of /register cap is correct — query still works without index, just slower at scale."
+}

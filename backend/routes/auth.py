@@ -9,13 +9,26 @@ import uuid
 import secrets
 import logging
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 
 from lib.rate_limit import rate_limit_dependency
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+# ── Anti-abuse settings ──
+SIGNUP_BONUS_CREDITS = 50           # 50 free top-up credits per new account
+MAX_ACCOUNTS_PER_IP_24H = 3         # Cap accounts created from the same IP per 24h window
+
+
+def _client_ip(request: Request) -> str:
+    """Resolve the real client IP from `X-Forwarded-For` (Kubernetes ingress) → falls back to socket peer."""
+    xff = request.headers.get("X-Forwarded-For") or request.headers.get("X-Real-IP", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 
 # ── Pydantic models (mirrors server.py — defined here too so FastAPI typed body parse works) ──
@@ -50,13 +63,27 @@ def _srv():
 
 
 @router.post("/auth/register")
-async def register(req: RegisterRequest, _=Depends(rate_limit_dependency("register", 5, 600))):
+async def register(req: RegisterRequest, request: Request, _=Depends(rate_limit_dependency("register", 5, 600))):
     srv = _srv()
     db = srv.db
 
     existing = await db.users.find_one({"email": req.email})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
+
+    # ── Anti-abuse: cap accounts per IP per 24h window ──
+    ip = _client_ip(request)
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    recent_from_ip = await db.users.count_documents({
+        "registration_ip": ip,
+        "created_at": {"$gte": cutoff},
+    })
+    if recent_from_ip >= MAX_ACCOUNTS_PER_IP_24H:
+        logger.warning(f"Registration blocked — IP {ip} hit {recent_from_ip} accounts in 24h.")
+        raise HTTPException(
+            status_code=429,
+            detail="Too many accounts created from your network. Try again in 24 hours.",
+        )
 
     user_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -65,8 +92,39 @@ async def register(req: RegisterRequest, _=Depends(rate_limit_dependency("regist
         "password_hash": srv.hash_password(req.password),
         "name": req.name or req.email.split("@")[0],
         "role": "user", "created_at": now,
+        # Anti-abuse + signup bonus state
+        "registration_ip": ip,
+        "last_login_ip": ip,
+        "last_login_at": now,
+        # Dual-pool credits (signup bonus lands in topup, never expires)
+        "subscription_credits": 50,
+        "subscription_credits_max": 50,
+        "topup_credits": SIGNUP_BONUS_CREDITS,
+        "credit_reset_date": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+        "tier": "recruit",
     }
     await db.users.insert_one(user_doc)
+
+    # Immutable ledger entry for the signup bonus.
+    await db.credit_transactions.insert_one({
+        "user_id": user_id,
+        "email": req.email,
+        "delta": SIGNUP_BONUS_CREDITS,
+        "kind": "signup_bonus",
+        "ref": None,
+        "pool": "topup",
+        "sub_deducted": 0,
+        "topup_deducted": 0,
+        "sub_remaining": 50,
+        "topup_remaining": SIGNUP_BONUS_CREDITS,
+        "balance_after": 50 + SIGNUP_BONUS_CREDITS,
+        "note": f"+{SIGNUP_BONUS_CREDITS} welcome bonus",
+        "virtual": False,
+        "metadata": {"ip": ip},
+        "created_at": now,
+    })
+    logger.info(f"User registered: {req.email} from IP {ip} (+{SIGNUP_BONUS_CREDITS} bonus credits)")
+
     token = srv.create_token(user_id, req.email, "user")
     return srv.TokenResponse(
         token=token,
@@ -75,13 +133,19 @@ async def register(req: RegisterRequest, _=Depends(rate_limit_dependency("regist
 
 
 @router.post("/auth/login")
-async def login(req: LoginRequest, _=Depends(rate_limit_dependency("login", 10, 60))):
+async def login(req: LoginRequest, request: Request, _=Depends(rate_limit_dependency("login", 10, 60))):
     srv = _srv()
     db = srv.db
 
     user = await db.users.find_one({"email": req.email}, {"_id": 0})
     if not user or not srv.verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    # Track login IP for analytics + abuse detection.
+    ip = _client_ip(request)
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"last_login_ip": ip, "last_login_at": datetime.now(timezone.utc).isoformat()}},
+    )
     token = srv.create_token(user["id"], user["email"], user["role"])
     return srv.TokenResponse(
         token=token,

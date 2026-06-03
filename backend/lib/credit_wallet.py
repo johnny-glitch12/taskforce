@@ -39,7 +39,7 @@ from typing import Optional, Dict, Any
 
 
 ACTION_COSTS = {
-    "vibe_chat":          0,
+    "vibe_chat":          1,
     "build_bot":          5,
     "workflow_run":       1,
     "bot_deploy":         0,

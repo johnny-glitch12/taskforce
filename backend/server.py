@@ -717,6 +717,8 @@ async def seed_database():
     # Create indexes
     await db.users.create_index("email", unique=True)
     await db.users.create_index("id", unique=True)
+    await db.users.create_index("registration_ip")
+    await db.users.create_index("last_login_ip")
     await db.waitlist.create_index("email", unique=True)
     await db.agents.create_index("id", unique=True)
     await db.agents.create_index("category")
@@ -1206,6 +1208,64 @@ async def repair_status():
         "last_result": _repair_status["last_result"],
         "logs": _repair_status["logs"][-50:],
     }
+
+
+@api_router.get("/admin/ip-abuse")
+async def admin_ip_abuse(min_accounts: int = 3, user=Depends(get_current_user)):
+    """Admin Overwatch — list IPs that have created `min_accounts` or more user accounts (potential abuse).
+    Returns groups sorted by recency with the email + created_at of every account on that IP."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    min_accounts = max(2, min(20, int(min_accounts)))
+    pipeline = [
+        {"$match": {"registration_ip": {"$nin": [None, "unknown", ""]}}},
+        {"$group": {
+            "_id": "$registration_ip",
+            "count": {"$sum": 1},
+            "accounts": {"$push": {
+                "id": "$id", "email": "$email", "name": "$name",
+                "created_at": "$created_at", "tier": "$tier",
+                "last_login_at": "$last_login_at",
+                "flagged": "$flagged_for_abuse",
+                "banned": "$banned",
+            }},
+        }},
+        {"$match": {"count": {"$gte": min_accounts}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 200},
+    ]
+    groups = await db.users.aggregate(pipeline).to_list(200)
+    # Also include "co-traveller" alert: accounts sharing IP with a banned account.
+    banned_ips = set()
+    async for u in db.users.find({"banned": True}, {"registration_ip": 1, "last_login_ip": 1, "_id": 0}):
+        if u.get("registration_ip"):
+            banned_ips.add(u["registration_ip"])
+        if u.get("last_login_ip"):
+            banned_ips.add(u["last_login_ip"])
+    return {
+        "groups": [{"ip": g["_id"], "count": g["count"], "accounts": g["accounts"]} for g in groups],
+        "banned_ips": sorted(banned_ips),
+        "policy": {"max_accounts_per_ip_24h": 3},
+    }
+
+
+class IPAbuseAction(BaseModel):
+    user_id: str
+    action: str = Field(pattern="^(flag|unflag|ban|unban)$")
+
+
+@api_router.post("/admin/ip-abuse/action")
+async def admin_ip_abuse_action(body: IPAbuseAction, user=Depends(get_current_user)):
+    """Admin Overwatch — flag/unflag/ban/unban a user account."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    set_fields = {"flag": {"flagged_for_abuse": True}, "unflag": {"flagged_for_abuse": False},
+                  "ban": {"banned": True}, "unban": {"banned": False}}[body.action]
+    set_fields["updated_at"] = datetime.now(timezone.utc).isoformat()
+    res = await db.users.update_one({"id": body.user_id}, {"$set": set_fields})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return {"ok": True, "action": body.action, "user_id": body.user_id}
 
 async def get_csdrop_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Auth guard that only allows the csdrop client."""

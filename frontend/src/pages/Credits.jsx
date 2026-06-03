@@ -67,7 +67,7 @@ function TopupPoolCard({ value, testid }) {
 
 function ActionCostsList({ costs }) {
   const labelMap = {
-    vibe_chat: "AI chat (vibe)",
+    vibe_chat: "AI chat message",
     build_bot: "Build bot",
     workflow_run: "Workflow run",
     bot_deploy: "Bot deploy",
