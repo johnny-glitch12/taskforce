@@ -153,6 +153,7 @@ async def stripe_webhook(request: Request):
                 # Auto-activate subscription if this is a subscription payment
                 if tx.get("type") == "subscription" and not tx.get("activated"):
                     from routes.subscriptions import TIERS
+                    from lib.credit_wallet import reset_subscription
                     tier = tx.get("tier")
                     tier_info = TIERS.get(tier, {})
                     now = datetime.now(timezone.utc).isoformat()
@@ -175,11 +176,31 @@ async def stripe_webhook(request: Request):
                         {"id": tx["user_id"]},
                         {"$set": {"tier": tier, "agent_limit": tier_info.get("agent_limit", 3)}},
                     )
+                    # Grant the new tier's monthly subscription credit allocation.
+                    user_doc = await db.users.find_one({"id": tx["user_id"]})
+                    if user_doc:
+                        await reset_subscription(db, user_doc, tier=tier, ref=event.session_id)
                     await db.payment_transactions.update_one(
                         {"session_id": event.session_id},
                         {"$set": {"activated": True}},
                     )
-                    logger.info(f"Subscription activated: {tier} for user {tx['user_id']}")
+                    logger.info(f"Subscription activated: {tier} for user {tx['user_id']} (credits granted)")
+
+                # Auto-grant top-up credits if this is a credit top-up payment
+                if tx.get("type") == "credit_topup" and not tx.get("activated"):
+                    from lib.credit_wallet import credit as wallet_credit
+                    credits = int(tx.get("credits") or 0)
+                    user_doc = await db.users.find_one({"id": tx["user_id"]})
+                    if user_doc and credits > 0:
+                        await wallet_credit(db, user_doc, credits, "topup",
+                                            ref=event.session_id,
+                                            note=f"+{credits} via Stripe topup (webhook)",
+                                            pool="topup")
+                        await db.payment_transactions.update_one(
+                            {"session_id": event.session_id},
+                            {"$set": {"activated": True}},
+                        )
+                        logger.info(f"Top-up credited via webhook: +{credits} to user {tx['user_id']}")
 
         return {"status": "ok"}
     except Exception as e:

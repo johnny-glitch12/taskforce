@@ -109,6 +109,23 @@ async def credits_topup_checkout(request: Request, body: TopupRequest, user=Depe
         metadata=metadata,
     )
     session = await sc.create_checkout_session(sess_req)
+    # Persist a payment_transactions record so the webhook can credit on `invoice.paid`/`checkout.session.completed`.
+    await db.payment_transactions.insert_one({
+        "id": uuid.uuid4().hex,
+        "session_id": session.session_id,
+        "user_id": str(user.get("id", user.get("email"))),
+        "user_email": user.get("email"),
+        "type": "credit_topup",
+        "pack": body.pack,
+        "credits": pack["credits"],
+        "amount": final_price,
+        "currency": "usd",
+        "payment_status": "pending",
+        "activated": False,
+        "metadata": metadata,
+        "created_at": _now(),
+        "updated_at": _now(),
+    })
     return {"url": session.url, "session_id": session.session_id, "final_price": final_price, "pack": pack}
 
 
