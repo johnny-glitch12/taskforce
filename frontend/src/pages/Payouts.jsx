@@ -62,7 +62,16 @@ export default function Payouts() {
       });
       const body = await r.json();
       if (!r.ok) {
-        toast.error(body.detail || `Failed (${r.status})`);
+        const msg = typeof body.detail === "string" ? body.detail : `Failed (${r.status})`;
+        // Surface the Stripe-side Connect-enablement requirement clearly.
+        if (msg.toLowerCase().includes("signed up for connect")) {
+          toast.error(
+            "Stripe Connect isn't enabled on the platform account yet. The site owner must enable it at dashboard.stripe.com/connect before payouts can be set up.",
+            { duration: 9000 },
+          );
+        } else {
+          toast.error(msg);
+        }
         return;
       }
       // Hand off to Stripe's hosted onboarding.
