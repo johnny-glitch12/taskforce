@@ -1,0 +1,35 @@
+{
+  "summary": "Iter43 — Prompt 7 Part 2 External Agent Pip Venv Runtime. Backend: 10/10 P7-Part2 tests pass (test_iter43_p7_part2_runtime.py) including the critical python-slugify real-pip-install + runtime import test and the 2s manifest-timeout subprocess-kill test. Regression: 29/29 iter42 (webhooks + onboarding + AST upload). Frontend: External Agents page route /external-agents, upload zone, package list, install lifecycle (NOT INSTALLED → READY via polling), expanded Run/Logs/Runs/Manifest tabs, invalid-JSON inline error WITHOUT API hit, valid JSON run returning {doubled: 14}, runs list, manifest pretty-print, delete with confirm — all verified end-to-end against the live preview URL with an admin JWT. Navbar entry verified in code (Navbar.jsx:40).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter43_p7_part2_runtime.py",
+    "/app/backend/tests/test_iter42_p7_webhooks_onboarding.py",
+    "/app/test_reports/pytest/iter43_results.xml",
+    "/app/test_reports/pytest/iter42_regression_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ExternalAgents.jsx is 585 lines — already approaching the 700-line guideline; consider splitting per-tab components (RunTab, RunsTab, ManifestTab, InstallLog) into siblings before next major edit.",
+    "routes/external_agents.py grew further this iteration (lib/external_agent_runtime endpoints added at line 388). Future split into routes/external_agents_install.py + routes/external_agents_run.py would keep individual files <400 lines.",
+    "Polling interval is fixed at 3s clientside while the package is installing — fine for ≤120s installs, but for slow pip installs the user sees no progress indication beyond a spinner. Consider streaming install_log lines into the UI while installing (the backend already persists install_log) for UX wins."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (10/10 iter43 + 29/29 iter42 regression = 39/39)",
+    "frontend": "100% on tested flows (load, upload->list, install->ready polling, expand, invalid JSON inline error, valid run with result, runs tab, manifest tab, delete)"
+  },
+  "test_credentials": "admin@nova.ai/admin123 (admin, unlimited compute). Used for both backend pytest and Playwright frontend test (token set via localStorage('taskforce_token')).",
+  "seed_data_creation": "Each backend test creates and DELETES its own .tfagent package (no leftovers). The frontend test uploaded one ui-test-* package via API and deleted it via the trash button at the end of the test. Verified backend list returned no orphan after the run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Reusable backend regression files: (1) /app/backend/tests/test_iter43_p7_part2_runtime.py — 10 tests for install + run + idempotency + 2s subprocess timeout + async entry + multi-file imports + python-slugify real pip install + delete-cleanup + 404s. Total runtime ~26s; first slugify install takes ~5-10s of real network. (2) /app/backend/tests/test_iter42_p7_webhooks_onboarding.py — 29 tests for upload + AST + webhooks + onboarding. Frontend page is at /external-agents. data-testids used: external-agents-page, upload-zone, upload-btn, refresh-btn, package-row-{id}, pkg-status-{not_installed|installing|ready|failed}, pkg-install-btn-{id}, pkg-expand-{id}, pkg-tab-{run|logs|runs|manifest}-{id}, run-input-{id}, run-btn-{id}, run-result-{id}, run-error-{id}, runs-list-{id}, manifest-display-{id}, pkg-delete-btn-{id}. The delete button uses a native window.confirm — handle it via page.on('dialog', d.accept()). Note: console shows 'refresh failed: TypeError: Failed to fetch' errors during teardown — these come from PostHog session-replay code wrapping fetch and firing after the React component unmounts. Not an app bug; can be ignored.",
+  "rca_of_the_issue": "N/A — no bugs found. All test expectations met on first run."
+}

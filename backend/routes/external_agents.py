@@ -15,6 +15,7 @@ Buyers can browse external agent listings + see manifest schema + security badge
 right away. They just can't EXECUTE external agents on our infra yet.
 """
 import ast
+import asyncio
 import base64
 import io
 import json
@@ -22,10 +23,12 @@ import re
 import uuid
 import zipfile
 from datetime import datetime, timezone
-from typing import List
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
+
+from lib import external_agent_runtime as runtime
 
 router = APIRouter()
 
@@ -364,6 +367,11 @@ async def delete_package(package_id: str, user=Depends(get_current_user())):
     res = await db.agent_packages.delete_one({"id": package_id, "user_id": user_id})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Package not found.")
+    # Best-effort cleanup of the on-disk venv + extracted code.
+    try:
+        runtime.uninstall_agent(package_id)
+    except Exception:
+        pass
     return {"ok": True, "deleted": package_id}
 
 
@@ -377,3 +385,144 @@ async def get_whitelist():
         "max_uncompressed_mb": MAX_UNCOMPRESSED_BYTES // 1024 // 1024,
         "manifest_required_fields": REQUIRED_MANIFEST_FIELDS,
     }
+
+
+# ───────── Part 2: Install / Run / Runs ─────────
+class RunBody(BaseModel):
+    input: Optional[Any] = None
+    keys: Optional[dict] = None  # user-provided BYOK overrides for this single run
+
+
+async def _load_pkg_or_404(db, package_id: str, user_id: str) -> dict:
+    doc = await db.agent_packages.find_one({"id": package_id, "user_id": user_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Package not found.")
+    return doc
+
+
+@router.post("/external-agents/packages/{package_id}/install")
+async def install_package(package_id: str, user=Depends(get_current_user())):
+    """Kick off venv creation + pip install in the background. Idempotent —
+    if the package is already installing/ready, returns the current status."""
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    doc = await _load_pkg_or_404(db, package_id, user_id)
+    if doc.get("install_status") == "installing":
+        return {"queued": False, "install_status": "installing",
+                "message": "Install already in progress."}
+    if doc.get("install_status") == "ready" and doc.get("execution_ready"):
+        return {"queued": False, "install_status": "ready",
+                "message": "Already installed.", "log_tail": (doc.get("install_log") or "")[-2000:]}
+
+    # Fire-and-forget — runtime.install_agent flips status to "installing" first
+    # thing, so subsequent polls see the right state.
+    asyncio.create_task(runtime.install_agent(db, package_id, ALLOWED_PACKAGES))
+    return {"queued": True, "install_status": "installing"}
+
+
+@router.get("/external-agents/packages/{package_id}/install-status")
+async def get_install_status(package_id: str, user=Depends(get_current_user())):
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    doc = await _load_pkg_or_404(db, package_id, user_id)
+    return runtime.install_status(doc)
+
+
+@router.post("/external-agents/packages/{package_id}/run")
+async def run_package(package_id: str, body: RunBody, user=Depends(get_current_user())):
+    """Execute the installed agent. Charges credits via the dual-pool wallet."""
+    from lib import credit_wallet
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    doc = await _load_pkg_or_404(db, package_id, user_id)
+    if not doc.get("execution_ready") or doc.get("install_status") != "ready":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Agent not ready (install_status={doc.get('install_status') or 'not_installed'}). "
+                   "Run the install endpoint first.",
+        )
+
+    # Affordability check BEFORE running so we never burn compute on insolvent accounts.
+    afford = await credit_wallet.can_afford(db, user, "external_agent_run")
+    if not afford.get("allowed"):
+        raise HTTPException(status_code=402, detail={
+            "error": "INSUFFICIENT_CREDITS",
+            "needed": afford.get("cost"),
+            "balance": afford.get("balance"),
+            "message": "Top up credits or upgrade your plan to run external agents.",
+        })
+
+    manifest = doc.get("manifest") or {}
+    entry_path = manifest.get("entry_point") or "main.py"
+    entry_fn = manifest.get("entry_function") or "run"
+
+    # Resolve user BYOK keys: stored vault keys + per-call overrides.
+    # We pull the simple `byok_keys` field if present; the heavy KMS-decrypt path
+    # lives elsewhere and is out of scope here.
+    stored_keys = (await db.users.find_one(
+        {"$or": [{"id": user_id}, {"email": user.get("email")}]},
+        {"byok_keys": 1, "_id": 0},
+    ) or {}).get("byok_keys") or {}
+    keys = {**stored_keys, **(body.keys or {})}
+
+    timeout_s = int(manifest.get("max_execution_time_seconds") or 30)
+    memory_mb = int(manifest.get("max_memory_mb") or 256)
+
+    run_id = uuid.uuid4().hex
+    started_at = _now_iso()
+    result = await runtime.run_agent(
+        package_id=package_id,
+        entry_path_rel=entry_path,
+        entry_fn=entry_fn,
+        input_data=body.input if body.input is not None else {},
+        env_vars={},  # ENV pass-through can be added once manifest supports it
+        user_api_keys=keys,
+        timeout_seconds=timeout_s,
+        memory_mb=memory_mb,
+    )
+
+    # Charge credits AFTER execution so failures don't double-deduct via retries.
+    # (Real-world tradeoff: a successful but very long run is still billed once.)
+    debit = await credit_wallet.debit(db, user, "external_agent_run", ref=run_id)
+
+    run_doc = {
+        "id": run_id,
+        "package_id": package_id,
+        "user_id": user_id,
+        "user_email": user.get("email"),
+        "started_at": started_at,
+        "finished_at": _now_iso(),
+        "duration_ms": result.get("duration_ms") or 0,
+        "success": bool(result.get("success")),
+        "status": "success" if result.get("success") else "failed",
+        "input": body.input if body.input is not None else {},
+        "result": result.get("result"),
+        "output": result.get("output") or "",
+        "stderr": result.get("stderr") or "",
+        "error": result.get("error"),
+        "trace": result.get("trace"),
+        "exit_code": result.get("exit_code"),
+        "credits_spent": int(debit.get("cost") or 0),
+    }
+    await db.external_agent_runs.insert_one(run_doc)
+    await db.agent_packages.update_one(
+        {"id": package_id, "user_id": user_id},
+        {"$inc": {"usage.run_count": 1, "usage.failures": 0 if result.get("success") else 1},
+         "$set": {"usage.last_run_at": _now_iso(), "updated_at": _now_iso()}},
+    )
+    # Strip the heavy `_id` before returning.
+    run_doc.pop("_id", None)
+    run_doc["credits_remaining"] = debit.get("balance")
+    return run_doc
+
+
+@router.get("/external-agents/packages/{package_id}/runs")
+async def list_runs(package_id: str, limit: int = 25, user=Depends(get_current_user())):
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    await _load_pkg_or_404(db, package_id, user_id)  # 404 if not owned
+    cursor = db.external_agent_runs.find(
+        {"package_id": package_id, "user_id": user_id}, {"_id": 0}
+    ).sort("started_at", -1).limit(max(1, min(int(limit), 100)))
+    items = await cursor.to_list(length=100)
+    return {"runs": items}

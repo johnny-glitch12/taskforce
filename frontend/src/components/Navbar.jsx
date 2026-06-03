@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/App";
 import { useTheme } from "@/lib/theme";
-import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, LogOut, Coins, Rocket, Sparkles } from "lucide-react";
+import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, LogOut, Coins, Rocket, Sparkles, Package } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 const CENTER_LINKS_PUBLIC = [
@@ -37,6 +37,7 @@ function UserMenu({ user, logout, navigate }) {
     { to: "/dashboard", label: "Command Center", icon: LayoutDashboard },
     { to: "/credits", label: "Credits", icon: Coins },
     { to: "/my-deployments", label: "My Deployments", icon: Rocket },
+    { to: "/external-agents", label: "External Agents", icon: Package },
     ...(isAdmin ? [
       { to: "/overwatch", label: "Overwatch", icon: BarChart3, accent: true },
       { to: "/security", label: "Security", icon: Shield },
