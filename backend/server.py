@@ -1996,6 +1996,9 @@ app.include_router(hosting_router, prefix="/api")
 from routes.bounties import router as bounties_router
 app.include_router(bounties_router, prefix="/api")
 
+from routes.notifications import router as notifications_router
+app.include_router(notifications_router, prefix="/api")
+
 # Mount uploads dir for exchange listing media (videos + photos)
 UPLOADS_DIR = Path(__file__).parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)

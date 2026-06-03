@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import DirectPublishModal from "../components/DirectPublishModal";
 import {
   Search, Heart, Star, Shield, ChevronRight, TrendingUp,
-  Sparkles, BadgeCheck, Play, Upload,
+  Sparkles, BadgeCheck, Play, Upload, Trophy,
   Headphones, BarChart3, Code2, Palette, DollarSign, MessageSquare,
 } from "lucide-react";
 
@@ -160,6 +160,21 @@ function AgentCard({ agent, index }) {
             <TrendingUp size={10} /> {agent.trendingLabel}
           </span>
         )}
+        {agent.bountyWinner && (
+          <span
+            data-testid={`bounty-winner-badge-${agent.id}`}
+            title={agent.bountyTitle ? `Bounty: ${agent.bountyTitle}` : "Bounty winner"}
+            className="absolute bottom-3 left-3 text-[10px] backdrop-blur-sm px-2.5 py-1 rounded-sm font-bold flex items-center gap-1 max-w-[80%]"
+            style={{
+              background: "linear-gradient(90deg, #fbbf24, #f59e0b)",
+              color: "#0a0e1a",
+              boxShadow: "0 0 12px rgba(251,191,36,0.3)",
+            }}
+          >
+            <Trophy size={10} className="shrink-0" />
+            <span className="truncate font-mono uppercase tracking-[0.1em]">Bounty Winner</span>
+          </span>
+        )}
         <button
           onClick={(e) => { e.stopPropagation(); setSaved(!saved); }}
           data-testid={`agent-save-${agent.id}`}
@@ -284,6 +299,9 @@ export default function Marketplace() {
           creator: l.creator_name,
           trending: (l.deploy_count || 0) > 10,
           tags: l.tags || [],
+          bountyWinner: l.bounty_winner === true,
+          bountyTitle: l.bounty_winner_title,
+          bountyId: l.bounty_winner_id,
         }));
         setAgents(listings);
       }

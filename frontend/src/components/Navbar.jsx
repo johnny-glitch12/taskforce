@@ -3,6 +3,7 @@ import { useAuth } from "@/App";
 import { useTheme } from "@/lib/theme";
 import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, LogOut, Coins, Rocket, Sparkles, Package, Server } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
+import NotificationBell from "@/components/NotificationBell";
 
 const CENTER_LINKS_PUBLIC = [
   { to: "/build", label: "Build", accent: true },
@@ -195,7 +196,10 @@ export default function Navbar() {
           </button>
 
           {user ? (
-            <UserMenu user={user} logout={logout} navigate={navigate} />
+            <>
+              <NotificationBell />
+              <UserMenu user={user} logout={logout} navigate={navigate} />
+            </>
           ) : (
             <>
               <Link
