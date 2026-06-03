@@ -1,0 +1,35 @@
+{
+  "summary": "Iter36 — SITE LOCK + Waitlist verification. ALL P0/P1 gating requirements PASS. Unauthenticated users see ONLY ComingSoonLanding on /, /exchange, /pricing, /armory, /credits, /my-deployments, /agent/abc (no Navbar, no Footer, no underlying page leakage, no /login redirect). /login + 4 /auth/* aliases correctly bypass the gate and render the Login page. ComingSoonLanding: heading 'Something Big Is Deploying.' renders, eyebrow + counter + form + SIGN IN + footer + 3 social icons all present. Waitlist form: invalid email shows inline error WITHOUT hitting API; valid email POSTs to /api/waitlist, shows success state ('You're on the list, operative.'), and counter increments 6→7. After admin login, root renders Home with full Navbar (THE EXCHANGE/THE ARMORY/LEADERBOARD/ACADEMY/PRICING) + standard footer; /armory renders Studio (no ComingSoon); /my-deployments, /credits, /exchange, /pricing all render; existing monitor page /my-deployments/9736667a4a2a4acca927acfb8de48a9c/monitor renders FreeOK usage data correctly. Backend waitlist endpoints: 10/10 pytest pass (count integer, POST creates record, idempotent on duplicate, invalid payload 422, unauth GET /api/waitlist 401/403, non-admin 403, admin returns clean list without _id, login + /credits/me + /auth/me regression all green).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter36_waitlist_sitelock.py",
+    "/app/test_reports/pytest/iter36_waitlist.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "App.js AppShell gating logic (lines 140-185) is clean and correct: siteLocked + !user + !isAuthRoute → ComingSoonLanding without Navbar/Footer; siteLocked + !user + isAuthRoute → focused Login Routes with catch-all Navigate to /login. No leak path observed in tests.",
+    "AUTH_ROUTES startsWith check (line 144) correctly handles /auth/login and aliases. /login is also whitelisted and confirmed unaffected by gate.",
+    "ComingSoonLanding handleSubmit short-circuits on invalid email (regex check before fetch) — verified: invalid 'notanemail' produced 0 network requests to /api/waitlist. Good defensive UX.",
+    "Counter refresh after successful POST is a SEPARATE GET /api/waitlist/count — non-optimistic but works. Slight race where success state shows before counter increments; acceptable for current spec.",
+    "Backend /api/waitlist POST is idempotent by email lookup (existing → return existing id). Behaviour verified twice with same id returned. Mongo unique index on email (server.py line 720) provides DB-level safety net.",
+    "GET /api/waitlist correctly excludes _id (projection {'_id':0}, server.py line 294). Admin response shape verified clean.",
+    "Non-admin GET /api/waitlist → 403; unauth without bearer → also 403 via get_current_user dependency raising. Both verified.",
+    "REACT_APP_SITE_LOCKED env toggle: hardcoded string compare to 'true' (App.js:143) — works as designed. When env=false, AppShell falls through to normal Routes block. Recommend documenting this env var in README for future iterations.",
+    "No regression in iter34/35 features: AdminGate still gates /armory for non-admins (inner ComingSoon page testid coming-soon-page), admin sees Studio. Usage Monitor renders runs/analytics/charts correctly."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter36_waitlist_sitelock.py (new)"
+  ],
+  "success_rate": {"backend": "100% (10/10 pytest)", "frontend": "100% (all 13 P0/P1 frontend checks pass)"},
+  "test_credentials": "admin@nova.ai / admin123. Created TEST waitlist emails via uuid prefix during pytest (auto-cleanable by email pattern test_*@example.com if needed).",
+  "seed_data_creation": "Pytest created ~3 test_*@example.com waitlist entries + 1 opv_*@example.com via UI test (counter now 7). Non-destructive.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "REACT_APP_SITE_LOCKED=true is live in /app/frontend/.env. To test underlying pages as unauth user you'd need to flip it to false (requires frontend restart). All 5 auth routes (/login, /auth/login, /auth/register, /auth/forgot-password, /auth/reset-password) are whitelisted in AUTH_ROUTES in App.js:138. ComingSoonLanding testids: coming-soon-landing, cs-eyebrow, cs-heading, cs-waitlist-form, cs-waitlist-email, cs-waitlist-submit, cs-waitlist-success, cs-waitlist-error, cs-counter, cs-already-have-access, cs-social-twitter/discord/github, cs-footer. Login testids in use: login-email-input, login-password-input, login-submit-btn. Admin login redirects to /armory by existing Login.jsx behaviour.",
+  "rca of the issue": "N/A — no bugs found in this iteration."
+}

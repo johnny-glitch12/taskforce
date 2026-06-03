@@ -1,6 +1,6 @@
 import { useState, useEffect, createContext, useContext, useCallback } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "@/lib/theme";
 import Navbar from "@/components/Navbar";
@@ -22,6 +22,7 @@ import CreatorDashboard from "@/pages/CreatorDashboard";
 import CredentialsVault from "@/pages/CredentialsVault";
 import Leaderboard from "@/pages/Leaderboard";
 import ComingSoon from "@/pages/ComingSoon";
+import ComingSoonLanding from "@/pages/ComingSoonLanding";
 import Credits from "@/pages/Credits";
 import MyDeployments from "@/pages/MyDeployments";
 import UsageMonitor from "@/pages/UsageMonitor";
@@ -126,124 +127,133 @@ function App() {
     <AuthContext.Provider value={{ user, token, isAdmin, loading, login, register, logout }}>
       <ThemeProvider>
         <BrowserRouter>
-          <div className="min-h-screen t-bg flex flex-col" style={{ transition: 'background-color 0.3s ease' }}>
-            <Navbar />
-            <Toaster
-              position="bottom-right"
-              toastOptions={{
-                style: {
-                  background: 'var(--toast-bg)',
-                  backdropFilter: 'blur(12px)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--toast-text)',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  borderRadius: '2px',
-                  fontSize: '12px',
-                },
-              }}
-            />
-            <main className="flex-1">
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/login" element={<Login />} />
-                <Route
-                  path="/academy"
-                  element={<AdminGate feature="The Academy" subtitle="Free training videos, drops, and operator playbooks land here when we publicly open Task Force AI." />}
-                />
-                <Route path="/pricing" element={<Pricing />} />
-                <Route path="/exchange" element={<Marketplace />} />
-                <Route path="/leaderboard" element={<Leaderboard />} />
-                <Route path="/marketplace" element={<Marketplace />} />
-                <Route path="/agent/:id" element={<AgentDetail />} />
-                <Route path="/creator/:id" element={<CreatorProfile />} />
-                <Route path="/payment/success" element={<PaymentSuccess />} />
-                <Route
-                  path="/armory"
-                  element={
-                    <AdminGate
-                      feature="The Armory"
-                      subtitle="Visual + code bot builder is in private beta. Public access opens with the v1 launch — join the waitlist below."
-                    >
-                      <Studio />
-                    </AdminGate>
-                  }
-                />
-                <Route
-                  path="/studio"
-                  element={
-                    <AdminGate feature="The Armory">
-                      <Studio />
-                    </AdminGate>
-                  }
-                />
-                <Route
-                  path="/credits"
-                  element={<ProtectedRoute><Credits /></ProtectedRoute>}
-                />
-                <Route
-                  path="/my-deployments"
-                  element={<ProtectedRoute><MyDeployments /></ProtectedRoute>}
-                />
-                <Route
-                  path="/my-deployments/:id/monitor"
-                  element={<ProtectedRoute><UsageMonitor /></ProtectedRoute>}
-                />
-                <Route path="/deployments" element={<Navigate to="/my-deployments" replace />} />
-                <Route
-                  path="/dashboard"
-                  element={
-                    <ProtectedRoute>
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/csdrop"
-                  element={
-                    <ProtectedRoute>
-                      <CsdropDashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/security"
-                  element={
-                    <ProtectedRoute>
-                      <SecurityDashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/overwatch"
-                  element={
-                    <ProtectedRoute>
-                      <OverwatchDashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/creator"
-                  element={
-                    <ProtectedRoute>
-                      <CreatorDashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/credentials"
-                  element={
-                    <ProtectedRoute>
-                      <CredentialsVault />
-                    </ProtectedRoute>
-                  }
-                />
-              </Routes>
-            </main>
-            <Footer />
-          </div>
+          <AppShell />
         </BrowserRouter>
       </ThemeProvider>
     </AuthContext.Provider>
+  );
+}
+
+/** Routes considered "public" (always accessible even when SITE_LOCKED=true). */
+const AUTH_ROUTES = ["/login", "/auth/login", "/auth/register", "/auth/forgot-password", "/auth/reset-password"];
+
+function AppShell() {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  const siteLocked = process.env.REACT_APP_SITE_LOCKED === "true";
+  const isAuthRoute = AUTH_ROUTES.some((p) => location.pathname.startsWith(p));
+  const shouldGate = siteLocked && !loading && !user;
+
+  // 🛑 Site locked + unauth + not on /login → show ComingSoonLanding ONLY (no Navbar/Footer)
+  if (shouldGate && !isAuthRoute) {
+    return (
+      <>
+        <Toaster
+          position="bottom-right"
+          toastOptions={{
+            style: {
+              background: "rgba(0,0,0,0.95)",
+              backdropFilter: "blur(12px)",
+              border: "1px solid #1a1a1e",
+              color: "#e4e4e7",
+              fontFamily: "'JetBrains Mono', monospace",
+              borderRadius: "2px",
+              fontSize: "12px",
+            },
+          }}
+        />
+        <ComingSoonLanding />
+      </>
+    );
+  }
+
+  // 🔐 Site locked + unauth + on auth route → render ONLY Login (focused, no Navbar/Footer)
+  if (shouldGate && isAuthRoute) {
+    return (
+      <>
+        <Toaster position="bottom-right" />
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/auth/login" element={<Login />} />
+          <Route path="/auth/register" element={<Login />} />
+          <Route path="/auth/forgot-password" element={<Login />} />
+          <Route path="/auth/reset-password" element={<Login />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </>
+    );
+  }
+
+  // ✅ Normal full app shell (user is logged in OR site is unlocked)
+  return (
+    <div className="min-h-screen t-bg flex flex-col" style={{ transition: "background-color 0.3s ease" }}>
+      <Navbar />
+      <Toaster
+        position="bottom-right"
+        toastOptions={{
+          style: {
+            background: "var(--toast-bg)",
+            backdropFilter: "blur(12px)",
+            border: "1px solid var(--border)",
+            color: "var(--toast-text)",
+            fontFamily: "'JetBrains Mono', monospace",
+            borderRadius: "2px",
+            fontSize: "12px",
+          },
+        }}
+      />
+      <main className="flex-1">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/auth/login" element={<Login />} />
+          <Route path="/auth/register" element={<Login />} />
+          <Route path="/auth/forgot-password" element={<Login />} />
+          <Route path="/auth/reset-password" element={<Login />} />
+          <Route
+            path="/academy"
+            element={<AdminGate feature="The Academy" subtitle="Free training videos, drops, and operator playbooks land here when we publicly open Task Force AI." />}
+          />
+          <Route path="/pricing" element={<Pricing />} />
+          <Route path="/exchange" element={<Marketplace />} />
+          <Route path="/leaderboard" element={<Leaderboard />} />
+          <Route path="/marketplace" element={<Marketplace />} />
+          <Route path="/agent/:id" element={<AgentDetail />} />
+          <Route path="/creator/:id" element={<CreatorProfile />} />
+          <Route path="/payment/success" element={<PaymentSuccess />} />
+          <Route
+            path="/armory"
+            element={
+              <AdminGate
+                feature="The Armory"
+                subtitle="Visual + code bot builder is in private beta. Public access opens with the v1 launch — join the waitlist below."
+              >
+                <Studio />
+              </AdminGate>
+            }
+          />
+          <Route
+            path="/studio"
+            element={
+              <AdminGate feature="The Armory">
+                <Studio />
+              </AdminGate>
+            }
+          />
+          <Route path="/credits" element={<ProtectedRoute><Credits /></ProtectedRoute>} />
+          <Route path="/my-deployments" element={<ProtectedRoute><MyDeployments /></ProtectedRoute>} />
+          <Route path="/my-deployments/:id/monitor" element={<ProtectedRoute><UsageMonitor /></ProtectedRoute>} />
+          <Route path="/deployments" element={<Navigate to="/my-deployments" replace />} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/csdrop" element={<ProtectedRoute><CsdropDashboard /></ProtectedRoute>} />
+          <Route path="/security" element={<ProtectedRoute><SecurityDashboard /></ProtectedRoute>} />
+          <Route path="/overwatch" element={<ProtectedRoute><OverwatchDashboard /></ProtectedRoute>} />
+          <Route path="/creator" element={<ProtectedRoute><CreatorDashboard /></ProtectedRoute>} />
+          <Route path="/credentials" element={<ProtectedRoute><CredentialsVault /></ProtectedRoute>} />
+        </Routes>
+      </main>
+      <Footer />
+    </div>
   );
 }
 
