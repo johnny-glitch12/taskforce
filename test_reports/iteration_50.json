@@ -1,0 +1,42 @@
+{
+  "summary": "Iter50 Armory redesign — backend (8/8 PASS) + frontend (all major flows PASS). Fixed 1 CRITICAL backend bug: test-run endpoint imported check_compute_credits/increment_compute_usage from routes.published which does not export those names (they live in lib.compute_credits). Without the fix every POST /api/armory/bot-projects/{id}/test-run returned 500. Patched the import in /app/backend/routes/armory_builder.py. Frontend exhaustively verified on https://dark-mode-nova.preview.emergentagent.com/armory as admin: empty state + all 15 testids, suggestion prefill, sidebar collapse 240↔48, ModelPicker (all 6 model testids; selecting gemini-2.5-pro flips toolbar to 'Code generation costs 5 credits'), real LLM chat send (user+assistant bubbles, '−1cr' meta), session load with preview (Files/Flow/Config tabs all render with SVG flow + Config form fields Name/Language/Source/Version/Description; 4 action buttons + open-workflows-header all visible), Open in Workflows navigates to /armory/workflows/{id} and renders legacy Studio under AdminGate, footer hidden on /armory but present on /bounties, navbar 'The Armory' link → /armory (no 'soon' tag).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/armory/bot-projects/{id}/test-run", "issue": "ImportError: cannot import 'check_compute_credits' from routes.published — should import from lib.compute_credits. Caused 500 on every call. FIXED by testing agent.", "priority": "CRITICAL"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Armory SessionSidebar > ModelPicker", "issues": ["Per spec, gpt-4o and claude-sonnet belong under a 'Your Keys' group header, but the ModelPicker renders only one 'PLATFORM' header for all 6 models. Models are visually distinguished by a key icon, but the 'YOUR KEYS' group label is missing. Cosmetic/UX deviation only — selection + cost flow works correctly."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter50_armory.py",
+    "/app/test_reports/pytest/iter50.xml"
+  ],
+  "action_items": [
+    "Optional: split ModelPicker into 'Platform' (gemini-flash, gemini-pro, gpt-4o-mini, claude-haiku) and 'Your Keys' (gpt-4o, claude-sonnet) sections to match the spec contract.",
+    "Consider seeding a freshly built bot_project for end-to-end test-run UI testing (existing admin projects already work)."
+  ],
+  "critical_code_review_comments": [
+    "armory_builder.py.test_run_project (FIXED) — imports were placed inside the function body referencing the wrong module; runtime ImportError. Always run a smoke curl after adding cross-module imports in lazy-import handlers since they don't surface at app startup.",
+    "Armory.jsx loadProject silently swallows errors via try/catch returning nothing — if /api/armory/bot-projects/{id} 404s when a session's project was deleted, the preview just stays hidden with no toast. Add a soft toast 'Project no longer exists' on 404.",
+    "ChatPanel.jsx status pill computes status = 'Building' | 'Ready' | 'Draft' but relies on global CSS `uppercase` for the DRAFT spec text. Works visually but if testers grep DOM text they may see 'Draft' (verified — tests for 'DRAFT' must use case-insensitive match or check computed style).",
+    "Armory.jsx send() — `setSession({ id: data.session_id, title: userText.slice(0,80), model, project_id: data.project_id || null })` overwrites local session shape, but skipping `created_at`/`updated_at` could break SessionSidebar's grouping when refreshSessions hasn't yet returned. Acceptable since refreshSessions runs immediately after.",
+    "Armory.jsx — useEffect's [token] dep but the closure captures `search`/`navigate` etc. Currently fine because of eslint-disable, but a bounty prefill arriving via mid-session re-render won't fire again. Acceptable per current UX."
+  ],
+  "updated_files": [
+    "/app/backend/routes/armory_builder.py (fixed import path)",
+    "/app/backend/tests/test_iter50_armory.py (new regression suite)"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% functional; 1 cosmetic 'Your Keys' group header missing"},
+  "test_credentials": "admin@nova.ai / admin123 from /app/memory/test_credentials.md — current, no changes",
+  "seed_data_creation": "None — used existing admin session with project_id (daf24aa4954e429ca0b5fcb87eafdb42 → project 3dee427b56e04bee984c676b959b0c0d) and a fresh real LLM chat 'Hello! Just say OK and exit.' which created one new session.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test-run endpoint fix is in place. Admin has 2 sessions with project_id (daf24aa4954e429ca0b5fcb87eafdb42, 8f70da4c7d9b464aa9cc119bc4603fea) — use either for preview-panel UI testing. The new backend regression file is /app/backend/tests/test_iter50_armory.py (8 tests). Note: vibe/chat costs 1 credit on flash, /armory route uses ProtectedRoute (not AdminGate), /armory/workflows/:projectId uses AdminGate.",
+  "rca of the issue": "Test-run 500: routes/armory_builder.py imported `check_compute_credits, increment_compute_usage` from `routes.published`, but `routes/published.py` does not define those names — they are defined in `/app/backend/lib/compute_credits.py`. Patched import to `from lib.compute_credits import check_compute_credits, increment_compute_usage`. Verified by re-running test_test_run_owner_ok (200), test_test_run_not_owner_or_missing (404), test_empty_nodes_returns_400 (400)."
+}

@@ -35,6 +35,7 @@ import Payouts from "@/pages/Payouts";
 import CreatorEarnings from "@/pages/CreatorEarnings";
 import ApiKeys from "@/pages/ApiKeys";
 import ListingDetail from "@/pages/ListingDetail";
+import Armory from "@/pages/Armory";
 import OnboardingModal from "@/components/OnboardingModal";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -210,6 +211,7 @@ function AppShell() {
   }
 
   // ✅ Normal full app shell (user is logged in OR site is unlocked)
+  const hideFooter = location.pathname.startsWith("/armory");
   return (
     <div className="min-h-screen t-bg flex flex-col" style={{ transition: "background-color 0.3s ease" }}>
       <Navbar />
@@ -250,10 +252,15 @@ function AppShell() {
           <Route
             path="/armory"
             element={
-              <AdminGate
-                feature="The Armory"
-                subtitle="Visual + code bot builder is in private beta. Public access opens with the v1 launch — join the waitlist below."
-              >
+              <ProtectedRoute>
+                <Armory />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/armory/workflows/:projectId"
+            element={
+              <AdminGate feature="Workflows Editor">
                 <Studio />
               </AdminGate>
             }
@@ -287,7 +294,7 @@ function AppShell() {
           <Route path="/credentials" element={<ProtectedRoute><CredentialsVault /></ProtectedRoute>} />
         </Routes>
       </main>
-      <Footer />
+      {hideFooter ? null : <Footer />}
     </div>
   );
 }

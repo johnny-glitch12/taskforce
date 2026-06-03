@@ -1,0 +1,105 @@
+/* Armory.jsx — design tokens (dark by default, with light-mode override).
+ *
+ * Tokens are scoped to .armory-shell so the rest of the app (which uses
+ * existing CSS vars like --bg-card / --text-primary) is unaffected.
+ */
+
+.armory-shell {
+  /* Dark (default) */
+  --armory-bg: #0A0A0A;
+  --armory-panel: #111111;
+  --armory-card: #1A1A1A;
+  --armory-card-hover: #1F1F1F;
+  --armory-border: #2A2A2A;
+  --armory-text: #F3F4F6;
+  --armory-text-mute: #9CA3AF;
+  --armory-text-dim: #6B7280;
+  --armory-accent: #00E5CC;
+  --armory-user-bubble: #1A1A1A;
+  --armory-build-card-bg: #141414;
+  --armory-active-bg: rgba(0,229,204,0.06);
+  --armory-code-bg: #0d0d0d;
+  --armory-success: #10B981;
+  --armory-success-bg: #0C1C16;
+  --armory-error: #EF4444;
+  --armory-error-bg: #1C1010;
+
+  color: var(--armory-text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Light-mode override — when the user has the body html.light class set. */
+html.light .armory-shell,
+body.light .armory-shell {
+  --armory-bg: #FFFFFF;
+  --armory-panel: #F9FAFB;
+  --armory-card: #FFFFFF;
+  --armory-card-hover: #F3F4F6;
+  --armory-border: #E5E7EB;
+  --armory-text: #111827;
+  --armory-text-mute: #4B5563;
+  --armory-text-dim: #6B7280;
+  --armory-accent: #00C8B0;
+  --armory-user-bubble: #F3F4F6;
+  --armory-build-card-bg: #F9FAFB;
+  --armory-active-bg: rgba(0,200,176,0.08);
+  /* Code blocks stay dark even in light mode (editor convention) */
+  --armory-code-bg: #0d0d0d;
+  --armory-success: #10B981;
+  --armory-success-bg: #ECFDF5;
+  --armory-error: #EF4444;
+  --armory-error-bg: #FEF2F2;
+}
+
+/* Fonts */
+.armory-shell h1,
+.armory-shell h2,
+.armory-shell h3 {
+  font-family: 'Rajdhani', 'Space Grotesk', system-ui, -apple-system, sans-serif;
+}
+
+/* Scrollbars (dark-themed, subtle) */
+.armory-shell *::-webkit-scrollbar { width: 8px; height: 8px; }
+.armory-shell *::-webkit-scrollbar-thumb { background: var(--armory-border); border-radius: 2px; }
+.armory-shell *::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+.armory-shell *::-webkit-scrollbar-track { background: transparent; }
+
+/* Animations */
+.armory-shell .fade-in {
+  animation: armory-fade-in 150ms ease-out;
+}
+@keyframes armory-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes armory-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.0); }
+}
+
+/* React Flow background dark fix */
+.armory-shell .react-flow__handle { background: var(--armory-accent); }
+.armory-shell .react-flow__edge-path { stroke: var(--armory-border); }
+
+/* Responsive: bottom sheet on small screens (kept simple — preview becomes overlay) */
+@media (max-width: 1100px) {
+  .armory-shell [data-testid="armory-preview"] {
+    position: fixed !important;
+    inset: auto 0 0 0 !important;
+    width: 100% !important;
+    max-height: 70vh !important;
+    z-index: 40;
+    border-left: none !important;
+    border-top: 1px solid var(--armory-border) !important;
+  }
+}
+
+@media (max-width: 800px) {
+  .armory-shell [data-testid="armory-sidebar"] {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    z-index: 50;
+    height: 100% !important;
+  }
+}

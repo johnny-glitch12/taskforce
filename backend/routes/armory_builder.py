@@ -452,3 +452,41 @@ async def fork_project(project_id: str, user=Depends(get_current_user())):
     await db.bot_projects.insert_one(forked)
     forked.pop("_id", None)
     return {"success": True, "project_id": new_id, "project": forked}
+
+
+@router.post("/armory/bot-projects/{project_id}/test-run")
+async def test_run_project(project_id: str, user=Depends(get_current_user())):
+    """One-shot dry-run of a bot project's node DAG. Re-uses the existing
+    workflow executor (compute-credit gated). Returns success + final_output
+    + duration_ms so the Armory AgentActionBar can render the result inline."""
+    from routes.workflow_executor import execute_workflow_dag, _build_ctx, _log_run
+    from lib.compute_credits import check_compute_credits, increment_compute_usage
+
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    project = await db.bot_projects.find_one({"id": project_id, "user_id": user_id}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    if not project.get("nodes"):
+        raise HTTPException(status_code=400, detail="Project has no nodes to execute.")
+
+    credit_check = await check_compute_credits(db, user)
+    if credit_check.get("allowed") is False:
+        return credit_check
+
+    ctx = _build_ctx(db, user)
+    # The executor expects a workflow doc with `nodes` + `edges`; bot_projects already match that shape.
+    wf = {"id": project["id"], "nodes": project.get("nodes", []), "edges": project.get("edges", [])}
+    result = await execute_workflow_dag(wf, ctx)
+    await increment_compute_usage(db, user)
+    run_id = await _log_run(db, user_id, project_id, "bot_project", result)
+
+    return {
+        "success": bool(result["success"]),
+        "run_id": run_id,
+        "duration_ms": result["duration_ms"],
+        "output": result.get("final_output"),
+        "error": result.get("error"),
+        "node_results": result.get("node_results"),
+    }
+
