@@ -23,7 +23,16 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
-### Phase 45 (Feb, 2026) — Platform Keys Default + Silent BYOK Override
+### Phase 46 (Feb, 2026) — Smart Model Auto-Pick
+- **`POST /api/vibe/recommend-model`** — 1cr Gemini Flash classifier. Returns `{model, label, build_cost, reason, complexity: simple|medium|complex, credits_used, balance_remaining}`.
+- Picks one of the 6 catalogue models based on task complexity (simple text transforms → Flash/Mini/Haiku; complex multi-step research → Pro/Sonnet/4o; classification → Mini/Haiku).
+- Pydantic `Field(min_length=3, max_length=4000)` for the prompt → 422 on invalid input. 402 short-circuits insufficient-credit users BEFORE the LLM call so they don't burn tokens.
+- Defensive fallback: if the LLM output can't be parsed, returns `{model: gemini-2.5-flash, reason: 'Fast and cheap — good fit for most tasks.', complexity: medium}` — the endpoint never 500s.
+- `credit_transactions.ref = "recommend:<picked_model_id>"` for analytics distinguishability.
+- **Frontend**: `AUTO · 1cr` button (data-testid `vibe-auto-pick`) in the top bar, disabled when input is empty with helpful title. Inline hint banner (data-testid `auto-pick-hint`) shows uppercase complexity tag + AI reason. Auto-dismisses after 12s via `useEffect` cleanup (handles unmount safely). Loading spinner replaces the icon while the request is in flight.
+- **Verified live**: iter41 — backend 12/12 + frontend 100%. Main agent smoke-tested 3 prompts via curl: simple text → Flash, complex research → Pro, classification → Mini. Picks were sensible across all 3.
+
+
 - **Every model works for every user immediately.** Removed the 402 `BYOK_REQUIRED` gate from `/vibe/chat` and `/vibe/generate`. All 6 models (Gemini Flash/Pro, GPT-4o/Mini, Claude Sonnet/Haiku) front their call through the Emergent Universal Key by default — same key already handled Gemini, also routes OpenAI + Anthropic.
 - **Silent BYOK override** (`_resolve_api_key`): if the user has a stored credential in `byok_credentials` for the model's provider (openai or anthropic), the decrypted key fronts the call and `key_source="byok"` lands in the response. Otherwise platform key + `key_source="platform"`. Corrupted ciphertext falls through silently — never blocks the user.
 - **Model ID decoupling**: user-facing IDs (`claude-sonnet`, `claude-haiku`, etc.) stay stable in the API contract while internal `api_model` field maps to versioned provider IDs (`claude-sonnet-4-5-20250929`, `claude-haiku-4-5-20251001`). Fixed the prior bug where `claude-sonnet` was sent verbatim and rejected by Anthropic.

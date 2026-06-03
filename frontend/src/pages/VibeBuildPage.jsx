@@ -247,6 +247,13 @@ export default function VibeBuildPage() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
 
+  // Auto-dismiss the recommend-hint after 12s — cleanup on unmount or new pick.
+  useEffect(() => {
+    if (!autoPickHint) return undefined;
+    const t = setTimeout(() => setAutoPickHint(null), 12000);
+    return () => clearTimeout(t);
+  }, [autoPickHint]);
+
   const refreshSessions = async () => {
     const r = await fetch(`${API}/api/vibe/sessions`, { headers });
     const d = await r.json();
@@ -309,8 +316,6 @@ export default function VibeBuildPage() {
       setModel(data.model);
       setAutoPickHint({ model: data.model, reason: data.reason, complexity: data.complexity });
       toast.success(`Auto-picked ${data.label} (${data.complexity}) · -${data.credits_used}cr`);
-      // Auto-dismiss hint after 12s so it doesn't clutter the UI
-      setTimeout(() => setAutoPickHint(null), 12000);
     } catch {
       toast.error("Network error");
     } finally {
