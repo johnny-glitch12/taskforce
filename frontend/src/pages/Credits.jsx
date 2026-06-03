@@ -257,10 +257,10 @@ export default function Credits() {
           style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)" }}
         >
           <span className="uppercase tracking-[0.18em] text-[10px] t-text-dim mr-2">Total Available</span>
-          <span className="text-cyan-400 font-bold text-[14px]" data-testid="total-balance-value">
+          <span className="text-cyan-400 font-bold text-[14px] mr-1.5" data-testid="total-balance-value">
             {info.unlimited ? "∞" : info.balance.toLocaleString()}
           </span>
-          <span className="t-text-dim ml-1">credits</span>
+          <span className="t-text-dim">credits</span>
         </div>
 
         {/* Promo + Costs + Packs */}

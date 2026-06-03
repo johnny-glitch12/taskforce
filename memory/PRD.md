@@ -23,7 +23,34 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
-### Phase 41 (Feb, 2026) — Site-Wide Auth Lock + Coming Soon Landing
+### Phase 42 (Feb, 2026) — Dual-Pool Credit Wallet (Emergent-Style)
+- **Full rewrite of `lib/credit_wallet.py`**: split single `credit_balance` into two pools on the user doc:
+  - `subscription_credits` — monthly allocation, **resets each billing cycle**
+  - `subscription_credits_max` — current tier's allocation (for UI ring + reset target)
+  - `topup_credits` — purchased credits, **never expire**
+  - `credit_reset_date` — ISO timestamp of next monthly reset
+- **Deduction priority**: subscription pool consumed first, then topup. Atomic conditional `find_one_and_update` with both `$gte` guards + auto-retry on race conditions. Verified: bb9 split `2 sub + 3 topup` correctly when sub had 2 left.
+- **Action costs expanded 3 → 7**: `vibe_chat=0`, `build_bot=5`, `workflow_run=1`, `bot_deploy=0`, `agent_run=1`, `external_agent_run=2`, `publish_listing=0`. Free actions (`cost=0`) log a `virtual=false` ledger entry but no balance change.
+- **`reset_subscription(db, user, tier, days)` function**: sets `subscription_credits = subscription_credits_max = TIER_MONTHLY_GRANT[tier]`, bumps `credit_reset_date`, leaves `topup_credits` UNTOUCHED. Appends a `subscription_reset` ledger entry. Wired into the Stripe webhook for `tx.type=="subscription"`.
+- **`credit(db, user, amount, source, pool="topup")` extended with `pool` param**: defaults to "topup" (promos, top-up packs, admin grants). `"subscription"` is reserved for `reset_subscription`. All ledger entries record `pool` field.
+- **Legacy migration**: first read of any user with old `credit_balance` and no `subscription_credits` auto-splits — `min(balance, allocation) → sub`, remainder → topup, unsets the legacy field. Idempotent (won't re-run).
+- **Admin bypass**: returns `1e9` for both pools + `unlimited=true`. Admin debits log a `virtual=true` ledger entry without changing balances.
+- **Stripe webhook extended** (`routes/stripe_payments.py:154-205`): on `paid` event,
+  - `tx.type=="subscription"` → calls `reset_subscription(tier=tx.tier)` to grant the new tier's monthly allocation
+  - `tx.type=="credit_topup"` → calls `credit(pool="topup")` to add the pack's credits
+  - Both paths are idempotent via the `activated` flag on `payment_transactions`.
+- **Top-up checkout now persists `payment_transactions` row** so the webhook can find it (`type="credit_topup"`, `credits`, `activated=false`).
+- **Frontend `Credits.jsx` full rewrite**:
+  - `CircularRing` component for the subscription pool (SVG progress ring, color flips to rose at <10% with low-credit-warning banner)
+  - `TopupPoolCard` with amber accent + "Never expire" subtitle + ∞ icon
+  - Combined total bar below the two cards
+  - 7-row `ActionCostsList` with friendly labels and "free" / "N cr" coloring
+  - "How it works" inline callout explaining sub-first deduction
+  - Top-up pack tiles now show per-credit cost (`$0.025/credit` etc) below the headline credits
+  - Transaction rows annotated with pool breakdown — debits show `sub −2 · top −3`, credits show `→ topup`
+- **Verified live**: iter37 — backend 10/11 pytest pass (1 fail is unrelated LLM-budget exhaustion blocking `/armory/build-bot`); frontend 100% pass (all 12 testids render correctly for admin); legacy migration + reset preservation of topup + promo→topup + Stripe webhook imports all verified.
+
+
 - **Pre-launch gate**: entire site now hidden behind authentication when `REACT_APP_SITE_LOCKED=true`. Unauthenticated visitors see ONLY a dark cyber `ComingSoonLanding.jsx` page on every route except the auth flows.
 - **`AppShell` reorg** (`App.js`): 3-state decision tree
   - locked + unauth + non-auth route → `ComingSoonLanding` (no Navbar, no Footer)
