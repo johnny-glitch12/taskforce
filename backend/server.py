@@ -1964,6 +1964,9 @@ app.include_router(armory_builder_router, prefix="/api")
 from routes.credits_and_more import router as credits_and_more_router
 app.include_router(credits_and_more_router, prefix="/api")
 
+from routes.vibe_coding import router as vibe_router
+app.include_router(vibe_router, prefix="/api")
+
 # Mount uploads dir for exchange listing media (videos + photos)
 UPLOADS_DIR = Path(__file__).parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)

@@ -26,6 +26,7 @@ import ComingSoonLanding from "@/pages/ComingSoonLanding";
 import Credits from "@/pages/Credits";
 import MyDeployments from "@/pages/MyDeployments";
 import UsageMonitor from "@/pages/UsageMonitor";
+import VibeBuildPage from "@/pages/VibeBuildPage";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -241,6 +242,7 @@ function AppShell() {
             }
           />
           <Route path="/credits" element={<ProtectedRoute><Credits /></ProtectedRoute>} />
+          <Route path="/build" element={<ProtectedRoute><VibeBuildPage /></ProtectedRoute>} />
           <Route path="/my-deployments" element={<ProtectedRoute><MyDeployments /></ProtectedRoute>} />
           <Route path="/my-deployments/:id/monitor" element={<ProtectedRoute><UsageMonitor /></ProtectedRoute>} />
           <Route path="/deployments" element={<Navigate to="/my-deployments" replace />} />

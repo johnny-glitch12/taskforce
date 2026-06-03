@@ -1,10 +1,11 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/App";
 import { useTheme } from "@/lib/theme";
-import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, LogOut, Coins, Rocket } from "lucide-react";
+import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, LogOut, Coins, Rocket, Sparkles } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 const CENTER_LINKS_PUBLIC = [
+  { to: "/build", label: "Build", accent: true },
   { to: "/exchange", label: "The Exchange" },
   { to: "/armory", label: "The Armory", soon: true },
   { to: "/leaderboard", label: "Leaderboard", soon: true },
@@ -13,6 +14,7 @@ const CENTER_LINKS_PUBLIC = [
 ];
 
 const CENTER_LINKS_ADMIN = [
+  { to: "/build", label: "Build", accent: true },
   { to: "/exchange", label: "The Exchange" },
   { to: "/armory", label: "The Armory" },
   { to: "/leaderboard", label: "Leaderboard", soon: true },
@@ -150,9 +152,12 @@ export default function Navbar() {
               to={link.to}
               data-testid={`nav-link-${link.label.toLowerCase().replace(/\s/g, "-")}`}
               className={`px-3.5 py-1.5 text-[11px] tracking-[0.1em] uppercase font-medium font-mono transition-all duration-200 flex items-center gap-1.5 ${
-                location.pathname === link.to ? "text-cyan-400" : "text-zinc-500 hover:text-cyan-400"
+                link.accent
+                  ? (location.pathname === link.to ? "text-cyan-300 font-bold" : "text-cyan-400 hover:text-cyan-300 font-bold")
+                  : (location.pathname === link.to ? "text-cyan-400" : "text-zinc-500 hover:text-cyan-400")
               }`}
             >
+              {link.accent && <Sparkles size={9} className="text-cyan-400" />}
               {link.label}
               {link.soon && (
                 <span
@@ -160,6 +165,14 @@ export default function Navbar() {
                   style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)' }}
                 >
                   SOON
+                </span>
+              )}
+              {link.accent && (
+                <span
+                  className="px-1 py-0.5 text-[7px] tracking-[0.1em] font-bold rounded-sm text-cyan-300"
+                  style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.35)' }}
+                >
+                  NEW
                 </span>
               )}
             </Link>

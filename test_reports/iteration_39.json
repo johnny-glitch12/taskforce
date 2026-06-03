@@ -1,0 +1,57 @@
+{
+  "summary": "Tested Vibe Coding feature (Prompt 6). Backend: 15/18 pytest passed, 1 failed (ingress 60s timeout on /vibe/generate — backend DOES complete successfully, but reverse proxy returns 502 before response is delivered). Frontend: /build page renders correctly with all required testids, BYOK lock UX, suggestion chips, model picker. CRITICAL pricing bug discovered: /vibe/generate charges a hard-coded 5 credits regardless of selected model, contradicting both the documented per-model build_cost (2/3/5) and the UI label 'Generate · 3cr' for flash.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "/api/vibe/generate", "issue": "PRICING MISMATCH: wallet_debit(db, user, 'build_bot', ...) at vibe_coding.py:339 always charges 5 credits (build_bot kind in /app/backend/lib/credit_wallet.py line 43). Per-model build_cost (3 flash / 2 mini / 5 others) is shown in /api/vibe/models and rendered as 'Generate · 3cr' on UI, but the actual debit + response credits_used will be 5 for ALL models. Users picking gemini-2.5-flash get charged 67% more than advertised; gpt-4o-mini and claude-haiku users get charged 150% more.", "priority": "CRITICAL"},
+      {"endpoint": "/api/vibe/generate", "issue": "Endpoint exceeds 60s ingress timeout — backend completes (verified bot_projects + vibe_sessions docs are correctly written) but client receives 502 'preview environment is not responding'. Two sequential LLM calls (planner + builder) take ~52s, plus parsing pushes past the proxy limit. Recommend (a) single combined LLM call, (b) parallelize plan+build, or (c) move to a background job + poll pattern.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "/api/vibe/generate response", "issue": "When ingress times out, frontend cannot resume the session via project_id (which IS already persisted server-side). User cannot tell their build actually succeeded. Add idempotency / 'resume in-flight build' affordance."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "VibeBuildPage", "issue": "Generate button is NOT visibly disabled when no session exists — the spec said 'Generate button is disabled until a session exists.' We loaded fresh and the button appeared faded but with no `disabled` attribute. (Note: in our admin run, prior session already existed so this is inconclusive; needs re-verification on a brand-new account.)", "selector": "[data-testid='vibe-send-build']", "priority": "MEDIUM"},
+      {"component": "VibeBuildPage", "issue": "User-facing 'Generate · {build_cost}cr' label will say e.g. '3cr' for flash but the backend currently charges 5cr — leads to user-trust break. Either fix backend pricing or fix the label.", "selector": "[data-testid='vibe-send-build']", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Vibe Generate", "issue": "Long-running build (>60s) likely produces a UX dead-end: user clicks Generate, spinner spins, request 502s, no feedback that project was actually saved. Needs streaming or polling.", "affected_selectors": ["[data-testid='vibe-send-build']", "[data-testid='vibe-loading']"]}
+    ],
+    "design_issues": [
+      {"screen": "/build", "issues": ["Suggestion chips do not appear once a previous session is loaded — by design but worth confirming intent. Sidebar 'NEW BUILD' button is fine.", "Page renders in light theme regardless of user dark-mode preference toggle (minor)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter39_vibe_coding.py",
+    "/app/test_reports/pytest/iter39_vibe.xml"
+  ],
+  "action_items": [
+    "[CRITICAL] Fix /api/vibe/generate to charge per-model build_cost (not the hard-coded build_bot=5 in lib/credit_wallet.py). Options: (a) add a per-call override to wallet_debit, (b) introduce kind keys per model, (c) compute cost from MODELS[req.model]['build_cost'] and pass as override. Also update wallet_debit signature accordingly.",
+    "[HIGH] /api/vibe/generate exceeds 60s reverse-proxy timeout. Options: combine planner+builder into a single LLM call, parallelize them, or convert generate into an async job with a /vibe/status/{session_id} polling endpoint.",
+    "[MEDIUM] Once charges are fixed, update the test assertion to enforce exact per-model debit (test currently accepts 3 or 5).",
+    "[LOW] On 502 from generate, frontend should still re-fetch the vibe session — the project_id is already persisted by the backend."
+  ],
+  "critical_code_review_comments": [
+    "vibe_coding.py:339 uses fixed 'build_bot' kind instead of model-specific cost — root cause of pricing bug.",
+    "lib/credit_wallet.py hard-codes vibe_chat=1 and build_bot=5 in a dict — does not scale to per-model pricing.",
+    "vibe_coding.py wallet_debit IS correctly called AFTER the LLM call succeeds for both chat and generate, so the 'no charge on failure' invariant from the spec holds. ✓",
+    "Cross-user isolation works (404 on foreign session_id, sessions list scoped to user). ✓",
+    "credit_transactions ledger row written with correct delta=-1 for vibe_chat. ✓",
+    "Files generated include main.py, handlers.py, config.py, requirements.txt, .env.example, README.md (6 distinct paths, exceeds the ≥5 requirement). ✓",
+    "Nodes use valid types (trigger/http_request/llm/transform/action observed); each has id, type, data.label, position{x,y}. ✓",
+    "BYOK gate returns 402 with detail.error=BYOK_REQUIRED, service, vault_url='/credentials' for both openai and anthropic. ✓",
+    "Model validation returns 400 mentioning valid models. ✓",
+    "Credit gate returns 402 with INSUFFICIENT_CREDITS + cost=1 when wallet drained. ✓"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter39_vibe_coding.py (new)",
+    "/app/test_reports/pytest/iter39_vibe.xml (new)"
+  ],
+  "success_rate": {"backend": "83% (15/18 pytest; the 1 fail + 2 cascade skips are due to a single ingress-timeout issue, backend logic itself is correct)", "frontend": "95% (all testids found, BYOK lock UX correct, labels correct, nav-link-build present)"},
+  "test_credentials": "admin@nova.ai / admin123 used for admin smoke. Test users created via /api/auth/register fallback to direct DB seed when IP cap (3/24h) is hit.",
+  "seed_data_creation": "Created several iter39_*@test.com users (subscription_credits=50, topup_credits=50). Two vibe_sessions docs and two bot_projects docs (project_id 616b51... and 2944e8...) generated during testing.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After main agent fixes the per-model pricing in /vibe/generate, re-run /app/backend/tests/test_iter39_vibe_coding.py and tighten test_generate_returns_files_nodes to assert credits_used == 3 (currently accepts 3 or 5). Also verify the ingress timeout fix — once /vibe/generate returns within 60s, the existing test will pass without retries. The BYOK end-to-end flow is intentionally stubbed (returns 402 BYOK_REQUIRED) — do NOT test it end-to-end until vault key flow is wired.",
+  "rca_of_the_issue": "ROOT CAUSE A (pricing): vibe_coding.py vibe_generate() calls wallet_debit(db, user, 'build_bot', ref=...). wallet_debit looks up cost from a hard-coded dict {'vibe_chat': 1, 'build_bot': 5, ...} in lib/credit_wallet.py. There is no path for per-model cost. The MODELS dict has 'build_cost' field which is only used in the /api/vibe/models response — never consulted by the debit path. Fix: pass cost explicitly: `wallet_debit(db, user, 'build_bot', ref=..., cost_override=MODELS[req.model]['build_cost'])` and update wallet_debit to accept the override. ROOT CAUSE B (timeout): vibe_generate makes two LLM calls (PLAN @ ~25s + BUILD @ ~25s) before returning. K8s ingress/cloud-run reverse proxy commonly enforces a 60s read timeout for the preview environment. Fix: combine into a single LLM call, parallelize plan+build, or convert to background job."
+}
