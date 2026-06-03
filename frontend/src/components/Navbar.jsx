@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/App";
 import { useTheme } from "@/lib/theme";
-import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, LogOut, Coins, Rocket, Sparkles, Package, Server } from "lucide-react";
+import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, LogOut, Coins, Rocket, Sparkles, Package, Server, Banknote } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import NotificationBell from "@/components/NotificationBell";
 
@@ -42,6 +42,7 @@ function UserMenu({ user, logout, navigate }) {
     { to: "/my-deployments", label: "My Deployments", icon: Rocket },
     { to: "/external-agents", label: "External Agents", icon: Package },
     { to: "/hosting", label: "Hosting Plans", icon: Server },
+    { to: "/payouts", label: "Payouts", icon: Banknote },
     ...(isAdmin ? [
       { to: "/overwatch", label: "Overwatch", icon: BarChart3, accent: true },
       { to: "/security", label: "Security", icon: Shield },

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { CheckCircle2, XCircle, Loader2, Server } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, Server, Target } from "lucide-react";
 import { useAuth } from "@/App";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -8,11 +8,12 @@ const API = process.env.REACT_APP_BACKEND_URL;
 export default function PaymentSuccess() {
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get("session_id");
-  const type = searchParams.get("type"); // "hosting" | "subscription" | undefined
+  const type = searchParams.get("type"); // "hosting" | "bounty" | "subscription" | undefined
   const { token } = useAuth() || {};
   const [status, setStatus] = useState("loading");
   const [data, setData] = useState(null);
   const [hostingSub, setHostingSub] = useState(null);
+  const [bounty, setBounty] = useState(null);
 
   useEffect(() => {
     if (!sessionId) { setStatus("error"); return; }
@@ -41,6 +42,19 @@ export default function PaymentSuccess() {
               }
             } catch { /* surfaced via the success card anyway */ }
           }
+          // For cash-bounty checkouts, flip the bounty to status=open + escrow=held.
+          if (type === "bounty" && token && d.bounty_id) {
+            try {
+              const aRes = await fetch(`${API}/api/bounties/${d.bounty_id}/activate`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (aRes.ok) {
+                const aBody = await aRes.json();
+                setBounty(aBody.bounty);
+              }
+            } catch { /* surfaced via the success card anyway */ }
+          }
           setStatus("success");
           return;
         }
@@ -57,6 +71,13 @@ export default function PaymentSuccess() {
     poll();
   }, [sessionId, type, token]);
 
+  const successTitle = type === "hosting"
+    ? "Hosting Plan Activated"
+    : type === "bounty"
+      ? "Bounty Funded"
+      : "Payment Successful";
+  const SuccessIcon = type === "hosting" ? Server : type === "bounty" ? Target : CheckCircle2;
+
   return (
     <div className="min-h-[calc(100vh-60px)] flex items-center justify-center px-6">
       <div className="fixed top-[20%] left-1/2 -translate-x-1/2 w-[400px] h-[400px] rounded-sm bg-cyan-400/[0.06] blur-[100px] pointer-events-none" />
@@ -71,14 +92,13 @@ export default function PaymentSuccess() {
         {status === "success" && (
           <>
             <div className="w-16 h-16 rounded-sm bg-emerald-500/10 flex items-center justify-center mx-auto mb-5">
-              {type === "hosting"
-                ? <Server size={32} className="text-emerald-400" />
-                : <CheckCircle2 size={32} className="text-emerald-400" />}
+              <SuccessIcon size={32} className="text-emerald-400" />
             </div>
             <h2 data-testid="payment-success-title" className="text-xl font-semibold text-white mb-2" style={{ fontFamily: "'Outfit', sans-serif" }}>
-              {type === "hosting" ? "Hosting Plan Activated" : "Payment Successful"}
+              {successTitle}
             </h2>
-            {type === "hosting" ? (
+
+            {type === "hosting" && (
               <>
                 <p className="text-[13px] text-zinc-500 mb-1" data-testid="hosting-success-detail">
                   {hostingSub?.tier_meta?.label || "Your hosting plan"} is now active.
@@ -97,7 +117,34 @@ export default function PaymentSuccess() {
                   </Link>
                 </div>
               </>
-            ) : (
+            )}
+
+            {type === "bounty" && (
+              <>
+                <p className="text-[13px] text-zinc-500 mb-1" data-testid="bounty-success-detail">
+                  {bounty?.title ? <strong className="text-zinc-300">{bounty.title}</strong> : "Your cash bounty"} is now open for submissions.
+                </p>
+                <p className="text-[12px] text-zinc-600 mb-6 font-mono">
+                  ${data?.amount != null ? (data.amount / 100).toFixed(2) : Number(bounty?.reward_amount || 0).toFixed(2)} held in Stripe escrow.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  {bounty?.id ? (
+                    <Link to={`/bounties/${bounty.id}`} data-testid="go-to-bounty-btn" className="flex-1 py-3 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all text-center">
+                      View bounty
+                    </Link>
+                  ) : (
+                    <Link to="/bounties" data-testid="back-to-bounties-btn" className="flex-1 py-3 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all text-center">
+                      Bounty Board
+                    </Link>
+                  )}
+                  <Link to="/bounties" className="flex-1 py-3 bg-white/[0.06] text-white text-[13px] font-medium rounded-sm border border-white/[0.08] hover:bg-white/[0.1] transition-all text-center">
+                    All Bounties
+                  </Link>
+                </div>
+              </>
+            )}
+
+            {(type !== "hosting" && type !== "bounty") && (
               <>
                 <p className="text-[13px] text-zinc-500 mb-1">
                   {data?.agent_name && <><strong className="text-zinc-300">{data.agent_name}</strong> — </>}
@@ -127,8 +174,8 @@ export default function PaymentSuccess() {
             <p className="text-[13px] text-zinc-500 mb-6">
               {status === "expired" ? "Your payment session has expired. Please try again." : "We couldn't verify your payment. Please try again or contact support."}
             </p>
-            <Link to="/marketplace" className="inline-block py-3 px-8 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all">
-              Back to Marketplace
+            <Link to={type === "bounty" ? "/bounties" : "/marketplace"} className="inline-block py-3 px-8 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all">
+              {type === "bounty" ? "Back to Bounties" : "Back to Marketplace"}
             </Link>
           </>
         )}

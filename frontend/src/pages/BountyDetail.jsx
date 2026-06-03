@@ -8,7 +8,7 @@ import {
   CheckCircle2, AlertTriangle, Coins, X, ExternalLink,
 } from "lucide-react";
 import SubmitToBountyModal from "@/components/SubmitToBountyModal";
-import { fmtRemaining } from "@/pages/BountyBoard";
+import { fmtRemaining, fmtReward } from "@/pages/BountyBoard";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -52,7 +52,11 @@ export default function BountyDetail() {
   useEffect(() => { refresh(); /* eslint-disable-next-line */ }, [id]);
 
   async function award(sub) {
-    if (!window.confirm(`Award ${b.reward_amount} credits to ${sub.creator_name} for "${sub.agent_label}"?`)) return;
+    const isCash = b.reward_type === "cash";
+    const rewardLabel = isCash
+      ? `$${Number(b.reward_amount).toFixed(2)} USD`
+      : `${b.reward_amount} credits`;
+    if (!window.confirm(`Award ${rewardLabel} to ${sub.creator_name} for "${sub.agent_label}"?`)) return;
     setAwarding(sub.id);
     try {
       const r = await fetch(`${API}/api/bounties/${id}/award`, {
@@ -61,8 +65,19 @@ export default function BountyDetail() {
         body: JSON.stringify({ submission_id: sub.id }),
       });
       const body = await r.json();
-      if (!r.ok) { toast.error(body.detail || "Award failed"); return; }
-      toast.success(`Awarded ${b.reward_amount} cr to ${sub.creator_name}!`);
+      if (!r.ok) {
+        // Winner-not-onboarded case → structured error with onboarding URL.
+        if (r.status === 409 && body.detail?.error === "WINNER_PAYOUTS_NOT_READY") {
+          toast.error(
+            `${sub.creator_name} hasn't completed Stripe payout setup yet. Ask them to visit /payouts before awarding.`,
+            { duration: 6000 },
+          );
+          return;
+        }
+        toast.error(typeof body.detail === "string" ? body.detail : "Award failed");
+        return;
+      }
+      toast.success(`Awarded ${rewardLabel} to ${sub.creator_name}!`);
       refresh();
     } catch (e) {
       toast.error(e.message);
@@ -72,13 +87,18 @@ export default function BountyDetail() {
   }
 
   async function cancel() {
-    if (!window.confirm("Cancel this bounty? Your escrow will be fully refunded.")) return;
+    const isCash = b.reward_type === "cash";
+    const verb = isCash ? "fully refunded via Stripe" : "fully refunded to your credit wallet";
+    if (!window.confirm(`Cancel this bounty? Your escrow will be ${verb}.`)) return;
     setCancelling(true);
     try {
       const r = await fetch(`${API}/api/bounties/${id}/cancel`, { method: "POST", headers: auth });
       const body = await r.json();
-      if (!r.ok) { toast.error(body.detail || "Cancel failed"); return; }
-      toast.success(`Cancelled — ${body.refunded} cr refunded.`);
+      if (!r.ok) { toast.error(typeof body.detail === "string" ? body.detail : "Cancel failed"); return; }
+      const refundLabel = body.reward_type === "cash"
+        ? `$${Number(body.refunded).toFixed(2)}`
+        : `${body.refunded} cr`;
+      toast.success(`Cancelled — ${refundLabel} refunded.`);
       refresh();
     } catch (e) { toast.error(e.message); }
     finally { setCancelling(false); }
@@ -123,10 +143,17 @@ export default function BountyDetail() {
               </div>
             </div>
             <div className="text-right">
-              <div className="text-[10px] uppercase tracking-[0.15em] font-mono t-text-dim mb-1">Reward</div>
-              <div className="text-4xl font-bold text-cyan-400 leading-none">
-                {b.reward_amount.toLocaleString()}<span className="text-sm t-text-mute ml-2">cr</span>
+              <div className="text-[10px] uppercase tracking-[0.15em] font-mono t-text-dim mb-1">
+                Reward {b.reward_type === "cash" ? "(USD)" : "(credits)"}
               </div>
+              {(() => {
+                const r = fmtReward(b);
+                return (
+                  <div className="text-4xl font-bold leading-none" style={{ color: r.color }}>
+                    {r.value}<span className="text-sm t-text-mute ml-2">{r.unit}</span>
+                  </div>
+                );
+              })()}
               {b.status === "open" && (
                 <div className="text-xs t-text-mute mt-2 inline-flex items-center gap-1 justify-end">
                   <Clock size={11} /> Ends in {fmtRemaining(b.seconds_remaining)}
@@ -280,9 +307,13 @@ function SmallBlock({ label, content, testid }) {
   );
 }
 
-function SubmissionRow({ s, isPoster, bountyStatus, rewardAmount, onAward, awarding, isAdmin }) {
+function SubmissionRow({ s, isPoster, bountyStatus, rewardAmount, rewardType, onAward, awarding, isAdmin }) {
   const isWinner = s.status === "winner";
   const isRejected = s.status === "rejected";
+  const isCash = rewardType === "cash";
+  const awardLabel = isCash
+    ? `Award $${Number(rewardAmount).toFixed(2)}`
+    : `Award ${rewardAmount} cr`;
   return (
     <div
       data-testid={`submission-${s.id}`}
@@ -324,7 +355,7 @@ function SubmissionRow({ s, isPoster, bountyStatus, rewardAmount, onAward, award
             className="px-4 py-2 rounded-sm text-xs font-mono uppercase tracking-[0.15em] inline-flex items-center gap-2 shrink-0"
             style={{ background: "#22d3ee", color: "#0a0e1a", opacity: awarding ? 0.5 : 1 }}
           >
-            {awarding ? <><Loader2 size={11} className="animate-spin" /> Awarding…</> : <><Trophy size={11} /> Award {rewardAmount} cr</>}
+            {awarding ? <><Loader2 size={11} className="animate-spin" /> Awarding…</> : <><Trophy size={11} /> {awardLabel}</>}
           </button>
         )}
         {s.agent_source === "exchange" && (

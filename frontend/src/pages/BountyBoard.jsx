@@ -47,11 +47,18 @@ export function fmtRemaining(seconds) {
   return `${h}h ${m}m`;
 }
 
+export function fmtReward(b) {
+  if (b?.reward_type === "cash") {
+    return { value: `$${Number(b.reward_amount || 0).toFixed(2)}`, unit: "USD", color: "#22c55e" };
+  }
+  return { value: Number(b?.reward_amount || 0).toLocaleString(), unit: "cr", color: "#22d3ee" };
+}
+
 export default function BountyBoard() {
   const { token, user } = useAuth() || {};
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
-  const [stats, setStats] = useState({ active: 0, awarded_count: 0, credits_paid_out: 0 });
+  const [stats, setStats] = useState({ active: 0, awarded_count: 0, credits_paid_out: 0, cash_paid_out: 0 });
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("all");
   const [status, setStatus] = useState("all");
@@ -68,7 +75,7 @@ export default function BountyBoard() {
       const r = await fetch(url.toString());
       const body = await r.json();
       setItems(body.items || []);
-      setStats(body.stats || { active: 0, awarded_count: 0, credits_paid_out: 0 });
+      setStats(body.stats || { active: 0, awarded_count: 0, credits_paid_out: 0, cash_paid_out: 0 });
     } catch (e) {
       console.error("bounty list failed:", e);
     } finally {
@@ -109,10 +116,11 @@ export default function BountyBoard() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mt-6 mb-8">
           <StatTile icon={Target} label="Active bounties" value={stats.active} accent="#22d3ee" testid="stat-active" />
           <StatTile icon={Trophy} label="Total awarded" value={stats.awarded_count} accent="#a855f7" testid="stat-awarded" />
           <StatTile icon={Sparkles} label="Credits paid out" value={`${stats.credits_paid_out.toLocaleString()} cr`} accent="#fbbf24" testid="stat-paid" />
+          <StatTile icon={Sparkles} label="Cash paid out" value={`$${Number(stats.cash_paid_out || 0).toFixed(2)}`} accent="#22c55e" testid="stat-cash-paid" />
         </div>
 
         {/* Filters */}
@@ -261,7 +269,14 @@ function BountyCard({ b }) {
       <div className="flex items-end justify-between gap-2">
         <div>
           <div className="text-[9px] uppercase tracking-[0.15em] font-mono t-text-dim mb-0.5">Reward</div>
-          <div className="text-2xl font-bold text-cyan-400 leading-none">{b.reward_amount.toLocaleString()}<span className="text-xs t-text-mute ml-1">cr</span></div>
+          {(() => {
+            const r = fmtReward(b);
+            return (
+              <div className="text-2xl font-bold leading-none" style={{ color: r.color }}>
+                {r.value}<span className="text-xs t-text-mute ml-1">{r.unit}</span>
+              </div>
+            );
+          })()}
         </div>
         <div className="text-right">
           <div className="text-[9px] uppercase tracking-[0.15em] font-mono t-text-dim mb-0.5 inline-flex items-center gap-1 justify-end">

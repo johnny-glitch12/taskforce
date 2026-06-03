@@ -2,7 +2,9 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/App";
 import { toast } from "sonner";
-import { X, Loader2, Target, Coins, AlertTriangle } from "lucide-react";
+import {
+  X, Loader2, Target, Coins, AlertTriangle, Banknote, ExternalLink,
+} from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -23,8 +25,12 @@ const INTEGRATIONS_LIB = [
   "typeform", "notion", "airtable", "supabase", "hubspot",
 ];
 
+const MIN_CASH = 10;
+const MAX_CASH = 10_000;
+
 export default function PostBountyModal({ onClose, onPosted }) {
   const { token } = useAuth() || {};
+  const [rewardType, setRewardType] = useState("credits"); // 'credits' | 'cash'
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -33,7 +39,8 @@ export default function PostBountyModal({ onClose, onPosted }) {
     input_expectations: "",
     output_expectations: "",
     example_use_case: "",
-    reward_amount: 500,
+    reward_amount: 500,        // credits
+    cash_amount_usd: 50,       // USD
     deadline_days: 7,
     max_submissions: 10,
   });
@@ -57,13 +64,33 @@ export default function PostBountyModal({ onClose, onPosted }) {
     }));
   }
 
-  const canAfford = balance == null || balance >= form.reward_amount;
+  const canAffordCredits = balance == null || balance >= form.reward_amount;
+  const cashAmount = Math.max(MIN_CASH, Math.min(MAX_CASH, Number(form.cash_amount_usd) || 0));
 
   async function submit() {
     if (form.title.trim().length < 8) { toast.error("Title must be at least 8 characters"); return; }
     if (form.description.trim().length < 20) { toast.error("Description must be at least 20 characters"); return; }
-    if (form.reward_amount < 50) { toast.error("Reward must be at least 50 credits"); return; }
-    if (!canAfford) { toast.error(`Not enough credits — you have ${balance}`); return; }
+
+    let payload;
+    if (rewardType === "credits") {
+      if (form.reward_amount < 50) { toast.error("Reward must be at least 50 credits"); return; }
+      if (!canAffordCredits) { toast.error(`Not enough credits — you have ${balance}`); return; }
+      payload = {
+        ...form,
+        reward_type: "credits",
+        reward_amount: form.reward_amount,
+      };
+    } else {
+      if (cashAmount < MIN_CASH) { toast.error(`Cash bounties must be at least $${MIN_CASH}`); return; }
+      payload = {
+        ...form,
+        reward_type: "cash",
+        cash_amount_usd: cashAmount,
+        reward_amount: 0,
+        origin_url: window.location.origin,
+      };
+    }
+
     setSubmitting(true);
     try {
       const r = await fetch(`${API}/api/bounties`, {
@@ -72,12 +99,17 @@ export default function PostBountyModal({ onClose, onPosted }) {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       const body = await r.json();
       if (!r.ok) {
         const msg = body.detail?.message || body.detail || `Failed (${r.status})`;
         toast.error(typeof msg === "string" ? msg : "Failed to post bounty");
+        return;
+      }
+      if (rewardType === "cash" && body.checkout_url) {
+        // Hand off to Stripe Checkout — frontend resumes at /payment/success?type=bounty.
+        window.location.href = body.checkout_url;
         return;
       }
       onPosted?.(body.bounty);
@@ -230,41 +262,100 @@ export default function PostBountyModal({ onClose, onPosted }) {
             background: "linear-gradient(180deg, #22d3ee0a, var(--bg-input))",
             border: "1px solid #22d3ee44",
           }}>
-            <div className="text-[10px] uppercase tracking-[0.18em] font-mono t-text-dim mb-2 inline-flex items-center gap-1.5">
+            <div className="text-[10px] uppercase tracking-[0.18em] font-mono t-text-dim mb-3 inline-flex items-center gap-1.5">
               <Coins size={11} /> Reward (held in escrow)
             </div>
-            <div className="flex items-center gap-3 mb-3">
-              <div className="flex-1">
-                <input
-                  data-testid="bounty-reward-input"
-                  type="number"
-                  min={50}
-                  max={1000000}
-                  step={50}
-                  value={form.reward_amount}
-                  onChange={(e) => updateField("reward_amount", Math.max(50, parseInt(e.target.value, 10) || 50))}
-                  className="w-full px-3 py-2 text-2xl font-bold text-cyan-400 rounded-sm outline-none"
-                  style={{ background: "var(--bg-input)", border: "1px solid var(--border)" }}
-                />
-              </div>
-              <span className="text-sm t-text-mute font-mono">credits</span>
+
+            {/* Reward type toggle */}
+            <div className="grid grid-cols-2 gap-2 mb-4" data-testid="reward-type-toggle">
               <button
-                disabled
-                className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.12em] rounded-sm opacity-50 cursor-not-allowed"
-                style={{ background: "transparent", color: "var(--text-mute)", border: "1px dashed var(--border)" }}
-                title="Cash bounties coming soon"
+                type="button"
+                data-testid="reward-type-credits"
+                onClick={() => setRewardType("credits")}
+                className="py-2 text-[11px] font-mono uppercase tracking-[0.12em] rounded-sm inline-flex items-center justify-center gap-2 transition-all"
+                style={{
+                  background: rewardType === "credits" ? "#22d3ee" : "var(--bg-input)",
+                  color: rewardType === "credits" ? "#0a0e1a" : "var(--text-mute)",
+                  border: `1px solid ${rewardType === "credits" ? "#22d3ee" : "var(--border)"}`,
+                }}
               >
-                Cash · soon
+                <Coins size={11} /> Credits
+              </button>
+              <button
+                type="button"
+                data-testid="reward-type-cash"
+                onClick={() => setRewardType("cash")}
+                className="py-2 text-[11px] font-mono uppercase tracking-[0.12em] rounded-sm inline-flex items-center justify-center gap-2 transition-all"
+                style={{
+                  background: rewardType === "cash" ? "#22c55e" : "var(--bg-input)",
+                  color: rewardType === "cash" ? "#0a0e1a" : "var(--text-mute)",
+                  border: `1px solid ${rewardType === "cash" ? "#22c55e" : "var(--border)"}`,
+                }}
+              >
+                <Banknote size={11} /> Cash · USD
               </button>
             </div>
-            <div className="flex items-center justify-between text-[10px] font-mono">
-              <span className="t-text-dim">Your balance: <span className="t-text">{balance != null ? balance.toLocaleString() : "—"}</span> cr</span>
-              {!canAfford && (
-                <span className="text-rose-400 inline-flex items-center gap-1">
-                  <AlertTriangle size={10} /> Top up needed
-                </span>
-              )}
-            </div>
+
+            {rewardType === "credits" ? (
+              <>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="flex-1">
+                    <input
+                      data-testid="bounty-reward-input"
+                      type="number"
+                      min={50}
+                      max={1000000}
+                      step={50}
+                      value={form.reward_amount}
+                      onChange={(e) => updateField("reward_amount", Math.max(50, parseInt(e.target.value, 10) || 50))}
+                      className="w-full px-3 py-2 text-2xl font-bold text-cyan-400 rounded-sm outline-none"
+                      style={{ background: "var(--bg-input)", border: "1px solid var(--border)" }}
+                    />
+                  </div>
+                  <span className="text-sm t-text-mute font-mono">credits</span>
+                </div>
+                <div className="flex items-center justify-between text-[10px] font-mono">
+                  <span className="t-text-dim">Your balance: <span className="t-text">{balance != null ? balance.toLocaleString() : "—"}</span> cr</span>
+                  {!canAffordCredits && (
+                    <span className="text-rose-400 inline-flex items-center gap-1">
+                      <AlertTriangle size={10} /> Top up needed
+                    </span>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-2xl font-bold text-green-400 font-mono">$</span>
+                  <div className="flex-1">
+                    <input
+                      data-testid="bounty-cash-input"
+                      type="number"
+                      min={MIN_CASH}
+                      max={MAX_CASH}
+                      step={10}
+                      value={form.cash_amount_usd}
+                      onChange={(e) => updateField("cash_amount_usd", parseFloat(e.target.value) || MIN_CASH)}
+                      className="w-full px-3 py-2 text-2xl font-bold text-green-400 rounded-sm outline-none"
+                      style={{ background: "var(--bg-input)", border: "1px solid var(--border)" }}
+                    />
+                  </div>
+                  <span className="text-sm t-text-mute font-mono">USD</span>
+                </div>
+                <div className="text-[10px] font-mono t-text-dim leading-relaxed">
+                  You&apos;ll be redirected to <span className="t-text">Stripe Checkout</span> after submit.
+                  Funds are held in Stripe escrow and released to the winner&apos;s
+                  Stripe Connect account on award (100% pass-through — no platform fee for v1).{" "}
+                  <a href="/payouts" target="_blank" rel="noopener noreferrer"
+                     className="text-cyan-400 hover:underline inline-flex items-center gap-1">
+                    Creator setup <ExternalLink size={9} />
+                  </a>
+                </div>
+                <div className="text-[10px] font-mono t-text-dim mt-2">
+                  Range: ${MIN_CASH} – ${MAX_CASH.toLocaleString()}
+                </div>
+              </>
+            )}
           </div>
 
           <Field label="Max submissions" hint="Cap on how many creators can submit (1–50)">
@@ -285,7 +376,9 @@ export default function PostBountyModal({ onClose, onPosted }) {
         <div className="p-5 border-t border-[color:var(--border)] sticky bottom-0" style={{ background: "var(--bg-card)" }}>
           <div className="flex items-center justify-between gap-3">
             <span className="text-[10px] t-text-dim font-mono">
-              {form.reward_amount.toLocaleString()} credits will be held in escrow on submit.
+              {rewardType === "credits"
+                ? `${form.reward_amount.toLocaleString()} credits will be held in escrow on submit.`
+                : `$${cashAmount.toFixed(2)} will be charged via Stripe and held in escrow.`}
             </span>
             <div className="flex gap-2">
               <button
@@ -298,16 +391,20 @@ export default function PostBountyModal({ onClose, onPosted }) {
               <button
                 data-testid="bounty-submit-btn"
                 onClick={submit}
-                disabled={submitting || !canAfford}
+                disabled={submitting || (rewardType === "credits" && !canAffordCredits)}
                 className="px-5 py-2 rounded-sm text-xs font-mono uppercase tracking-[0.15em] inline-flex items-center gap-2"
                 style={{
-                  background: canAfford ? "#22d3ee" : "var(--bg-input)",
-                  color: canAfford ? "#0a0e1a" : "var(--text-mute)",
+                  background: rewardType === "cash"
+                    ? "#22c55e"
+                    : (canAffordCredits ? "#22d3ee" : "var(--bg-input)"),
+                  color: rewardType === "cash" || canAffordCredits ? "#0a0e1a" : "var(--text-mute)",
                   opacity: submitting ? 0.5 : 1,
-                  cursor: canAfford ? "pointer" : "not-allowed",
+                  cursor: (rewardType === "credits" && !canAffordCredits) ? "not-allowed" : "pointer",
                 }}
               >
-                {submitting ? <><Loader2 size={11} className="animate-spin" /> Posting…</> : "Post bounty"}
+                {submitting
+                  ? <><Loader2 size={11} className="animate-spin" /> {rewardType === "cash" ? "Redirecting…" : "Posting…"}</>
+                  : (rewardType === "cash" ? "Continue to Stripe →" : "Post bounty")}
               </button>
             </div>
           </div>

@@ -122,6 +122,8 @@ async def get_payment_status(session_id: str, request: Request):
         "agent_id": tx.get("agent_id"),
         "agent_name": tx.get("agent_name"),
         "plan": tx.get("plan"),
+        "type": tx.get("type"),
+        "bounty_id": tx.get("bounty_id"),
     }
 
 

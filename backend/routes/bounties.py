@@ -426,9 +426,10 @@ async def list_bounties(
         if status not in VALID_STATUS:
             raise HTTPException(status_code=400, detail="invalid status")
         q["status"] = status
-    # If no explicit status filter, hide cancelled rows from the public feed.
+    # If no explicit status filter, hide cancelled + pending_payment from the
+    # public feed (the latter is still visible to the poster via /my-posted).
     if "status" not in q:
-        q["status"] = {"$nin": ["cancelled"]}
+        q["status"] = {"$nin": ["cancelled", "pending_payment"]}
 
     sort_map = {
         "newest": [("created_at", -1)],
@@ -448,7 +449,22 @@ async def list_bounties(
             "active": {"$sum": {"$cond": [{"$eq": ["$status", "open"]}, 1, 0]}},
             "awarded_count": {"$sum": {"$cond": [{"$eq": ["$status", "awarded"]}, 1, 0]}},
             "credits_paid_out": {"$sum": {
-                "$cond": [{"$eq": ["$status", "awarded"]}, "$reward_amount", 0],
+                "$cond": [
+                    {"$and": [
+                        {"$eq": ["$status", "awarded"]},
+                        {"$ne": ["$reward_type", "cash"]},
+                    ]},
+                    "$reward_amount", 0,
+                ],
+            }},
+            "cash_paid_out": {"$sum": {
+                "$cond": [
+                    {"$and": [
+                        {"$eq": ["$status", "awarded"]},
+                        {"$eq": ["$reward_type", "cash"]},
+                    ]},
+                    "$reward_amount", 0,
+                ],
             }},
         }},
     ]).to_list(length=1)
@@ -462,6 +478,7 @@ async def list_bounties(
             "active": int(s.get("active") or 0),
             "awarded_count": int(s.get("awarded_count") or 0),
             "credits_paid_out": int(s.get("credits_paid_out") or 0),
+            "cash_paid_out": float(s.get("cash_paid_out") or 0.0),
         },
     }
 
