@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { ArrowRight, Users, Play, Zap, Shield, Terminal, Globe, Code2, GitBranch, Lock } from "lucide-react";
 import { motion, useInView, useScroll, useTransform } from "framer-motion";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 /* ─── Scroll-triggered section wrapper ─── */
 function Reveal({ children, delay = 0, className = "" }) {

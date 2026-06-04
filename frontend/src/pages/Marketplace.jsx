@@ -9,7 +9,7 @@ import {
   Headphones, BarChart3, Code2, Palette, DollarSign, MessageSquare,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 const categories = [
   { id: "all", label: "All Agents", icon: Sparkles },
@@ -256,7 +256,7 @@ export default function Marketplace() {
       const isFree = (parseFloat(agent.price) || 0) === 0 && (parseFloat(agent.buy_price) || 0) === 0;
       const endpoint = isFree ? "/api/deployments/free" : "/api/deployments/checkout";
       try {
-        const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}${endpoint}`, {
+        const res = await fetch(`${process.env.REACT_APP_BACKEND_URL || ""}${endpoint}`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify({ listing_id: agent.id, mode: isFree ? "free" : "rent" }),

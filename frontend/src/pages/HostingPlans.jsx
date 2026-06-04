@@ -6,7 +6,7 @@ import {
   Check, Sparkles, Infinity as InfinityIcon, Clock,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 const ACCENT = {
   starter: "#94a3b8",

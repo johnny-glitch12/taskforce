@@ -6,7 +6,7 @@ import {
   X, Loader2, Target, Coins, AlertTriangle, Banknote, ExternalLink,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 const CATEGORIES = [
   { id: "customer_support", label: "Customer Support" },

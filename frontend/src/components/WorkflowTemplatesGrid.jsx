@@ -6,7 +6,7 @@ import {
   ChevronRight, Loader2, X,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 /**
  * WorkflowTemplatesGrid — Sidebar panel that lists translated n8n templates

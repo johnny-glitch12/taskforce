@@ -28,7 +28,7 @@ import {
 
 import { useAgentTerminal } from "../hooks/useAgentTerminal";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 // Bridge from catalog `icon` string → real lucide component
 const ICON_MAP = {

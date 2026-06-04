@@ -4,7 +4,7 @@ import { useAuth } from "@/App";
 import { toast } from "sonner";
 import { Key, Plus, Copy, Trash2, AlertTriangle, Code2, BookOpen, Loader2 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 export default function ApiKeys() {
   const { token } = useAuth() || {};

@@ -10,7 +10,7 @@ import {
 
 import { parseComputeLimit, ComputeLimitModal } from "@/components/ComputeLimitModal";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 /* ─── Published Agents Tab (merged Creator Hub) ─── */
 function PublishedAgentsTab({ token }) {

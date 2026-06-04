@@ -7,7 +7,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/App";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 function StatCard({ label, value, sub, accent = "#22d3ee", icon: Icon, testid }) {
   return (

@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import SyncSessionModal from "./SyncSessionModal";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 /* ─── Theme tokens ─── */
 const T = {

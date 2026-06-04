@@ -4,7 +4,7 @@ import { useAuth } from "@/App";
 import { toast } from "sonner";
 import { Star, MessageSquare, Trash2, Reply, Loader2, CheckCircle2 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 export default function ReviewsPanel({ listingId, ownerUserId }) {
   const { token, user } = useAuth() || {};

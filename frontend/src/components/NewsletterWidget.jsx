@@ -2,7 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Mail, Loader2, CheckCircle2 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 export default function NewsletterWidget() {
   const [email, setEmail] = useState("");

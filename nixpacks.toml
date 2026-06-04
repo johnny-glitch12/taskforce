@@ -1,0 +1,28 @@
+# ────────────────────────────────────────────────────────────────────────────
+# Nixpacks build (alternative to Dockerfile — Railway picks whichever exists,
+# preferring the Dockerfile when both are present).
+# ────────────────────────────────────────────────────────────────────────────
+
+[phases.setup]
+nixPkgs = ["python311", "gcc", "nodejs_20", "yarn", "libffi", "libmagic"]
+
+[phases.frontend]
+dependsOn = ["setup"]
+cmds = [
+    "cd frontend && yarn install --frozen-lockfile && CI=false GENERATE_SOURCEMAP=false PUBLIC_URL=/spa yarn build",
+    "mkdir -p backend/spa && cp -r frontend/build/. backend/spa/"
+]
+
+[phases.install]
+dependsOn = ["setup"]
+cmds = ["pip install --no-cache-dir -r backend/requirements.txt"]
+
+[start]
+cmd = "bash scripts/start.sh"
+
+[variables]
+PYTHONUNBUFFERED = "1"
+PYTHONDONTWRITEBYTECODE = "1"
+PYTHONPATH = "/app/backend"
+GENERATE_SOURCEMAP = "false"
+DISABLE_ESLINT_PLUGIN = "true"

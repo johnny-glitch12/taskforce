@@ -1,0 +1,21 @@
+# ────────────────────────────────────────────────────────────────────────────
+# Railway deployment manifest — Task Force AI
+# Docs: https://docs.railway.app/reference/config-as-code
+# ────────────────────────────────────────────────────────────────────────────
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "./Dockerfile"
+
+[deploy]
+# Health probe — Railway considers the service unhealthy when /api/health
+# returns non-2xx for `healthcheckTimeout` seconds and triggers a redeploy.
+healthcheckPath = "/api/health"
+healthcheckTimeout = 300
+
+# Restart only on actual failures (not on every deploy).
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+# Number of concurrent replicas — start at 1, scale up via dashboard.
+numReplicas = 1

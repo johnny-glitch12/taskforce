@@ -6,7 +6,7 @@ import {
   Bell, BellDot, CheckCheck, Trophy, Target, XCircle, Inbox, Loader2,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 const KIND_META = {
   bounty_submission_new: { icon: Target,   color: "#22d3ee", label: "New submission" },

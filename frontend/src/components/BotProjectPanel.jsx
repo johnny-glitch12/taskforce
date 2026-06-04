@@ -6,7 +6,7 @@ import {
   GitCommit, Loader2, X, History, FolderTree, Plus, ChevronDown,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 /** Match a file extension to Monaco language + colored file-tab icon. */
 function fileMeta(path) {

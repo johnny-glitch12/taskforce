@@ -18,7 +18,7 @@ import {
   TrendingDown,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 const TIERS = [
   { id: "recruit",  name: "RECRUIT",  backendTier: null,        tagline: "Start building and learning the basics.",

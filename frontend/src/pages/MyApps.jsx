@@ -8,7 +8,7 @@ import { Link } from "react-router-dom";
 import { Layers, ExternalLink, Loader2, Sparkles, ArrowUpRight, Activity } from "lucide-react";
 import { useAuth } from "@/App";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 export default function MyApps() {
   const { token } = useAuth();

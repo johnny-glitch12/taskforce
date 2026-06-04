@@ -12,7 +12,7 @@ import { ChevronLeft, Loader2, Code2, RefreshCw, Wand2, Activity, ExternalLink, 
 import { toast } from "sonner";
 import { useAuth } from "@/App";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 export default function AppViewer() {
   const { slug } = useParams();

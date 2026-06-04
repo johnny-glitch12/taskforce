@@ -7,7 +7,7 @@ import {
   ChevronDown, ChevronRight, ListTree,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 const STATUS_BADGE = {
   ready:         { label: "Ready",         color: "#22c55e", icon: CheckCircle2 },

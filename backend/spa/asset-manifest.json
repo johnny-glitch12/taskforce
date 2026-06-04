@@ -1,0 +1,11 @@
+{
+  "files": {
+    "main.css": "/spa/static/css/main.e95c28ed.css",
+    "main.js": "/spa/static/js/main.3610cabe.js",
+    "index.html": "/spa/index.html"
+  },
+  "entrypoints": [
+    "static/css/main.e95c28ed.css",
+    "static/js/main.3610cabe.js"
+  ]
+}

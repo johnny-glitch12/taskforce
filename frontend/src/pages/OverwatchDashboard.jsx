@@ -11,7 +11,7 @@ import {
   PieChart, Pie, Cell, Legend,
 } from "recharts";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 /* ─── Mock data generators (real APIs would replace these) ─── */
 function generateRevenueData() {

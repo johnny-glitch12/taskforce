@@ -5,7 +5,7 @@ import { useAuth } from "@/App";
 import { Loader2, ArrowLeft, Bot, Trophy } from "lucide-react";
 import ReviewsPanel from "@/components/ReviewsPanel";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 export default function ListingDetail() {
   const { id } = useParams();

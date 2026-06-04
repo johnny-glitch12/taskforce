@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import PostBountyModal from "@/components/PostBountyModal";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 const CATEGORIES = [
   { id: "all", label: "All" },

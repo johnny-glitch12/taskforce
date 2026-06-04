@@ -10,7 +10,7 @@ import {
 import SubmitToBountyModal from "@/components/SubmitToBountyModal";
 import { fmtRemaining, fmtReward } from "@/pages/BountyBoard";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 const STATUS_COLOR = {
   open: "#22c55e",

@@ -5,7 +5,7 @@ import {
   Folder, Plus, Trash2, ChevronRight, Loader2, Workflow, Download, X, Search,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 /**
  * MyWorkflowsGrid — Sidebar listing the user's OWN runtime workflows.

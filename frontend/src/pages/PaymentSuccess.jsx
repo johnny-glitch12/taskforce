@@ -3,7 +3,7 @@ import { useSearchParams, Link } from "react-router-dom";
 import { CheckCircle2, XCircle, Loader2, Server, Target } from "lucide-react";
 import { useAuth } from "@/App";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 export default function PaymentSuccess() {
   const [searchParams] = useSearchParams();

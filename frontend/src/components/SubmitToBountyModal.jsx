@@ -7,7 +7,7 @@ import {
   X, Loader2, Target, ShoppingBag, Package, Wand2, ArrowRight,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 export default function SubmitToBountyModal({ bounty, onClose, onSubmitted }) {
   const { token } = useAuth() || {};

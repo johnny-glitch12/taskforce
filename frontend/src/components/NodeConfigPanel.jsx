@@ -5,7 +5,7 @@ import {
   Code, Zap, Database as DbIcon, FileText, Mail,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 /**
  * NodeConfigPanel — Right-side panel that lets the user configure

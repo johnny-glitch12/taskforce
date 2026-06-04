@@ -8,7 +8,7 @@ import {
   Loader2, ShieldCheck, ArrowRight, Settings,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 export default function Payouts() {
   const { token } = useAuth() || {};

@@ -7,7 +7,7 @@ import {
   Play, Clock, CheckCircle2, AlertCircle, Zap, Calendar,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 export default function MyDeployments() {
   const { token } = useAuth();

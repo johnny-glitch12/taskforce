@@ -1,0 +1,29 @@
+# ============================================================================
+# Task Force AI — Dedicated Celery worker image for Railway "worker" service.
+# Use this when scaling worker count independent of the API container.
+# ============================================================================
+FROM python:3.11-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        gcc g++ libffi-dev libssl-dev libmagic1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY backend/requirements.txt /app/backend/requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \
+ && pip install --no-cache-dir -r /app/backend/requirements.txt
+
+COPY backend/ /app/backend/
+COPY scripts/ /app/scripts/
+
+RUN mkdir -p /tmp/agent_workdir /tmp/agent_venvs
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app/backend
+
+WORKDIR /app/backend
+
+# Two-thread worker — tune via Railway env (CELERY_CONCURRENCY).
+CMD ["sh", "-c", "celery -A lib.celery_app worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-2} -Q ${CELERY_QUEUES:-default,supernova_eval}"]

@@ -7,7 +7,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 function CircularRing({ value, max, color = "#22d3ee", label, sublabel, testid }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;

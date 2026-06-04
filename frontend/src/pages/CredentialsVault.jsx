@@ -5,7 +5,7 @@ import {
   Key, Trash2, Plus, Shield, X, Zap, CheckCircle2, AlertCircle, Loader2,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 const SERVICES = [
   { id: "slack",     label: "Slack",       hint: "Incoming Webhook URL — https://hooks.slack.com/services/..." },

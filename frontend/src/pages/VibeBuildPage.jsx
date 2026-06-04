@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/App";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 const SPEED_COLOR = { fast: "#10b981", medium: "#fbbf24", slow: "#fb7185" };
 const QUALITY_COLOR = { good: "#a78bfa", excellent: "#22d3ee" };

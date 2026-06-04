@@ -5,7 +5,7 @@ import {
   Monitor, Square, Key, Shield, Eye, EyeOff, Lock,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 /* ─── Theme tokens (mirrored from CsdropDashboard) ─── */
 const T = {

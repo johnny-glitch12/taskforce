@@ -12,7 +12,7 @@ import {
   ArrowUpRight, ArrowDownRight, Loader2, Server,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 const WINDOW_OPTIONS = [
   { id: 7,   label: "7d"   },

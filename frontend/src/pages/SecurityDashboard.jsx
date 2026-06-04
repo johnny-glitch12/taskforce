@@ -5,7 +5,7 @@ import {
   RefreshCw, Filter, Clock, Loader2,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 const VERDICT_STYLES = {
   SAFE: { color: "text-emerald-400", bg: "bg-emerald-500/10", icon: CheckCircle2 },

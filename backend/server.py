@@ -1948,6 +1948,35 @@ from lib.security_middleware import install_security
 install_security(app)
 
 
+@app.get("/api/health")
+async def health_check():
+    """Lightweight health check for Railway / uptime monitors.
+    Returns 200 (status='healthy' or 'degraded' if a dep is down) — never 500."""
+    from datetime import datetime, timezone
+    h = {"status": "healthy",
+         "timestamp": datetime.now(timezone.utc).isoformat(),
+         "services": {}}
+    try:
+        await db.command("ping")
+        h["services"]["mongodb"] = "connected"
+    except Exception:
+        h["services"]["mongodb"] = "disconnected"
+        h["status"] = "degraded"
+    try:
+        broker = os.environ.get("CELERY_BROKER_URL") or os.environ.get("REDIS_URL") or ""
+        if broker:
+            import redis as _redis
+            _r = _redis.from_url(broker, socket_timeout=2)
+            _r.ping()
+            h["services"]["redis"] = "connected"
+        else:
+            h["services"]["redis"] = "not_configured"
+    except Exception:
+        h["services"]["redis"] = "disconnected"
+        h["status"] = "degraded"
+    return h
+
+
 # Include router
 app.include_router(api_router)
 
@@ -2306,3 +2335,65 @@ async def shutdown_db_client():
     if scheduler.running:
         scheduler.shutdown(wait=False)
     client.close()
+
+
+# ─── Production SPA Serving (Railway / single-container deploy) ──────────
+#
+# When the React frontend is pre-built into `backend/spa/` (done at Docker
+# build time with PUBLIC_URL=/spa), serve it from FastAPI so a single
+# container handles both API and UI. In the Emergent preview environment,
+# `backend/spa/` doesn't exist — supervisor runs the React dev server on
+# :3000 instead — so this whole block is skipped at runtime. No behavioural
+# change for the preview.
+#
+# IMPORTANT design choice: the React build runs with `PUBLIC_URL=/spa` so all
+# bundle paths (`<script src="/spa/static/js/main.<hash>.js">`) live under
+# `/spa/static/*`. This deliberately avoids colliding with the existing
+# `/static/*` mount used for csdrop debug images and exchange-listing media.
+#
+# IMPORTANT ordering: the catch-all `/{full_path:path}` route must be
+# REGISTERED LAST (after every api_router include + websocket route),
+# because once defined it would shadow anything added later. The handler
+# also defensively excludes `/api/`, `/spa/`, `/static/` paths.
+from fastapi.staticfiles import StaticFiles  # noqa: E402, F811
+from fastapi.responses import FileResponse  # noqa: E402, F811
+
+_SPA_DIR = Path(__file__).resolve().parent / "spa"
+if _SPA_DIR.exists() and (_SPA_DIR / "index.html").exists():
+    # Mount the CRA-built bundle under /spa/* so the absolute paths inside
+    # the generated index.html resolve cleanly. Using `html=True` makes
+    # `/spa` and `/spa/` serve index.html.
+    app.mount("/spa", StaticFiles(directory=str(_SPA_DIR), html=True), name="spa")
+
+    # Root-level CRA assets the bundle expects (PUBLIC_URL doesn't rewrite
+    # these because they're referenced by absolute paths or are PWA files).
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def _favicon():
+        f = _SPA_DIR / "favicon.ico"
+        return FileResponse(f) if f.exists() else FileResponse(_SPA_DIR / "index.html")
+
+    @app.get("/manifest.json", include_in_schema=False)
+    async def _manifest():
+        f = _SPA_DIR / "manifest.json"
+        return FileResponse(f) if f.exists() else FileResponse(_SPA_DIR / "index.html")
+
+    @app.get("/robots.txt", include_in_schema=False)
+    async def _robots():
+        f = _SPA_DIR / "robots.txt"
+        return FileResponse(f) if f.exists() else FileResponse(_SPA_DIR / "index.html")
+
+    # SPA catch-all — MUST be the last registered route. React Router
+    # (BrowserRouter) handles client-side routing, so every non-API path
+    # serves index.html and the SPA picks up the URL.
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        # Defensive exclusion: API + docs + already-mounted static paths
+        # fall through to FastAPI's normal 404 (they're registered above so
+        # this catch-all shouldn't even match them — belt+braces).
+        if full_path.startswith(("api/", "docs", "openapi", "spa/", "static/", "ws")):
+            from fastapi import HTTPException as _HTTPException
+            raise _HTTPException(status_code=404, detail="Not found")
+        return FileResponse(_SPA_DIR / "index.html")
+    logger.info(f"[startup] SPA static serving enabled from {_SPA_DIR}")
+else:
+    logger.info("[startup] backend/spa/ not present — SPA serving disabled (preview mode)")

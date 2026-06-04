@@ -41,7 +41,10 @@ import MyApps from "@/pages/MyApps";
 import AppViewer from "@/pages/AppViewer";
 import OnboardingModal from "@/components/OnboardingModal";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+// API base URL: in preview/dev we hit a separate backend origin via REACT_APP_BACKEND_URL.
+// In production single-container (Railway), the frontend is served by FastAPI on the
+// SAME origin, so an empty string makes every fetch resolve to a relative `/api/...` path.
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 export const AuthContext = createContext(null);
 

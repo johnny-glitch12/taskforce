@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/App";
 import { Banknote, Coins, Trophy, Activity, Download, Loader2, ArrowDownRight } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 export default function CreatorEarnings() {
   const { token } = useAuth() || {};

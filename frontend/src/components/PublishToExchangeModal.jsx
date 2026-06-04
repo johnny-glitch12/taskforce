@@ -3,7 +3,7 @@ import { useAuth } from "@/App";
 import { toast } from "sonner";
 import { X, Upload, Video, Image as ImgIcon, DollarSign, Tag, Trash2 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 const CATEGORIES = [
   "messaging", "email", "data", "ai-llm", "automation",

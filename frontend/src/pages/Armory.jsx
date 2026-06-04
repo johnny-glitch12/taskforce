@@ -19,7 +19,7 @@ import AgentPreview from "@/components/armory/AgentPreview";
 import DirectPublishModal from "@/components/DirectPublishModal";
 import "./Armory.css";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 export default function Armory() {
   const { token } = useAuth() || {};

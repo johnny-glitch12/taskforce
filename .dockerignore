@@ -1,0 +1,51 @@
+# ── Git / Emergent ──────────────────────────────────────────────────────────
+.git
+.gitignore
+.gitconfig
+.gitattributes
+.emergent/
+
+# ── Local-only / preview-only docs and scratch ──────────────────────────────
+memory/
+test_reports/
+tests/
+backend_test.py
+test_result.md
+design_guidelines.json
+data/
+
+# ── Markdown (keep README so it shows on Railway) ───────────────────────────
+*.md
+!README.md
+
+# ── Python caches ───────────────────────────────────────────────────────────
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+
+# ── Secrets — Railway injects env vars at runtime ───────────────────────────
+.env
+.env.*
+!frontend/.env.production
+
+# ── Node ────────────────────────────────────────────────────────────────────
+**/node_modules/
+frontend/build/
+frontend/dist/
+frontend/.next/
+
+# ── IDE / OS ────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
+
+# ── Logs ────────────────────────────────────────────────────────────────────
+*.log

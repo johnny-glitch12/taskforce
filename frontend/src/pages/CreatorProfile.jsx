@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { BadgeCheck, Shield, Star, ArrowLeft, ExternalLink, Clock, MessageSquare } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 export default function CreatorProfile() {
   const { id } = useParams();

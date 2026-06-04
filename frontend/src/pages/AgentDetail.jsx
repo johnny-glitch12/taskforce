@@ -8,7 +8,7 @@ import {
   CreditCard, Lock, Code2, Server, FileKey, Cpu,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 /* ─── Demo Chat Simulation ─── */
 const demoResponses = {
