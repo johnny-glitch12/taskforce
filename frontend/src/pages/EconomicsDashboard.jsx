@@ -110,7 +110,7 @@ export default function EconomicsDashboard() {
             </div>
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight t-text">Platform Economics</h1>
             <p className="text-sm t-text-sub mt-2">
-              Dynamic credit revenue vs API cost. Margin {data ? (data.platform_margin * 100 - 100).toFixed(0) : "—"}% on platform calls.
+              Dynamic credit revenue vs API cost. Platform charges {data ? data.platform_margin.toFixed(1) : "—"}× provider cost on platform-key calls (≈60% gross margin).
             </p>
           </div>
 

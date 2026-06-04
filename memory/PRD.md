@@ -23,6 +23,28 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 56 (Feb 2026) — Smart Dynamic Credit System + Economics Dashboard + Pricing Overhaul (Prompt 14)
+
+**Switch from flat-rate pre-pay credits → usage-based post-pay billing on real LLM token counts.**
+
+- **`lib/credit_calculator.py`** — Token-based pricing engine. `MODEL_COSTS` per-million-token map (Gemini Flash $0.30in/$2.50out, Pro $1/$10, GPT-4o $2.50/$10, 4o-Mini $0.15/$0.60, Claude Sonnet $3/$15, Haiku $1/$5). `PLATFORM_MARGIN=2.5×` (60% gross margin). `CREDIT_VALUE_USD=$0.01`. `MIN_CREDITS` floor per action (vibe_chat=1, build_bot=2, etc.). `AVERAGE_TOKENS` per action used by `estimate_range(model, action)` for pricing tooltips. tiktoken (cl100k_base) cross-provider proxy via `estimate_tokens()` + `estimate_tokens_for_call()`.
+- **`lib/smart_credits.py`** — Two-step billing flow: `check_can_afford(db, user, model, action)` pre-flight estimate; `debit_actual_usage(db, user, model, action, input_tokens, output_tokens, key_source, ref)` post-call atomic debit with rich ledger metadata patching (find_one_and_update with `sort=[(created_at,-1)]` to patch the just-inserted row). **BYOK discount lever**: when `key_source=='byok'`, charges only `MIN_CREDITS[action]` and records `api_cost_usd=0` so economics dashboard shows we paid nothing.
+- **`routes/vibe_coding.py`** — `_call_platform_llm()` signature changed from `→ str` to `→ {text, input_tokens, output_tokens, model}`. All 3 routes (`/vibe/chat`, `/vibe/generate`, `/vibe/recommend-model`) swapped flat `wallet_debit` → `smart_credits.debit_actual_usage`. Response payloads now include `input_tokens`, `output_tokens`, `cost_breakdown:{api_cost_usd, revenue_usd, model, key_source}`. Session message rows persist tokens too for replay UI.
+- **`routes/armory_builder.py`** — `_generate_with_gemini()` now returns `{bot, input_tokens, output_tokens, model}`. `build_bot` debits dynamically; response includes `credits_used, cost_breakdown`.
+- **NEW `routes/credits_economics.py`**:
+  - **`POST /api/credits/estimate`** (auth) — `{}` → full pricing matrix (6 models × 4 actions = 24 rows with low/typical/high/byok_cost/api_cost/revenue) + `model_costs` + `min_credits` + `platform_margin`. `{model, action}` → single row. Unknown model/action → 400.
+  - **`GET /api/admin/economics?days=N`** (owner-only) — `{window: {total_revenue_usd, total_api_cost_usd, gross_margin_usd, gross_margin_pct, calls, tokens, active_users}, lifetime:{}, per_model:[], by_key_source:{platform:{}, byok:{}}, top_spenders:[20], daily:[]}`. Aggregates via 6 mongo pipelines over `credit_transactions.metadata.*` fields. Dev admin (role=admin, is_owner=false) → 403 `OWNER_ONLY`.
+- **`server.py`** — `UserResponse.is_owner: bool` added; mounted `credits_economics_router`.
+- **`routes/auth.py`** — `/auth/login` + `/auth/me` responses now carry `is_owner`.
+- **`pages/Pricing.jsx`** — Overhauled: tier grid (kept) + **ModelCostMatrix** (per-model × per-action typical-with-range cells + purple BYOK column, pulled from `/credits/estimate`) + **top-up packs strip** (4 packs $5/$19/$79/$299) + **BYOK panel** (purple gradient card, "60–95% savings", deep-link to `/credentials`) + trust bar.
+- **NEW `pages/EconomicsDashboard.jsx`** @ `/admin/economics` (owner-only via `OwnerGate`) — 4 stat cards (Revenue/Cost/Margin/Users), lifetime strip, per-model breakdown table with revenue-share progress bars, platform-vs-BYOK split panel, top-20 spenders, daily revenue-vs-cost bars. 7d/30d/90d/1y window toggle.
+- **`App.js`** — `isOwner` context value + `OwnerGate` component + `/admin/economics` route.
+- **`components/Navbar.jsx`** — "Economics" menu entry visible only to owners.
+- **`components/armory/ChatMessage.jsx`** — `CreditMeta` extended: now optionally renders `tokens (in→out)` and a purple **BYOK** badge when `key_source==='byok'`. Backward-compatible: missing fields = legacy compact display.
+
+**Verified (iter57)**: **16/17 backend tests PASS · 100% frontend PASS**. 1 backend test SKIP (BYOK runtime debit — fake `sk-test-xxx` key 502s at OpenAI before reaching debit; key-resolution path verified via AuthenticationError trace). Race-safe atomic debit confirmed via 5 concurrent /vibe/chat calls. Ledger metadata writes verified. Owner gate verified: admin@nova.ai (200) vs benjamin@taskforce.ai (403 OWNER_ONLY).
+
+
 ### Phase 55 (Feb 2026) — P3 Carryover Sweep (Armory 404 toast · Demo listings · Reviews moderation · Schedule circuit breaker · Earnings CSV streaming)
 
 - **Armory project-404 toast** (`pages/Armory.jsx` `loadProject`) — when a session points to a deleted/foreign project the load no longer silently fails. Now surfaces "Build artifact no longer exists. Start a new conversation to rebuild." for 404 and "Couldn't load build (XX)" for other failures, clears the preview state instead of leaving a stale right panel.
