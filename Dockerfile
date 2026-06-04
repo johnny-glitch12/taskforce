@@ -52,10 +52,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install backend Python deps first (layer cache)
+# Install backend Python deps first (layer cache).
+# --extra-index-url is required for `emergentintegrations==0.1.0` which
+# lives on Emergent's CloudFront mirror, not on public PyPI. The flag is
+# safe to ALWAYS include because pip falls back to the primary PyPI index
+# for every other package transparently.
 COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
- && pip install --no-cache-dir -r /app/backend/requirements.txt
+ && pip install --no-cache-dir \
+        --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ \
+        -r /app/backend/requirements.txt
 
 # Copy backend + scripts
 COPY backend/ /app/backend/

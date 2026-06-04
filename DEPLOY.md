@@ -195,6 +195,11 @@ cd backend && uvicorn server:app --host 0.0.0.0 --port 8000
 
 ## Common gotchas
 
+- **`emergentintegrations` PyPI mirror** — this package lives on Emergent's
+  CloudFront mirror (`https://d33sy5i8bnduwe.cloudfront.net/simple/`), not on
+  public PyPI. Both Dockerfiles already pass `--extra-index-url` to pip so the
+  Railway build resolves it transparently. If you ever swap out pip for `uv`
+  or another resolver, mirror the same extra-index flag.
 - **`/static/*` collision** — the codebase already uses `/static/exchange/*` for
   marketplace listing media. The CRA build is configured with `PUBLIC_URL=/spa`
   so its bundle paths live under `/spa/static/*` and don't collide.
