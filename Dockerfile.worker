@@ -8,12 +8,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gcc g++ libffi-dev libssl-dev libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
+# `emergentintegrations` lives on Emergent's CloudFront PyPI mirror, NOT
+# on public PyPI. Set globally + on the install line (belt + braces).
+ENV PIP_EXTRA_INDEX_URL="https://d33sy5i8bnduwe.cloudfront.net/simple/" \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
 WORKDIR /app
 
 COPY backend/requirements.txt /app/backend/requirements.txt
-# --extra-index-url required for `emergentintegrations` (CloudFront mirror).
-RUN pip install --no-cache-dir --upgrade pip \
- && pip install --no-cache-dir \
+RUN pip install --upgrade pip \
+ && pip install \
         --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ \
         -r /app/backend/requirements.txt
 

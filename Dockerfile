@@ -50,16 +50,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gcc g++ libffi-dev libssl-dev curl libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
+# `emergentintegrations` lives on Emergent's CloudFront PyPI mirror, NOT on
+# public PyPI. Setting PIP_EXTRA_INDEX_URL globally so every pip invocation
+# in this image (incl. any post-install user pip calls) can reach it.
+ENV PIP_EXTRA_INDEX_URL="https://d33sy5i8bnduwe.cloudfront.net/simple/" \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
 WORKDIR /app
 
 # Install backend Python deps first (layer cache).
-# --extra-index-url is required for `emergentintegrations==0.1.0` which
-# lives on Emergent's CloudFront mirror, not on public PyPI. The flag is
-# safe to ALWAYS include because pip falls back to the primary PyPI index
-# for every other package transparently.
+# Explicit --extra-index-url on the install line too — belt and braces, in
+# case some Railway build cache layer ignores the ENV var.
 COPY backend/requirements.txt /app/backend/requirements.txt
-RUN pip install --no-cache-dir --upgrade pip \
- && pip install --no-cache-dir \
+RUN pip install --upgrade pip \
+ && pip install \
         --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ \
         -r /app/backend/requirements.txt
 
