@@ -457,10 +457,10 @@ async def fork_project(project_id: str, user=Depends(get_current_user())):
 @router.post("/armory/bot-projects/{project_id}/test-run")
 async def test_run_project(project_id: str, user=Depends(get_current_user())):
     """One-shot dry-run of a bot project's node DAG. Re-uses the existing
-    workflow executor (compute-credit gated). Returns success + final_output
-    + duration_ms so the Armory AgentActionBar can render the result inline."""
+    workflow executor and the dual-pool credit_wallet.debit() — atomic,
+    race-safe, and visible in /api/credits/me."""
     from routes.workflow_executor import execute_workflow_dag, _build_ctx, _log_run
-    from lib.compute_credits import check_compute_credits, increment_compute_usage
+    from lib.credit_wallet import can_afford, debit
 
     db = get_db()
     user_id = str(user.get("id", user.get("email")))
@@ -470,15 +470,25 @@ async def test_run_project(project_id: str, user=Depends(get_current_user())):
     if not project.get("nodes"):
         raise HTTPException(status_code=400, detail="Project has no nodes to execute.")
 
-    credit_check = await check_compute_credits(db, user)
-    if credit_check.get("allowed") is False:
-        return credit_check
+    # 1) Pre-flight check (non-mutating) so we can return a friendly 200+allowed:false
+    #    instead of throwing — keeps the existing FE contract working.
+    pre = await can_afford(db, user, "workflow_run")
+    if not pre.get("allowed"):
+        return pre
+
+    # 2) Atomic debit. find_one_and_update inside credit_wallet.debit() guarantees
+    #    concurrent calls cannot both pass — second caller will see ValueError and
+    #    we surface it as the same allowed:false dict.
+    try:
+        debit_info = await debit(db, user, "workflow_run", ref=project_id)
+    except ValueError:
+        # Lost the race or balance dropped between can_afford() and debit().
+        return await can_afford(db, user, "workflow_run")
 
     ctx = _build_ctx(db, user)
     # The executor expects a workflow doc with `nodes` + `edges`; bot_projects already match that shape.
     wf = {"id": project["id"], "nodes": project.get("nodes", []), "edges": project.get("edges", [])}
     result = await execute_workflow_dag(wf, ctx)
-    await increment_compute_usage(db, user)
     run_id = await _log_run(db, user_id, project_id, "bot_project", result)
 
     return {
@@ -488,5 +498,10 @@ async def test_run_project(project_id: str, user=Depends(get_current_user())):
         "output": result.get("final_output"),
         "error": result.get("error"),
         "node_results": result.get("node_results"),
+        "credits": {
+            "cost": debit_info.get("cost"),
+            "balance": debit_info.get("balance"),
+            "unlimited": debit_info.get("unlimited", False),
+        },
     }
 
