@@ -295,10 +295,16 @@ async def run_app(app_id: str, body: AppRunRequest, request: Request,
             raise HTTPException(status_code=401, detail="Authentication required.")
         if owner_id != caller_id:
             raise HTTPException(status_code=403, detail="Not your app.")
+    else:
+        # Public: anonymous visitors must still sign up to run (viral signup loop).
+        # They CAN view the iframe (it loads without auth) but to actually exercise
+        # the agent they need a free account so we can attribute usage + cap abuse.
+        if not user:
+            raise HTTPException(status_code=401, detail="Sign in to run this app.")
 
     # Resolve which wallet to bill — public apps bill the owner; private bill the caller (== owner).
     billing_user = user
-    if is_public and (not user or owner_id != caller_id):
+    if is_public and owner_id != caller_id:
         billing_user = await db.users.find_one({"id": owner_id})
         if not billing_user:
             raise HTTPException(status_code=503, detail="App owner not found.")

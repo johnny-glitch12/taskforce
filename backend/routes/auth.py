@@ -209,14 +209,14 @@ async def forgot_password(req: ForgotRequest, _=Depends(rate_limit_dependency("f
     except Exception as _e:
         logger.warning(f"[email] reset email failed to schedule: {_e}")
 
-    # Note: we no longer return `reset_token` in production responses — it leaks
-    # via response body. Keeping it for local/dev where EMAIL is disabled so the
-    # FE password-reset flow can still be tested end-to-end without a mailbox.
+    # In prod (EMAIL_ENABLED=true) we OMIT reset_token from the response so it
+    # only reaches the user via the verified email channel. In dev we include it
+    # so the FE password-reset flow can be tested end-to-end without a mailbox.
     from utils.email_service import EMAIL_ENABLED
-    payload: dict = {"message": "If that email exists, a reset link has been generated."}
-    if not EMAIL_ENABLED:
-        payload["reset_token"] = reset_token
-    return payload
+    if EMAIL_ENABLED:
+        return {"message": "If that email exists, a reset link has been generated."}
+    return {"message": "If that email exists, a reset link has been generated.",
+            "reset_token": reset_token}
 
 
 @router.post("/auth/reset-password")

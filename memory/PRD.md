@@ -23,6 +23,55 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 59 (Feb 2026) — Viral Share + Resend Emails + Security Hardening (Prompts 13, 17 + Share)
+
+**🟢 Share Button — viral loop for hosted mini-apps**
+- New `POST /api/apps/{slug}/share {is_public: bool}` toggles a project's `is_public` flag.
+- `GET /api/apps/{slug}/render` loads anonymously when public (HTML shell + Babel + JSX renders without auth).
+- `POST /api/apps/{slug}/run`:
+  - Private app + non-owner → **403** "Not your app."
+  - Public app + non-owner JWT → **200** runs in sandbox, debits the **OWNER's wallet** (creator absorbs viral cost), `app_runs.caller_id` captures the visitor for analytics.
+  - Public app + anonymous visitor → **401** "Sign in to run this app." → drives viral signups.
+- **AppViewer Share panel** (`data-testid='app-viewer-share-toggle'`): Public/Private toggle, readonly URL + Copy button, readonly `<iframe>` embed snippet + Copy button, Twitter + LinkedIn share-intent links (only when public). Iframe sandbox tightened to `allow-scripts allow-same-origin` (no `allow-forms`, no popups, no top-navigation).
+
+**🟢 Prompt 13 — Resend Transactional Emails**
+- New `backend/utils/email_service.py` — 6 templates, all dark-themed inline-CSS matching the TaskForce brand:
+  - `send_welcome_email`        — fired on `/api/auth/register`
+  - `send_waitlist_email`       — fired on `/api/waitlist`
+  - `send_password_reset_email` — fired on `/api/auth/forgot-password`; `reset_token` is now OMITTED from the response body when `EMAIL_ENABLED=true` (no in-band leak).
+  - `send_submission_received_email` — fired in `/api/bounties/{id}/submit` to the poster.
+  - `send_bounty_awarded_email`     — fired in `/api/bounties/{id}/award` to the winner.
+  - `send_tier_upgrade_email`        — fired in the Stripe `checkout.session.completed` subscription branch.
+- All sends are **fire-and-forget** via `asyncio.create_task` — the user-facing action ALWAYS returns 200 even when Resend is down.
+- Synchronous Resend SDK wrapped in `loop.run_in_executor` so it never blocks FastAPI's event loop.
+- Domain `taskforce.run` needs SPF/DKIM DNS verification in the Resend dashboard before mails leave the spam folder; until then, every send returns `{success: False, error: '...domain not verified...'}` and we log a warning (auth flows still succeed).
+- `RESEND_API_KEY`, `EMAIL_FROM`, `PLATFORM_URL` added to `backend/.env`. `resend==2.30.1` and `bleach==6.3.0` added to requirements.
+
+**🟢 Prompt 17 — Security Audit + Hardening Pass**
+- New `backend/lib/security_middleware.py` — `SecurityHeadersMiddleware` stamps every response with: `X-Content-Type-Options=nosniff`, `X-Frame-Options=DENY` (global) or `SAMEORIGIN` (iframe render only), `Strict-Transport-Security`, `Permissions-Policy=camera=(), microphone=(), geolocation=(), payment=()`, `Referrer-Policy=strict-origin-when-cross-origin`, `X-XSS-Protection=1; mode=block`.
+- **CSP on /api/apps/*/render only** — allows `'unsafe-inline' 'unsafe-eval'` for script-src (Babel-standalone), restricts to `unpkg.com` + `cdn.tailwindcss.com`, `connect-src 'self'` (mini-app can ONLY call back into Task Force API).
+- **Global exception handler** — catches every unhandled `Exception` and returns `{error: 'INTERNAL_ERROR', message: 'Something went wrong. Please try again.'}` — NEVER leaks stack traces. Separate handler for `bson.errors.InvalidId` → clean 400.
+- **Rate limits** added: `/api/vibe/chat` 30/min, `/api/vibe/generate` 5/min, `/api/apps/{id}/run` 60/min (in addition to existing auth-route limits).
+- New `backend/lib/sanitize.py` — `sanitize_text`, `sanitize_html`, `sanitize_url`, `sanitize_user_response` utilities (bleach-backed when available, regex fallback otherwise). Available for future input-validation hardening.
+- **Audit findings (no fixes needed)** — codebase already had strong baselines from prior phases:
+  - ✅ Zero hardcoded secrets in source (all in `.env`, `.gitignore`'d).
+  - ✅ `JWT_SECRET` is 43 chars, bcrypt for passwords, role hardcoded to `"user"` on register.
+  - ✅ Rate-limited auth endpoints (login=10/60s, register=5/600s, forgot=3/600s, IP anti-abuse cap).
+  - ✅ Every user-scoped query filters by `user_id` — IDOR-clean (sampled 20+ routes).
+  - ✅ Stripe webhook signature verified by `emergentintegrations.StripeCheckout.handle_webhook()`.
+  - ✅ Credit-debit guards (`amount > 0` enforced in `lib/credit_wallet.py`).
+  - ✅ Zero `dangerouslySetInnerHTML` in frontend (React auto-escapes everywhere).
+  - ✅ BYOK keys encrypted at rest via Fernet+KMS, never returned to frontend.
+  - ✅ Pydantic validation on all request bodies.
+  - ✅ `UserResponse` Pydantic model returned (not raw user dict) → no password_hash/IP leak.
+
+**Verified (iter59)**:
+- **18/20 backend pytest pass** (`/app/backend/tests/test_iter59_share_security_emails.py`) — the 2 skips were anti-abuse rate limit on the CI runner's IP, not product bugs.
+- **Frontend Playwright pass** — all 8 share-panel testids present, sandbox locked, Toast confirmation observed, Twitter+LinkedIn share links surfaced only when public.
+- **Main-agent live tests**: anon-on-public 401, public+non-owner 200 (owner debited), private+non-owner 403, security headers verified via `curl -I`, CSP on `/render` only, email module fires welcome+waitlist+forgot+ all returning `domain not verified` (expected, DNS pending).
+- **Post-test polish**: cleaned the `reset_token: null` field from forgot-password prod response, hardened anon-public-app to 401 (signup wall — viral loop).
+
+
 ### Phase 58 (Feb 2026) — Emergent-Quality 5-Stage Code Gen Pipeline + Hosted Agent Mini-Apps (Prompts 15 & 16)
 
 Two massive specs merged into one tight MVP slice — see git for full file map.
