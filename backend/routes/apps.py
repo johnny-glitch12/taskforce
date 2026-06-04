@@ -128,35 +128,42 @@ _IFRAME_HTML_TEMPLATE = """<!DOCTYPE html>
   .tf-err { padding: 24px; color: #f43f5e; font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; }
 </style>
 </head>
-<body>
+<body data-tf-app-id="__APP_ID__" data-tf-base="__BASE__">
+<script id="tf-cfg" type="application/json">__TF_CFG__</script>
 <div id="root"></div>
 <script>
   // tfApi bridge — the AI-generated App.jsx calls window.tfApi.run(input)
-  // to invoke the agent's backend run() function.
-  window.tfApi = {
-    appId: "__APP_ID__",
-    run: async function(input) {
-      const resp = await fetch("__BASE__/api/apps/__APP_ID__/run", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer __TOKEN__"
-        },
-        body: JSON.stringify({ input: input || {} })
-      });
-      if (!resp.ok) {
-        const txt = await resp.text();
-        throw new Error("tfApi.run failed: HTTP " + resp.status + " — " + txt.slice(0, 200));
+  // to invoke the agent's backend run() function. Config is JSON-encoded in the
+  // tf-cfg script tag (NOT string-replaced into the JS body) so any sentinel
+  // tokens in the AI-generated JSX can't collide with our shell.
+  (function(){
+    var cfg = {};
+    try { cfg = JSON.parse(document.getElementById('tf-cfg').textContent); } catch(e) {}
+    window.tfApi = {
+      appId: cfg.app_id,
+      run: async function(input) {
+        var resp = await fetch(cfg.base + "/api/apps/" + encodeURIComponent(cfg.app_id) + "/run", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + cfg.token
+          },
+          body: JSON.stringify({ input: input || {} })
+        });
+        if (!resp.ok) {
+          var txt = await resp.text();
+          throw new Error("tfApi.run failed: HTTP " + resp.status + " — " + txt.slice(0, 200));
+        }
+        return await resp.json();
       }
-      return await resp.json();
-    }
-  };
+    };
+  })();
 </script>
-<script type="text/babel" data-presets="env,react">
+<script id="tf-app-source" type="text/babel" data-presets="env,react">
 try {
   __APP_JSX__
-  const mount = document.getElementById("root");
-  const Component = window.__TF_APP;
+  var mount = document.getElementById("root");
+  var Component = window.__TF_APP;
   if (!Component) {
     mount.innerHTML = '<div class="tf-err">App generation error: window.__TF_APP was not assigned.</div>';
   } else {
@@ -177,8 +184,9 @@ async def render_app(slug: str, token: Optional[str] = None):
     """Serve the iframe-friendly HTML shell for an AI-generated mini-app.
 
     Token can be passed as a query param (?token=...) because iframes can't
-    forward Authorization headers from their parent. We embed it into the JS
-    so the in-iframe tfApi.run() can authenticate the user's backend call."""
+    forward Authorization headers from their parent. We embed it into a JSON
+    config script tag (NOT string-replaced into JS), so any sentinel tokens
+    that an AI-generated app_jsx might contain can't collide with our shell."""
     db = get_db()
     # No auth here — we let the iframe load and rely on token in tfApi to
     # gate the actual run() endpoint. The slug is non-secret (it's in the URL).
@@ -197,12 +205,13 @@ async def render_app(slug: str, token: Optional[str] = None):
     # Resolve a base URL the iframe can call back to. Same-origin works because
     # the frontend serves the iframe from /apps/:slug which calls /api/apps/...
     base = ""  # same-origin
+    cfg_json = json.dumps({"app_id": proj["id"], "base": base, "token": token or ""})
     html = (
         _IFRAME_HTML_TEMPLATE
         .replace("__APP_TITLE__", (proj.get("name") or "Agent") + " — Mini App")
         .replace("__APP_ID__", proj["id"])
         .replace("__BASE__", base)
-        .replace("__TOKEN__", token or "")
+        .replace("__TF_CFG__", cfg_json.replace("</", "<\\/"))
         .replace("__APP_JSX__", app_jsx)
     )
     return HTMLResponse(html)

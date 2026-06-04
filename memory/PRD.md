@@ -23,6 +23,38 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 58 (Feb 2026) — Emergent-Quality 5-Stage Code Gen Pipeline + Hosted Agent Mini-Apps (Prompts 15 & 16)
+
+Two massive specs merged into one tight MVP slice — see git for full file map.
+
+**Prompt 15 — 5-Stage Multi-Agent Pipeline**
+- New `backend/prompts/code_gen_prompts.py` — strict JSON prompts for **Architect → Planner → Builder → Reviewer → Polisher → UI Builder** (6 stages, UI Builder only fires when the Architect flags `has_ui=true`).
+- New `backend/lib/code_gen_pipeline.py` (~440 lines) — `run_build_pipeline()` orchestrator. **Cheap stages** (Architect/Planner/Reviewer/Polisher) hardcoded to `gemini-2.5-flash` for ~80% cheaper non-builder calls. **Builder + UI Builder** use the user's chosen model. Each stage **debits credits POST-call** via `lib/smart_credits.debit_actual_usage` so a failed LLM call doesn't burn the user's wallet. Progress + parsed outputs persisted to `vibe_sessions.build_progress[]` + `vibe_sessions.build_context.{stage}`.
+- **AST validation** — `validate_all_files()` runs `ast.parse` + import-resolution against `requirements.txt` + Python stdlib on every `.py` file. **When AST is clean, the Reviewer stage is SKIPPED entirely** (saves a credit + ~5–15s latency).
+- **PipelinePaused exception** — when `check_can_afford` returns insolvent mid-pipeline, the orchestrator catches it and writes `build_status='paused'`, `build_paused_stage`, `build_paused_reason` to the session. The frontend's chat thread surfaces a yellow "Out of credits at X" banner with **Top Up Credits** (→ `/credits`) + **Resume Build** buttons.
+- **Resume flow** — `POST /api/vibe/resume-build/{session_id}` (404 if unknown, 409 if not paused, 402 if still broke) re-dispatches the same Celery task with `resume=True`. Completed stages are skipped via `build_context` cache → user only pays for the remaining ones.
+- **Celery integration** — new `tfai.vibe_build` Celery task in `lib/celery_app.py` makes the entire pipeline non-blocking. `POST /api/vibe/generate` now returns `{status: 'queued', session_id, task_id, poll_url}` in <3s. New `GET /api/vibe/build-status/{session_id}` is the polling endpoint — returns `progress[]` (per-stage status + credits_used + duration_ms), plus `paused` info when applicable, plus the full `project` when complete. Inline fallback when `CELERY_BROKER_URL` is unset (dev). **Legacy** `POST /api/vibe/generate-legacy` preserved for callers that still want the single-call flow.
+- **Smart Model Routing**: cheap stages always Flash (saves margin); Builder uses user choice. Net cost for a complex flagship build is roughly `(4 × flash) + (1 × user-model) + (optional 1 × user-model ui-builder)` ≈ the user's `build_cost` plus ~2-3cr overhead. Transparent — debit happens per stage, visible in the chat progress card.
+
+**Prompt 16 — Hosted Agent Mini-Apps (Single-File React via Babel CDN)**
+- New `backend/routes/apps.py` — all endpoints prefixed `/api`:
+  - `GET /my-apps` — listing of the user's UI-enabled projects, each with `id`, `slug`, `manifest`, `run_count`.
+  - `GET /apps/{slug}` (auth, owner-only) — full app metadata including `frontend.app_jsx`.
+  - `GET /apps/{slug}/render` — HTML iframe shell (NO auth — token comes via `?token=` query param). Embeds Tailwind CDN, React 18 UMD, Babel-standalone, the AI-generated `App.jsx`, and a `window.tfApi.run(input)` bridge. Config is **JSON-encoded into a `<script id="tf-cfg" type="application/json">`** tag (NOT string-replaced into the JS body) so any sentinel-like sequences in the AI-generated JSX can't collide with the shell.
+  - `POST /apps/{id}/run` — exec'es the agent's `main.py run(input)` function in a curated SAFE_BUILTINS sandbox (includes `__build_class__` so `class` defs work). Owner-only. Debits 1cr per run (smart_credits `agent_run` action). Logs to new `app_runs` collection.
+  - `GET /apps/{id}/runs` — last 25 runs for the owner.
+  - `POST /apps/{id}/redesign` (body `{prompt}`) — re-runs the UI Builder stage with a "modify this current App.jsx" prompt. Updates `bot_projects.frontend.{app_jsx, manifest}`. Debits the UI Builder credits.
+- **`bot_projects` schema** extended: new `frontend: {app_jsx, manifest}`, `has_ui: bool`, `app_slug: string` fields. New `app_runs` collection (`{id, app_id, user_id, input, output, success, error, duration_ms, credits_used, created_at}`).
+- **Frontend** new pages: `pages/MyApps.jsx` (responsive grid w/ launch cards) + `pages/AppViewer.jsx` (header w/ My Apps back / app name / slug / Preview|Runs tabs / Refresh / Redesign button + textarea row, sandboxed iframe pointing to `/api/apps/{slug}/render?token=...`, runs history table on the Runs tab). New routes `/my-apps` + `/apps/:slug` (both `ProtectedRoute`). Navbar dropdown gets a new accent **"My Apps"** entry with `Layers` icon.
+- **Frontend Armory build flow** now polls `/api/vibe/build-status/{sid}` every 1.5s. A new `build_progress` message type in `components/armory/ChatMessage.jsx` renders a strip of `stage-chip-{stage}` chips (Architect / Planner / Builder / Reviewer / Polisher / UI Builder) with per-stage status, credits, and duration. On success the placeholder is replaced with the legacy `CodeGenerationCard` plus an **"Open Mini App"** cyan button when the build has UI. On pause, an amber banner with **Top Up Credits** + **Resume Build** appears.
+- **EconomicsDashboard runtime chip** — fetches `/api/admin/runtime/status` (owner-only) and renders `RUNTIME: CELERY · Redis Xms · KMS: local` chip (`data-testid='runtime-health-chip'`) right under the page description.
+
+**Verified (iter58)**:
+- **24/24 backend pytest pass** (`/app/backend/tests/test_iter58_vibe_pipeline_apps.py`) — pipeline progression, /my-apps, /apps/{slug}, /apps/{slug}/render, /apps/{id}/run (sandboxed Text Capitalizer end-to-end: input `"hello world"` → output `{capitalized_text: "HELLO WORLD"}`), /apps/{id}/runs, /apps/{id}/redesign, /vibe/resume-build gates, /admin/runtime/status owner gate. Zero critical, zero minor issues. Regressions on `/vibe/chat`, `/vibe/sessions`, `/vibe/models`, `/vibe/recommend-model` all pass.
+- **Frontend live screenshot-verified** by main agent: `/my-apps` grid + AI-built Text Capitalizer app rendering inside the iframe with full Tailwind styling + EconomicsDashboard runtime chip visible.
+- **Hardening fix** applied post-test based on code-review note: replaced naive `__TOKEN__` string substitution with a JSON-encoded `<script id="tf-cfg">` tag (defence against AI-generated JSX sequences accidentally matching our shell sentinels). Verified iframe + run still work post-fix.
+
+
 ### Phase 57 (Feb 2026) — Backlog Sweep: Margin-aware Auto-Pick · Real-token defensive hook · Celery+Redis HA · KMS adapters · Test-path fix
 
 Cleared every item from the Phase 56 backlog in one pass.
