@@ -13,9 +13,12 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
-# Install deps first (better layer cache)
-COPY frontend/package.json frontend/yarn.lock ./
-RUN yarn install --frozen-lockfile --network-timeout 1000000
+# Install deps first (better layer cache).
+# We use `npm install` (not `npm ci`) so the build works whether or not a
+# package-lock.json is committed to the repo — CRA + React 19 mixed deps
+# also need --legacy-peer-deps to bypass the npm 7+ strict resolver.
+COPY frontend/package.json frontend/package-lock.json* frontend/yarn.lock* ./
+RUN npm install --no-audit --no-fund --legacy-peer-deps
 
 # Copy source and build
 COPY frontend/ ./
@@ -36,7 +39,7 @@ ENV PUBLIC_URL=/spa
 ARG REACT_APP_BACKEND_URL=""
 ENV REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL}
 
-RUN yarn build
+RUN npm run build
 
 
 # ── Stage 2: Python backend + serve frontend ────────────────────────────────

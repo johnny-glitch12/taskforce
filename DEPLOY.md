@@ -179,7 +179,7 @@ production scale, split it:
 ```bash
 # 1. Build the React SPA
 cd frontend
-CI=false GENERATE_SOURCEMAP=false REACT_APP_BACKEND_URL="" PUBLIC_URL=/spa yarn build
+CI=false GENERATE_SOURCEMAP=false REACT_APP_BACKEND_URL="" PUBLIC_URL=/spa npm run build
 cd ..
 
 # 2. Copy build into backend/spa

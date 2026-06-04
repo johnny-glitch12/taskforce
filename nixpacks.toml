@@ -4,12 +4,12 @@
 # ────────────────────────────────────────────────────────────────────────────
 
 [phases.setup]
-nixPkgs = ["python311", "gcc", "nodejs_20", "yarn", "libffi", "libmagic"]
+nixPkgs = ["python311", "gcc", "nodejs_20", "libffi", "libmagic"]
 
 [phases.frontend]
 dependsOn = ["setup"]
 cmds = [
-    "cd frontend && yarn install --frozen-lockfile && CI=false GENERATE_SOURCEMAP=false PUBLIC_URL=/spa yarn build",
+    "cd frontend && npm install --no-audit --no-fund --legacy-peer-deps && CI=false GENERATE_SOURCEMAP=false PUBLIC_URL=/spa npm run build",
     "mkdir -p backend/spa && cp -r frontend/build/. backend/spa/"
 ]
 
