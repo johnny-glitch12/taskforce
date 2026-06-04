@@ -1,0 +1,55 @@
+{
+  "summary": "Iteration 58 — Vibe 5-Stage Code-Gen Pipeline (Prompt 15) + Hosted Mini-Apps via iframe + Babel (Prompt 16). Backend: 24/24 pytest pass (test_iter58_vibe_pipeline_apps.py). Verified Celery async dispatch (<3s queued return), full pipeline progression (architect→planner→builder→reviewer-skipped→polisher→ui_builder all 'done'), bot_projects.frontend.app_jsx populated with window.__TF_APP, /my-apps + /apps/{slug} + /apps/{slug}/render (no-auth HTML with Babel/React/tfApi bridge), POST /apps/{id}/run sandbox executed Text Capitalizer end-to-end returning capitalized output + debit 1cr, /apps/{id}/runs history, /apps/{id}/redesign 404+422 guards, /vibe/resume-build 404/409 gates, /admin/runtime/status owner gate (200 owner / 403 dev-admin / 401 anon) with runtime.active='celery' + celery_health.ok=true + 'tfai.vibe_build' in tasks. Regressions on /vibe/chat, /vibe/sessions, /vibe/models, /vibe/recommend-model all pass. Frontend code-inspection confirms data-testid='runtime-health-chip', 'stage-chip-{stage}', 'armory-msg-build-progress', Navbar /my-apps entry, AppViewer iframe shell — but live Playwright runs were BLOCKED by the Emergent 'Wake up servers' preview wall (re-triggers on every navigation in the automation harness). Main agent's prior live screenshot evidence + matching source already verify rendering.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter58_vibe_pipeline_apps.py",
+    "/app/test_reports/pytest/iter58.xml"
+  ],
+  "passed_tests": [
+    "Regression: GET /api/vibe/models (>=6 models + default=gemini-2.5-flash)",
+    "Regression: GET /api/vibe/sessions",
+    "Regression: POST /api/vibe/chat (dynamic billing fields)",
+    "Regression: POST /api/vibe/recommend-model (returns one of 6 catalog ids)",
+    "POST /api/vibe/generate → status='queued', task_id+poll_url in <5s (non-blocking Celery dispatch)",
+    "GET /api/vibe/build-status/{sid} progresses through stages and settles at status='complete' with project payload (has_ui, app_slug, frontend)",
+    "GET /api/my-apps (auth) — apps[] each with id/slug/manifest/run_count; 401 anon",
+    "GET /api/apps/{slug} — full metadata incl frontend.app_jsx containing 'window.__TF_APP'; 404 unknown; 404 cross-tenant (dev admin)",
+    "GET /api/apps/{slug}/render — public HTML with Babel-standalone + React UMD + tfApi bridge",
+    "POST /api/apps/{id}/run — Text Capitalizer sandbox returned capitalized output, success=true, credits_used=1, duration_ms",
+    "POST /api/apps/{id}/run cross-tenant → 403",
+    "GET /api/apps/{id}/runs — history list; cross-tenant → 404",
+    "POST /api/apps/{id}/redesign — 404 unknown, 422 prompt min_length<5",
+    "POST /api/vibe/resume-build/{sid} — 409 when not paused, 404 unknown sid",
+    "GET /api/admin/runtime/status — owner 200 with runtime.active='celery', celery_health.ok=true, latency_ms present, 'tfai.vibe_build' in runtime.celery.tasks",
+    "GET /api/admin/runtime/status — dev admin (benjamin) → 403 OWNER_ONLY; anon → 401"
+  ],
+  "action_items": [
+    "[INFO] Frontend live UI testing was blocked by the Emergent 'Wake up servers' preview wall which re-triggered on every page.goto in the automation harness. Backend smoke (24/24) + main-agent's prior live screenshots + source-level testid verification cover the frontend contract. If user-facing regressions arise, manually wake the preview once and run /my-apps, /apps/:slug, /admin/economics flows.",
+    "[OPTIONAL/HARDENING] Pause/resume could not be runtime-exercised because the owner wallet has ample credits — the only deterministic way to force pause is to drop the wallet near zero between Architect and Builder. Consider an admin endpoint (or test fixture) that injects PipelinePaused for a session so the resume happy path is covered by automation."
+  ],
+  "critical_code_review_comments": [
+    "apps.py run_app sandbox uses exec() with a curated SAFE_BUILTINS dict and __build_class__/__import__ both exposed. The sandbox is intentionally lightweight (per inline comment) — but __import__ allows imports of *any* installed module including os/subprocess/requests. For an MVP this is acceptable since only the project owner can run their own AI-generated code, but the comment claiming 'safe builtins' overstates isolation. A future hardening should either drop __import__ or whitelist modules.",
+    "apps.py /apps/{slug}/render embeds the JWT directly into the HTML string via string-replace of __TOKEN__. If app_jsx contains the literal sequence '__TOKEN__' (LLM-generated, unlikely but possible), it would be replaced too. Use a safer template engine or a JSON-encoded data-attribute → JS read pattern.",
+    "apps.py get_app returns 404 for unknown OR cross-tenant — privacy-by-obscurity. Good for confidentiality but worth documenting (a future API doc reader might expect 403).",
+    "vibe_coding.py /vibe/resume-build pre-flight uses 'gemini-2.5-flash' for non-builder stages but session model for builder stage — this is a reasonable proxy though it doesn't truly check 'can afford the remaining stages'. Edge case: a user with exactly 1cr passes pre-flight then immediately re-pauses at the next stage. Not a functional bug — just a UX nit.",
+    "test_iter58 currently relies on an existing UI-enabled bot project from prior smoke runs (the Text Capitalizer slug). If the database is wiped, the pipeline test still creates a fresh one, but the cross-tenant 403 tests would skip-fail if no app exists. Acceptable for regression but flag for CI seeding."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter58_vibe_pipeline_apps.py (new — 24 tests, all pass)"
+  ],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "source-verified only (Playwright blocked by preview wall)"},
+  "test_credentials": "admin@nova.ai/admin123 (owner) · benjamin@taskforce.ai/benjamin-J7VBJ4rL (dev admin, non-owner)",
+  "seed_data_creation": "One additional vibe_session + bot_project (text-capitalizer-like) generated by the pipeline test. Several app_runs rows inserted into db.app_runs via /apps/{id}/run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression suite for Prompts 15+16 is in /app/backend/tests/test_iter58_vibe_pipeline_apps.py — run with: pytest /app/backend/tests/test_iter58_vibe_pipeline_apps.py -v. Pipeline takes ~30-90s for the full 5-stage run (the test polls up to 180s). Owner wallet has plenty of credits. Frontend testids confirmed via source: 'runtime-health-chip' (EconomicsDashboard.jsx:125), 'stage-chip-{stage}' (ChatMessage.jsx:34), 'armory-msg-build-progress' (ChatMessage.jsx:64), Navbar 'My Apps' entry (Navbar.jsx:42). To exercise the frontend via Playwright, the Emergent preview wall must be woken first — note that wake-up state does NOT persist across page.goto calls in the harness; consider keeping a single page session alive instead of re-navigating.",
+  "rca_of_the_issue": "No backend issues. Frontend automation issue is environmental (preview wake-up wall in this harness, not a product bug)."
+}

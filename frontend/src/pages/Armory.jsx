@@ -221,25 +221,83 @@ export default function Armory() {
 
       // Append AI message
       if (mode === "build") {
-        setMessages((m) => [...m, {
-          role: "assistant",
-          type: "build",
-          name: data.name,
-          files: data.files || [],
-          nodes: data.nodes || [],
-          edges: data.edges || [],
-          duration_ms: Math.round(dt),
-          credits_used: data.credits_used,
-          model: data.model,
-          project_id: data.project_id,
-        }]);
-        setFiles(data.files || []);
-        setNodes(data.nodes || []);
-        setEdges(data.edges || []);
-        // Refresh full project (gets trust_score, version, etc.)
-        if (data.project_id) await loadProject(data.project_id);
-        else setPreviewOpen(true);
-        toast.success(`${data.name || "Agent"} generated · −${data.credits_used}cr`);
+        // NEW: pipeline returns {status: 'queued', session_id} — poll for stage progress.
+        const sid = data.session_id;
+        setSession((s) => ({ ...(s || {}), id: sid, model, project_id: s?.project_id || null }));
+
+        // Insert a "building" placeholder we can mutate during polling.
+        const placeholderIdx = (() => {
+          let idx = -1;
+          setMessages((m) => {
+            idx = m.length;
+            return [...m, { role: "assistant", type: "build_progress", session_id: sid, progress: [], status: "queued" }];
+          });
+          return idx;
+        })();
+
+        // Poll loop — every 1.5s up to 4 min
+        const startedAt = Date.now();
+        const maxMs = 4 * 60 * 1000;
+        let last = null;
+        while (Date.now() - startedAt < maxMs) {
+          await new Promise((r) => setTimeout(r, 1500));
+          let pres;
+          try {
+            pres = await fetch(`${API}/api/vibe/build-status/${sid}`, { headers });
+          } catch {
+            continue;
+          }
+          if (!pres.ok) continue;
+          last = await pres.json();
+          setMessages((m) => {
+            const next = [...m];
+            next[placeholderIdx] = {
+              role: "assistant",
+              type: "build_progress",
+              session_id: sid,
+              progress: last.progress || [],
+              status: last.status,
+              paused: last.paused,
+              error: last.error,
+              total_credits_used: last.total_credits_used,
+            };
+            return next;
+          });
+          if (["complete", "paused", "failed"].includes(last.status)) break;
+        }
+
+        if (last && last.status === "complete" && last.project) {
+          setMessages((m) => {
+            const next = [...m];
+            next[placeholderIdx] = {
+              role: "assistant",
+              type: "build",
+              name: last.project.name,
+              files: last.project.files || [],
+              nodes: last.project.nodes || [],
+              edges: last.project.edges || [],
+              duration_ms: Math.round(performance.now() - t0),
+              credits_used: last.total_credits_used,
+              model,
+              project_id: last.project.id,
+              has_ui: last.project.has_ui,
+              app_slug: last.project.app_slug,
+              progress: last.progress || [],
+            };
+            return next;
+          });
+          setFiles(last.project.files || []);
+          setNodes(last.project.nodes || []);
+          setEdges(last.project.edges || []);
+          if (last.project.id) await loadProject(last.project.id);
+          else setPreviewOpen(true);
+          toast.success(`${last.project.name || "Agent"} generated · −${last.total_credits_used}cr`);
+          setSession((s) => ({ ...(s || {}), id: sid, project_id: last.project.id }));
+        } else if (last && last.status === "paused") {
+          toast.warning(`Build paused — top up credits and click Resume`);
+        } else if (last && last.status === "failed") {
+          toast.error(`Build failed: ${last.error || "unknown"}`);
+        }
       } else {
         setMessages((m) => [...m, {
           role: "assistant",
@@ -250,9 +308,9 @@ export default function Armory() {
         }]);
       }
       if (!session?.id) {
-        setSession({ id: data.session_id, title: userText.slice(0, 80), model, project_id: data.project_id || null });
-      } else {
-        setSession((s) => ({ ...s, project_id: data.project_id || s.project_id }));
+        setSession((s) => ({ ...(s || {}), id: data.session_id, title: userText.slice(0, 80), model, project_id: data.project_id || s?.project_id || null }));
+      } else if (data.project_id) {
+        setSession((s) => ({ ...s, project_id: data.project_id }));
       }
       refreshSessions();
       refreshCredits();
@@ -264,6 +322,84 @@ export default function Armory() {
   }, [input, busy, session, model, headers, loadProject, refreshSessions, refreshCredits]);
 
   const handleSuggest = (prompt) => setInput(prompt);
+
+  // ── Resume a paused build (after user tops up credits) ─────
+  const onResumeBuild = useCallback(async () => {
+    const sid = session?.id;
+    if (!sid) {
+      toast.error("No session to resume.");
+      return;
+    }
+    setBusy(true); setBusyMode("build");
+    try {
+      const r = await fetch(`${API}/api/vibe/resume-build/${sid}`, { method: "POST", headers });
+      const j = await r.json();
+      if (!r.ok) {
+        if (j.error === "INSUFFICIENT_CREDITS") {
+          toast.error("Still not enough credits — top up more and try again.");
+        } else {
+          toast.error(j.detail || `Resume failed (${r.status})`);
+        }
+        return;
+      }
+      toast.info("Resuming build…");
+
+      // Poll same loop as the original build
+      const startedAt = Date.now();
+      const maxMs = 4 * 60 * 1000;
+      let last = null;
+      while (Date.now() - startedAt < maxMs) {
+        await new Promise((res) => setTimeout(res, 1500));
+        const pres = await fetch(`${API}/api/vibe/build-status/${sid}`, { headers });
+        if (!pres.ok) continue;
+        last = await pres.json();
+        // Mutate the most-recent build_progress message
+        setMessages((m) => {
+          const idx = [...m].reverse().findIndex((x) => x.type === "build_progress" || x.type === "build");
+          if (idx < 0) return m;
+          const realIdx = m.length - 1 - idx;
+          const next = [...m];
+          next[realIdx] = {
+            ...next[realIdx],
+            type: last.status === "complete" ? "build" : "build_progress",
+            session_id: sid,
+            progress: last.progress || [],
+            status: last.status,
+            paused: last.paused,
+            error: last.error,
+            total_credits_used: last.total_credits_used,
+            ...(last.status === "complete" && last.project ? {
+              name: last.project.name,
+              files: last.project.files || [],
+              nodes: last.project.nodes || [],
+              edges: last.project.edges || [],
+              project_id: last.project.id,
+              has_ui: last.project.has_ui,
+              app_slug: last.project.app_slug,
+              credits_used: last.total_credits_used,
+              model: model,
+            } : {}),
+          };
+          return next;
+        });
+        if (["complete", "paused", "failed"].includes(last.status)) break;
+      }
+      if (last && last.status === "complete" && last.project) {
+        setFiles(last.project.files || []);
+        setNodes(last.project.nodes || []);
+        setEdges(last.project.edges || []);
+        if (last.project.id) await loadProject(last.project.id);
+        toast.success(`Build complete · −${last.total_credits_used}cr`);
+      } else if (last && last.status === "paused") {
+        toast.warning("Build paused again — add more credits.");
+      }
+      refreshCredits();
+    } catch {
+      toast.error("Resume failed.");
+    } finally {
+      setBusy(false); setBusyMode(null);
+    }
+  }, [session, headers, model, loadProject, refreshCredits]);
 
   // ── Right panel actions ───────────────────────────────────
   const openInWorkflows = useCallback(() => {
@@ -368,6 +504,7 @@ export default function Armory() {
         onSuggest={handleSuggest}
         onViewFiles={() => setPreviewOpen(true)}
         onOpenInWorkflows={openInWorkflows}
+        onResume={onResumeBuild}
         hasProject={!!project}
       />
       {previewOpen && project && (

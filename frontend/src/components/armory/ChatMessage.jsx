@@ -1,21 +1,161 @@
 /* eslint-disable react/prop-types */
 /**
  * ChatMessage — one row in the chat thread.
- * Renders user / assistant / error / code-generation cards.
+ * Renders user / assistant / error / code-generation / build-progress cards.
  */
-import { Bot, User, AlertCircle, Coins } from "lucide-react";
+import { Bot, User, AlertCircle, Coins, CheckCircle2, Loader2, Circle, AlertTriangle, ArrowUpRight } from "lucide-react";
+import { Link } from "react-router-dom";
 import CodeGenerationCard from "./CodeGenerationCard";
 
-export default function ChatMessage({ msg, onViewFiles, onOpenInWorkflows }) {
+const STAGE_LABELS = {
+  architect: "Architect",
+  planner: "Planner",
+  builder: "Builder",
+  reviewer: "Reviewer",
+  polisher: "Polisher",
+  ui_builder: "UI Builder",
+};
+const ALL_STAGES = ["architect", "planner", "builder", "reviewer", "polisher", "ui_builder"];
+
+function StageChip({ stage, status, creditsUsed, durationMs }) {
+  const Icon = status === "done" ? CheckCircle2
+    : status === "running" || status === "queued" ? Loader2
+    : status === "failed" ? AlertTriangle
+    : Circle;
+  const color = status === "done" ? "#10b981"
+    : status === "running" ? "var(--armory-accent)"
+    : status === "failed" ? "#f43f5e"
+    : status === "paused" ? "#fbbf24"
+    : status === "skipped" ? "var(--armory-text-mute)"
+    : "var(--armory-text-mute)";
+  const opacity = status === "skipped" ? 0.4 : 1;
+  return (
+    <div
+      data-testid={`stage-chip-${stage}`}
+      data-status={status || "pending"}
+      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-sm text-[10px] font-mono uppercase tracking-[0.1em]"
+      style={{
+        background: "var(--armory-card)",
+        border: `1px solid ${status === "done" ? "rgba(16,185,129,0.3)" : "var(--armory-border)"}`,
+        color,
+        opacity,
+      }}
+    >
+      <Icon size={10} className={status === "running" ? "animate-spin" : ""} />
+      <span>{STAGE_LABELS[stage] || stage}</span>
+      {status === "done" && creditsUsed != null && (
+        <span className="opacity-60">−{creditsUsed}cr</span>
+      )}
+      {status === "done" && durationMs != null && (
+        <span className="opacity-60">{Math.round(durationMs / 100) / 10}s</span>
+      )}
+    </div>
+  );
+}
+
+function BuildProgressCard({ msg, onResume }) {
+  const progress = msg.progress || [];
+  const byStage = Object.fromEntries(progress.map((p) => [p.stage, p]));
+  const status = msg.status;
+  const totalCr = msg.total_credits_used || 0;
+
+  return (
+    <div
+      data-testid="armory-msg-build-progress"
+      className="px-4 py-3 rounded-sm"
+      style={{
+        background: "var(--armory-card)",
+        border: "1px solid var(--armory-border)",
+        borderLeft: status === "paused" ? "3px solid #fbbf24" : status === "failed" ? "3px solid #f43f5e" : "3px solid var(--armory-accent)",
+      }}
+    >
+      <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center gap-2">
+          <Loader2 size={12} className={status === "queued" || status === "running" ? "animate-spin" : ""} style={{ color: "var(--armory-accent)" }} />
+          <span className="text-[11px] font-mono uppercase tracking-[0.15em]" style={{ color: "var(--armory-accent)" }}>
+            {status === "complete" ? "Build Complete" : status === "paused" ? "Build Paused" : status === "failed" ? "Build Failed" : "Building Agent"}
+          </span>
+        </div>
+        <span className="text-[10px] font-mono opacity-60" style={{ color: "var(--armory-text-mute)" }}>
+          {totalCr}cr so far
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {ALL_STAGES.map((s) => {
+          const entry = byStage[s];
+          return (
+            <StageChip
+              key={s}
+              stage={s}
+              status={entry?.status}
+              creditsUsed={entry?.credits_used}
+              durationMs={entry?.duration_ms}
+            />
+          );
+        })}
+      </div>
+
+      {status === "paused" && (
+        <div data-testid="build-paused-banner" className="mt-3 px-3 py-2 rounded-sm text-[12px]" style={{ background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.3)" }}>
+          <div className="flex items-center gap-2 text-amber-300 mb-1 font-mono text-[10px] uppercase tracking-[0.15em]">
+            <AlertTriangle size={10} /> Out of credits at {msg.paused?.stage || "stage"}
+          </div>
+          <div className="text-[12px]" style={{ color: "var(--armory-text)" }}>
+            Top up credits then resume the build — already-completed stages will be skipped.
+          </div>
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <Link to="/credits" data-testid="build-paused-topup" className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm bg-amber-400 text-black text-[10px] font-bold uppercase tracking-widest font-mono hover:bg-amber-300">
+              Top Up Credits <ArrowUpRight size={9} />
+            </Link>
+            <button data-testid="build-resume-btn" onClick={onResume} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-cyan-400 text-cyan-300 text-[10px] font-bold uppercase tracking-widest font-mono hover:bg-cyan-400/10">
+              Resume Build
+            </button>
+          </div>
+        </div>
+      )}
+
+      {status === "failed" && msg.error && (
+        <div className="mt-2 text-[12px] text-rose-300 font-mono">{msg.error}</div>
+      )}
+    </div>
+  );
+}
+
+export default function ChatMessage({ msg, onViewFiles, onOpenInWorkflows, onResume }) {
   const isUser = msg.role === "user";
   const isError = msg.type === "error";
   const isBuild = msg.type === "build" || msg.kind === "build";
+  const isBuildProgress = msg.type === "build_progress";
+
+  if (isBuildProgress) {
+    return (
+      <div className="flex gap-3 mb-4 fade-in">
+        <Avatar role="assistant" />
+        <div className="flex-1 max-w-[680px]">
+          <BuildProgressCard msg={msg} onResume={onResume} />
+        </div>
+      </div>
+    );
+  }
 
   if (isBuild) {
     return (
       <div data-testid={`armory-msg-build`} className="flex gap-3 mb-4 fade-in">
         <Avatar role="assistant" />
         <div className="flex-1 max-w-[680px]">
+          {msg.progress && msg.progress.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {ALL_STAGES.map((s) => {
+                const entry = msg.progress.find((p) => p.stage === s);
+                if (!entry) return null;
+                return (
+                  <StageChip key={s} stage={s} status={entry.status}
+                    creditsUsed={entry.credits_used} durationMs={entry.duration_ms} />
+                );
+              })}
+            </div>
+          )}
           <CodeGenerationCard
             name={msg.name}
             files={msg.files || []}
@@ -24,6 +164,18 @@ export default function ChatMessage({ msg, onViewFiles, onOpenInWorkflows }) {
             onViewFiles={onViewFiles}
             onOpenInWorkflows={onOpenInWorkflows}
           />
+          {msg.has_ui && msg.app_slug && (
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <Link
+                to={`/apps/${msg.app_slug}`}
+                data-testid={`open-mini-app-${msg.app_slug}`}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm bg-cyan-400 text-black text-[10px] font-bold uppercase tracking-widest font-mono hover:bg-cyan-300"
+              >
+                Open Mini App <ArrowUpRight size={9} />
+              </Link>
+              <span className="text-[10px] font-mono opacity-50">/apps/{msg.app_slug}</span>
+            </div>
+          )}
           {msg.credits_used !== undefined && (
             <CreditMeta credits={msg.credits_used} model={msg.model} inputTokens={msg.input_tokens} outputTokens={msg.output_tokens} keySource={msg.key_source} />
           )}

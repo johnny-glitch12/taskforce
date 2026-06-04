@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/App";
 import { useTheme } from "@/lib/theme";
-import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, LogOut, Coins, Rocket, Sparkles, Package, Server, Banknote, TrendingUp, Key } from "lucide-react";
+import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, LogOut, Coins, Rocket, Sparkles, Package, Server, Banknote, TrendingUp, Key, Layers } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import NotificationBell from "@/components/NotificationBell";
 
@@ -39,6 +39,7 @@ function UserMenu({ user, logout, navigate }) {
     { to: "/dashboard", label: "Command Center", icon: LayoutDashboard },
     { to: "/credits", label: "Credits", icon: Coins },
     { to: "/my-deployments", label: "My Deployments", icon: Rocket },
+    { to: "/my-apps", label: "My Apps", icon: Layers, accent: true },
     { to: "/external-agents", label: "External Agents", icon: Package },
     { to: "/hosting", label: "Hosting Plans", icon: Server },
     { to: "/payouts", label: "Payouts", icon: Banknote },

@@ -37,6 +37,8 @@ import ApiKeys from "@/pages/ApiKeys";
 import ListingDetail from "@/pages/ListingDetail";
 import Armory from "@/pages/Armory";
 import EconomicsDashboard from "@/pages/EconomicsDashboard";
+import MyApps from "@/pages/MyApps";
+import AppViewer from "@/pages/AppViewer";
 import OnboardingModal from "@/components/OnboardingModal";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -304,6 +306,8 @@ function AppShell() {
           <Route path="/creator" element={<ProtectedRoute><CreatorDashboard /></ProtectedRoute>} />
           <Route path="/credentials" element={<ProtectedRoute><CredentialsVault /></ProtectedRoute>} />
           <Route path="/admin/economics" element={<OwnerGate feature="Platform Economics"><EconomicsDashboard /></OwnerGate>} />
+          <Route path="/my-apps" element={<ProtectedRoute><MyApps /></ProtectedRoute>} />
+          <Route path="/apps/:slug" element={<ProtectedRoute><AppViewer /></ProtectedRoute>} />
         </Routes>
       </main>
       {hideFooter ? null : <Footer />}

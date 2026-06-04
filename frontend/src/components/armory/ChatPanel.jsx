@@ -13,7 +13,7 @@ import EmptyState from "./EmptyState";
 export default function ChatPanel({
   session, messages, model, models, input, setInput,
   busy, busyMode, onSend, onSuggest,
-  onViewFiles, onOpenInWorkflows, hasProject,
+  onViewFiles, onOpenInWorkflows, onResume, hasProject,
   collapsed,
 }) {
   const endRef = useRef(null);
@@ -93,6 +93,7 @@ export default function ChatPanel({
                 msg={m}
                 onViewFiles={onViewFiles}
                 onOpenInWorkflows={onOpenInWorkflows}
+                onResume={onResume}
               />
             ))}
             {busy && (

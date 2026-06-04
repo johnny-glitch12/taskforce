@@ -2021,6 +2021,9 @@ app.include_router(admin_seeds_router, prefix="/api")
 from routes.credits_economics import router as credits_economics_router
 app.include_router(credits_economics_router, prefix="/api")
 
+from routes.apps import router as apps_router
+app.include_router(apps_router, prefix="/api")
+
 
 # ─── Runtime / Infra Status (owner-only) ──────────────────
 @app.get("/api/admin/runtime/status")

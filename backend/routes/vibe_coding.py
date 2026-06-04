@@ -498,8 +498,155 @@ async def vibe_chat(req: VibeChatRequest, user=Depends(get_current_user())):
 
 @router.post("/vibe/generate")
 async def vibe_generate(req: VibeGenerateRequest, user=Depends(get_current_user())):
-    """Code-generation turn. Billed dynamically on real token usage (vibe_build action).
-    Persists files+nodes to bot_projects."""
+    """Dispatch the 5-stage code-gen pipeline as a background Celery task.
+
+    Returns immediately with status='queued' and the session_id. Frontend should
+    poll GET /api/vibe/build-status/{session_id} for stage progress. When the
+    pipeline finishes, the session's build_status flips to 'complete' and the
+    generated project is available at bot_projects.id = session.project_id.
+
+    Fallback: when CELERY_BROKER_URL is unset (zero-config dev), runs inline so
+    behaviour stays correct in tests + local dev. Production uses Celery."""
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    _verify_model(req.model)
+
+    # Light pre-flight: ensures we can charge the Architect stage. Real per-stage
+    # affordability is enforced inside the pipeline as each stage runs.
+    pre = await check_can_afford(db, user, "gemini-2.5-flash", "vibe_chat")
+    if not pre.get("allowed"):
+        return JSONResponse(status_code=402, content=pre)
+
+    session = await db.vibe_sessions.find_one({"id": req.session_id, "user_id": user_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    now = _now_iso()
+    user_msg = {"role": "user", "content": req.message, "timestamp": now}
+    await db.vibe_sessions.update_one(
+        {"id": session["id"]},
+        {"$push": {"messages": user_msg},
+         "$set": {"build_status": "queued", "build_progress": [],
+                  "build_context": {},
+                  "build_started_at": now, "model": req.model, "updated_at": now}},
+    )
+
+    from lib.celery_app import ENABLED as CELERY_ENABLED, vibe_build_task
+    if CELERY_ENABLED:
+        async_result = vibe_build_task.delay(
+            session_id=session["id"],
+            user_id=user_id, user_email=user.get("email"),
+            user_prompt=req.message, builder_model=req.model, resume=False,
+        )
+        return {
+            "session_id": session["id"], "status": "queued",
+            "task_id": async_result.id, "model": req.model,
+            "poll_url": f"/api/vibe/build-status/{session['id']}",
+        }
+    # Inline fallback for dev
+    from lib.code_gen_pipeline import run_build_pipeline
+    result = await run_build_pipeline(
+        db, user, session_id=session["id"],
+        user_prompt=req.message, builder_model=req.model, resume=False,
+    )
+    return {"session_id": session["id"], "status": result.get("status"),
+            "model": req.model, "result": result}
+
+
+@router.get("/vibe/build-status/{session_id}")
+async def vibe_build_status(session_id: str, user=Depends(get_current_user())):
+    """Poll endpoint — returns the pipeline's current stage progression.
+    Frontend renders a stage-by-stage progress chip strip from this."""
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    sess = await db.vibe_sessions.find_one(
+        {"id": session_id, "user_id": user_id},
+        {"_id": 0, "build_progress": 1, "build_status": 1, "build_paused_reason": 1,
+         "build_paused_stage": 1, "build_paused_estimate": 1, "build_error": 1,
+         "project_id": 1, "model": 1, "total_credits_used": 1},
+    )
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    payload = {
+        "session_id": session_id,
+        "status": sess.get("build_status", "idle"),
+        "progress": sess.get("build_progress", []),
+        "project_id": sess.get("project_id"),
+        "model": sess.get("model"),
+        "total_credits_used": sess.get("total_credits_used", 0),
+    }
+    if sess.get("build_status") == "paused":
+        payload["paused"] = {
+            "stage": sess.get("build_paused_stage"),
+            "reason": sess.get("build_paused_reason"),
+            "estimate_credits": sess.get("build_paused_estimate"),
+        }
+    if sess.get("build_status") == "failed":
+        payload["error"] = sess.get("build_error")
+    if sess.get("build_status") == "complete" and sess.get("project_id"):
+        proj = await db.bot_projects.find_one(
+            {"id": sess["project_id"], "user_id": user_id},
+            {"_id": 0, "id": 1, "name": 1, "description": 1, "files": 1, "nodes": 1,
+             "edges": 1, "frontend": 1, "has_ui": 1, "app_slug": 1},
+        )
+        payload["project"] = proj
+    return payload
+
+
+@router.post("/vibe/resume-build/{session_id}")
+async def vibe_resume_build(session_id: str, user=Depends(get_current_user())):
+    """Resume a paused pipeline. The user typically tops up credits between
+    pause and resume — we re-dispatch the same Celery task with resume=True so
+    completed stages are skipped (read from build_context)."""
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    sess = await db.vibe_sessions.find_one({"id": session_id, "user_id": user_id})
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    if sess.get("build_status") != "paused":
+        raise HTTPException(status_code=409, detail=f"Session is not paused (status={sess.get('build_status')}).")
+
+    # Try to afford the stage we paused at
+    paused_stage = sess.get("build_paused_stage")
+    model = sess.get("model") or DEFAULT_MODEL
+    pre = await check_can_afford(db, user, "gemini-2.5-flash" if paused_stage != "builder" else model, "vibe_build")
+    if not pre.get("allowed"):
+        return JSONResponse(status_code=402, content=pre)
+
+    # Find the original prompt: the most recent user message
+    msgs = sess.get("messages", []) or []
+    user_msgs = [m for m in msgs if m.get("role") == "user"]
+    if not user_msgs:
+        raise HTTPException(status_code=400, detail="No user message to resume against.")
+    user_prompt = user_msgs[-1]["content"]
+
+    await db.vibe_sessions.update_one(
+        {"id": session_id},
+        {"$set": {"build_status": "queued", "build_resumed_at": _now_iso(), "updated_at": _now_iso()},
+         "$unset": {"build_paused_reason": "", "build_paused_stage": "",
+                    "build_paused_estimate": "", "build_paused_at": ""}},
+    )
+
+    from lib.celery_app import ENABLED as CELERY_ENABLED, vibe_build_task
+    if CELERY_ENABLED:
+        async_result = vibe_build_task.delay(
+            session_id=session_id,
+            user_id=user_id, user_email=user.get("email"),
+            user_prompt=user_prompt, builder_model=model, resume=True,
+        )
+        return {"session_id": session_id, "status": "queued", "task_id": async_result.id}
+    from lib.code_gen_pipeline import run_build_pipeline
+    result = await run_build_pipeline(
+        db, user, session_id=session_id,
+        user_prompt=user_prompt, builder_model=model, resume=True,
+    )
+    return {"session_id": session_id, "status": result.get("status"), "result": result}
+
+
+@router.post("/vibe/generate-legacy")
+async def vibe_generate_legacy(req: VibeGenerateRequest, user=Depends(get_current_user())):
+    """LEGACY single-call generator (pre-pipeline). Kept for tests and any callers
+    that don't yet use the polling flow. New clients should use /vibe/generate."""
     db = get_db()
     user_id = str(user.get("id", user.get("email")))
     _verify_model(req.model)

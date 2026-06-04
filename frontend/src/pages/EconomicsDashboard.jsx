@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/App";
 import {
   DollarSign, TrendingUp, Activity, Users, Zap, Cpu,
-  ArrowUpRight, ArrowDownRight, Loader2,
+  ArrowUpRight, ArrowDownRight, Loader2, Server,
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -67,6 +67,15 @@ export default function EconomicsDashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [runtime, setRuntime] = useState(null);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API}/api/admin/runtime/status`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setRuntime)
+      .catch(() => {});
+  }, [token]);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +121,27 @@ export default function EconomicsDashboard() {
             <p className="text-sm t-text-sub mt-2">
               Dynamic credit revenue vs API cost. Platform charges {data ? data.platform_margin.toFixed(1) : "—"}× provider cost on platform-key calls (≈60% gross margin).
             </p>
+            {runtime && (
+              <div data-testid="runtime-health-chip" className="inline-flex items-center gap-2 mt-3 px-2 py-1 rounded-sm" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+                <Server size={10} className={runtime.runtime?.active === "celery" ? "text-emerald-400" : "text-amber-400"} />
+                <span className="text-[10px] font-mono uppercase tracking-[0.15em] t-text-sub">
+                  Runtime: {runtime.runtime?.active || "—"}
+                </span>
+                {runtime.runtime?.celery_health?.ok && (
+                  <span className="text-[10px] font-mono t-text-mute">
+                    · Redis {runtime.runtime.celery_health.latency_ms}ms
+                  </span>
+                )}
+                {runtime.runtime?.celery_health && !runtime.runtime.celery_health.ok && (
+                  <span className="text-[10px] font-mono text-rose-400">· broker down</span>
+                )}
+                {runtime.kms?.active_provider && (
+                  <span className="text-[10px] font-mono t-text-mute">
+                    · KMS: {runtime.kms.active_provider}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           <div data-testid="economics-window-toggle" className="inline-flex rounded-sm overflow-hidden" style={{ border: "1px solid var(--border)" }}>

@@ -133,6 +133,35 @@ def scheduled_runs_tick_task(self):
     return {"dispatched": int(n or 0)}
 
 
+@celery_app.task(name="tfai.vibe_build", bind=True)
+def vibe_build_task(self, session_id: str, user_id: str, user_email: str,
+                    user_prompt: str, builder_model: str, resume: bool = False):
+    """Run the Emergent-quality 5-stage code-gen pipeline as a Celery task.
+    Non-blocking — frontend polls /api/vibe/build-status/{session_id} for progress."""
+    async def _go():
+        client, db = _task_db()
+        try:
+            # Re-hydrate user doc since Celery passes only ids over the wire.
+            user_doc = await db.users.find_one({"id": user_id}) or await db.users.find_one({"email": user_email})
+            if not user_doc:
+                return {"status": "failed", "error": "user not found"}
+            user_doc.setdefault("id", user_id)
+            user_doc.setdefault("email", user_email)
+            from lib.code_gen_pipeline import run_build_pipeline
+            return await run_build_pipeline(
+                db, user_doc,
+                session_id=session_id,
+                user_prompt=user_prompt,
+                builder_model=builder_model,
+                resume=resume,
+            )
+        finally:
+            client.close()
+    result = _run_async(_go)
+    logger.info(f"[celery:vibe_build] session={session_id} status={result.get('status')}")
+    return result
+
+
 @celery_app.task(name="tfai.supernova_eval", bind=True)
 def supernova_eval_task(self):
     """Daily Supernova creator-tier evaluation."""
