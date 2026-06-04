@@ -25,7 +25,7 @@ export default function ChatMessage({ msg, onViewFiles, onOpenInWorkflows }) {
             onOpenInWorkflows={onOpenInWorkflows}
           />
           {msg.credits_used !== undefined && (
-            <CreditMeta credits={msg.credits_used} model={msg.model} />
+            <CreditMeta credits={msg.credits_used} model={msg.model} inputTokens={msg.input_tokens} outputTokens={msg.output_tokens} keySource={msg.key_source} />
           )}
         </div>
       </div>
@@ -87,7 +87,7 @@ export default function ChatMessage({ msg, onViewFiles, onOpenInWorkflows }) {
           {renderWithCodeBlocks(msg.content || "")}
         </div>
         {msg.credits_used !== undefined && (
-          <CreditMeta credits={msg.credits_used} model={msg.model} />
+          <CreditMeta credits={msg.credits_used} model={msg.model} inputTokens={msg.input_tokens} outputTokens={msg.output_tokens} keySource={msg.key_source} />
         )}
       </div>
     </div>
@@ -114,12 +114,24 @@ function Avatar({ role }) {
   );
 }
 
-function CreditMeta({ credits, model }) {
+function CreditMeta({ credits, model, inputTokens, outputTokens, keySource }) {
+  const totalTokens = (inputTokens || 0) + (outputTokens || 0);
+  const isByok = keySource === "byok";
   return (
-    <div className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-mono opacity-60" style={{ color: "var(--armory-text-dim)" }}>
-      <Coins size={9} style={{ color: "var(--armory-accent)" }} />
-      <span>−{credits}cr</span>
+    <div data-testid="armory-credit-meta" className="mt-2 inline-flex items-center gap-2 text-[10px] font-mono opacity-70 flex-wrap" style={{ color: "var(--armory-text-dim)" }}>
+      <span className="inline-flex items-center gap-1">
+        <Coins size={9} style={{ color: "var(--armory-accent)" }} />
+        <span data-testid="credit-meta-cost">−{credits}cr</span>
+      </span>
       {model && <span>· {model.split("-").slice(0, 2).join("-")}</span>}
+      {totalTokens > 0 && (
+        <span data-testid="credit-meta-tokens">· {inputTokens || 0}→{outputTokens || 0} tok</span>
+      )}
+      {isByok && (
+        <span data-testid="credit-meta-byok" className="px-1.5 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-wider" style={{ background: "rgba(168,85,247,0.15)", color: "#c084fc", border: "1px solid rgba(168,85,247,0.3)" }}>
+          BYOK
+        </span>
+      )}
     </div>
   );
 }

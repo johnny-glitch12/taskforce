@@ -23,6 +23,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from lib.credit_wallet import can_afford as wallet_can_afford, debit as wallet_debit
+from lib.credit_calculator import estimate_tokens_for_call
+from lib.smart_credits import check_can_afford, debit_actual_usage
 
 router = APIRouter()
 
@@ -215,16 +217,25 @@ def _normalize_bot(payload: dict) -> dict:
 
 
 async def _generate_with_gemini(prompt: str) -> dict:
+    """Returns {bot: <normalized>, input_tokens, output_tokens, model}."""
     from emergentintegrations.llm.chat import LlmChat, UserMessage
     chat = LlmChat(
         api_key=EMERGENT_LLM_KEY,
         session_id=f"armory-builder-{uuid.uuid4().hex[:8]}",
         system_message=BUILDER_SYSTEM_PROMPT,
     ).with_model("gemini", GEMINI_MODEL)
-    msg = UserMessage(text=f"Build this bot now (JSON only, no prose):\n\n{prompt}")
+    user_message = f"Build this bot now (JSON only, no prose):\n\n{prompt}"
+    msg = UserMessage(text=user_message)
     raw = await chat.send_message(msg)
-    payload = _extract_json(raw)
-    return _normalize_bot(payload)
+    text = str(raw)
+    payload = _extract_json(text)
+    in_tok, out_tok = estimate_tokens_for_call(BUILDER_SYSTEM_PROMPT, [], user_message, text)
+    return {
+        "bot": _normalize_bot(payload),
+        "input_tokens": in_tok,
+        "output_tokens": out_tok,
+        "model": GEMINI_MODEL,
+    }
 
 
 # ─── POST /api/armory/build-bot ───────────────────────
@@ -233,17 +244,18 @@ async def build_bot(req: BuildBotRequest, user=Depends(get_current_user())):
     db = get_db()
     user_id = str(user.get("id", user.get("email")))
 
-    # Credit wallet gate — Armory build costs 5 credits per bot.
-    credit_check = await wallet_can_afford(db, user, "build_bot")
-    if not credit_check.get("allowed"):
+    # Dynamic pre-flight: bot builds use Gemini Pro on the build_bot action.
+    pre = await check_can_afford(db, user, GEMINI_MODEL, "build_bot")
+    if not pre.get("allowed"):
         from fastapi.responses import JSONResponse
-        return JSONResponse(status_code=402, content=credit_check)
+        return JSONResponse(status_code=402, content=pre)
 
     try:
-        bot = await _generate_with_gemini(req.prompt)
+        gen = await _generate_with_gemini(req.prompt)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM build failed: {str(e)[:200]}")
 
+    bot = gen["bot"]
     if not bot["files"] or not bot["manifest"]["nodes"]:
         raise HTTPException(status_code=502, detail="Generated bot has no files or nodes — try a more specific prompt.")
 
@@ -300,10 +312,21 @@ async def build_bot(req: BuildBotRequest, user=Depends(get_current_user())):
         }
         await db.bot_projects.insert_one(doc)
 
-    await wallet_debit(db, user, "build_bot", ref=project_id)
+    # Dynamic post-call debit on real token usage.
+    debit = await debit_actual_usage(
+        db, user,
+        model=GEMINI_MODEL, action="build_bot",
+        input_tokens=gen["input_tokens"], output_tokens=gen["output_tokens"],
+        key_source="platform", ref=project_id,
+    )
 
     project = await db.bot_projects.find_one({"id": project_id}, {"_id": 0})
-    return {"success": True, "project_id": project_id, "project": project}
+    return {
+        "success": True, "project_id": project_id, "project": project,
+        "credits_used": debit.get("credits_charged"),
+        "balance_remaining": debit.get("balance"),
+        "cost_breakdown": debit.get("cost_breakdown"),
+    }
 
 
 # ─── GitHub-style project CRUD ────────────────────────

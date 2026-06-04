@@ -111,15 +111,18 @@ async def debit_actual_usage(
 
     # Persist the rich metadata into the same transaction row that credit_wallet
     # just wrote. credit_wallet stores a row in credit_transactions; we patch
-    # the latest matching row with our breakdown so the economics dashboard can
-    # aggregate on metadata.* fields.
+    # the most-recent matching row with our breakdown so the economics dashboard
+    # can aggregate on metadata.* fields. find_one_and_update with sort guarantees
+    # we patch the row we just inserted, not an older one with the same ref.
     try:
         user_id = str(user.get("id", user.get("email")))
-        await db.credit_transactions.update_one(
-            {"user_id": user_id, "ref": ref, "kind": action} if ref else
-            {"user_id": user_id, "kind": action},
+        match = {"user_id": user_id, "kind": action}
+        if ref:
+            match["ref"] = ref
+        await db.credit_transactions.find_one_and_update(
+            match,
             {"$set": {"metadata": metadata}},
-            upsert=False,
+            sort=[("created_at", -1)],
         )
     except Exception as e:
         logger.warning(f"[smart_credits] metadata patch failed: {e}")

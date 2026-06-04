@@ -36,6 +36,7 @@ import CreatorEarnings from "@/pages/CreatorEarnings";
 import ApiKeys from "@/pages/ApiKeys";
 import ListingDetail from "@/pages/ListingDetail";
 import Armory from "@/pages/Armory";
+import EconomicsDashboard from "@/pages/EconomicsDashboard";
 import OnboardingModal from "@/components/OnboardingModal";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -58,6 +59,14 @@ function AdminGate({ children, feature, subtitle }) {
   const { isAdmin, loading } = useAuth();
   if (loading) return null;
   if (!isAdmin) return <ComingSoon feature={feature} subtitle={subtitle} />;
+  return children;
+}
+
+/** Owner-only route — even dev admins are denied. */
+function OwnerGate({ children, feature, subtitle }) {
+  const { isOwner, loading } = useAuth();
+  if (loading) return null;
+  if (!isOwner) return <ComingSoon feature={feature || "Owner Only"} subtitle={subtitle || "This area is restricted to platform owners."} />;
   return children;
 }
 
@@ -133,9 +142,10 @@ function App() {
   };
 
   const isAdmin = user?.role === "admin";
+  const isOwner = isAdmin && !!user?.is_owner;
 
   return (
-    <AuthContext.Provider value={{ user, token, isAdmin, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, isAdmin, isOwner, loading, login, register, logout }}>
       <ThemeProvider>
         <BrowserRouter>
           <AppShell />
@@ -293,6 +303,7 @@ function AppShell() {
           <Route path="/overwatch" element={<ProtectedRoute><OverwatchDashboard /></ProtectedRoute>} />
           <Route path="/creator" element={<ProtectedRoute><CreatorDashboard /></ProtectedRoute>} />
           <Route path="/credentials" element={<ProtectedRoute><CredentialsVault /></ProtectedRoute>} />
+          <Route path="/admin/economics" element={<OwnerGate feature="Platform Economics"><EconomicsDashboard /></OwnerGate>} />
         </Routes>
       </main>
       {hideFooter ? null : <Footer />}

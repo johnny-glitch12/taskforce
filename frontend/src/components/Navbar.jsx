@@ -27,6 +27,7 @@ function UserMenu({ user, logout, navigate }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const isAdmin = user?.role === "admin";
+  const isOwner = isAdmin && !!user?.is_owner;
 
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -46,6 +47,9 @@ function UserMenu({ user, logout, navigate }) {
     ...(isAdmin ? [
       { to: "/overwatch", label: "Overwatch", icon: BarChart3, accent: true },
       { to: "/security", label: "Security", icon: Shield },
+    ] : []),
+    ...(isOwner ? [
+      { to: "/admin/economics", label: "Economics", icon: TrendingUp, accent: true },
     ] : []),
   ];
 

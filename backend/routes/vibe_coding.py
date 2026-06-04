@@ -27,6 +27,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from lib.credit_wallet import can_afford as wallet_can_afford, debit as wallet_debit
+from lib.credit_calculator import estimate_tokens, estimate_tokens_for_call
+from lib.smart_credits import check_can_afford, debit_actual_usage
 
 router = APIRouter()
 
@@ -196,11 +198,17 @@ async def _get_byok_providers(db, user_id: str) -> set:
     return out
 
 
-async def _call_platform_llm(*, model: str, system_prompt: str, history: list, user_message: str, session_key: str, api_key: Optional[str] = None) -> str:
+async def _call_platform_llm(*, model: str, system_prompt: str, history: list, user_message: str, session_key: str, api_key: Optional[str] = None) -> dict:
     """Dispatch a chat call to a model — uses the supplied api_key (BYOK or Emergent).
     History is injected as transcript text in a single user message — emergentintegrations
     creates fresh sessions per LlmChat instance, so replaying turns one-by-one would
-    fan-out into N LLM round-trips (blowing past the 60s ingress timeout)."""
+    fan-out into N LLM round-trips (blowing past the 60s ingress timeout).
+
+    Returns {text, input_tokens, output_tokens, model} — token counts are estimated
+    via tiktoken (cl100k_base proxy) since emergentintegrations does not expose
+    provider-side usage objects. Estimate matches the trim policy below so counts
+    align with the bytes we actually sent on the wire.
+    """
     from emergentintegrations.llm.chat import LlmChat, UserMessage
     info = MODELS[model]
     key = api_key or EMERGENT_LLM_KEY
@@ -216,7 +224,14 @@ async def _call_platform_llm(*, model: str, system_prompt: str, history: list, u
     else:
         composite = user_message
     resp = await chat.send_message(UserMessage(text=composite))
-    return str(resp)
+    text = str(resp)
+    in_tokens, out_tokens = estimate_tokens_for_call(system_prompt, history, user_message, text)
+    return {
+        "text": text,
+        "input_tokens": in_tokens,
+        "output_tokens": out_tokens,
+        "model": model,
+    }
 
 
 async def _get_byok_status(db, user_id: str) -> dict:
@@ -250,37 +265,49 @@ RETURN STRICTLY THIS JSON, no markdown fences, no prose:
 
 @router.post("/vibe/recommend-model")
 async def recommend_model(req: RecommendRequest, user=Depends(get_current_user())):
-    """Cheap auto-pick. Uses Gemini Flash (1cr) to classify the request and recommend
+    """Cheap auto-pick. Uses Gemini Flash to classify the request and recommend
     one of the 6 catalogue models. Returns {model, reason, complexity} or falls back
-    to gemini-2.5-flash if the LLM output can't be parsed."""
+    to gemini-2.5-flash if the LLM output can't be parsed. Billed dynamically — the
+    classifier call is cheap (few hundred tokens) so users typically pay the
+    1-credit MIN_CREDITS['vibe_chat'] floor."""
     db = get_db()
-    check = await wallet_can_afford(db, user, "vibe_chat")
-    if not check.get("allowed"):
-        return JSONResponse(status_code=402, content=check)
+    pre = await check_can_afford(db, user, "gemini-2.5-flash", "vibe_chat")
+    if not pre.get("allowed"):
+        return JSONResponse(status_code=402, content=pre)
 
     try:
-        raw = await _call_platform_llm(
+        result = await _call_platform_llm(
             model="gemini-2.5-flash", system_prompt=RECOMMEND_SYSTEM,
             history=[], user_message=req.prompt,
             session_key=f"vibe-recommend-{user.get('id', user.get('email'))}",
         )
-        parsed = _extract_json(raw)
+        parsed = _extract_json(result["text"])
+        in_tok = result["input_tokens"]
+        out_tok = result["output_tokens"]
     except Exception:
         parsed = {}
+        in_tok = estimate_tokens(RECOMMEND_SYSTEM + req.prompt)
+        out_tok = 0
 
     pick = parsed.get("model") if parsed.get("model") in MODELS else DEFAULT_MODEL
     reason = parsed.get("reason") or "Fast and cheap — good fit for most tasks."
     complexity = parsed.get("complexity") or "medium"
 
-    debit = await wallet_debit(db, user, "vibe_chat", ref=f"recommend:{pick}")
+    debit = await debit_actual_usage(
+        db, user,
+        model="gemini-2.5-flash", action="vibe_chat",
+        input_tokens=in_tok, output_tokens=out_tok,
+        key_source="platform", ref=f"recommend:{pick}",
+    )
     return {
         "model": pick,
         "label": MODELS[pick]["label"],
         "build_cost": MODELS[pick]["build_cost"],
         "reason": reason,
         "complexity": complexity,
-        "credits_used": debit["cost"],
-        "balance_remaining": debit["balance"],
+        "credits_used": debit.get("credits_charged"),
+        "balance_remaining": debit.get("balance"),
+        "cost_breakdown": debit.get("cost_breakdown"),
     }
 
 
@@ -371,15 +398,15 @@ def _verify_model(model: str):
 
 @router.post("/vibe/chat")
 async def vibe_chat(req: VibeChatRequest, user=Depends(get_current_user())):
-    """Conversational planning turn. 1 credit per AI reply."""
+    """Conversational planning turn. Billed dynamically on real token usage."""
     db = get_db()
     user_id = str(user.get("id", user.get("email")))
     _verify_model(req.model)
 
-    # Credit gate
-    check = await wallet_can_afford(db, user, "vibe_chat")
-    if not check.get("allowed"):
-        return JSONResponse(status_code=402, content=check)
+    # Pre-flight: estimate cost from AVERAGE_TOKENS for the chosen model.
+    pre = await check_can_afford(db, user, req.model, "vibe_chat")
+    if not pre.get("allowed"):
+        return JSONResponse(status_code=402, content=pre)
 
     session = await _ensure_session(db, user_id, user.get("email"), req.session_id, req.model, req.message)
     history = session.get("messages", [])
@@ -388,7 +415,7 @@ async def vibe_chat(req: VibeChatRequest, user=Depends(get_current_user())):
     key_info = await _resolve_api_key(db, user_id, req.model)
 
     try:
-        ai_text = await _call_platform_llm(
+        result = await _call_platform_llm(
             model=req.model, system_prompt=VIBE_PLANNING_PROMPT,
             history=history, user_message=req.message,
             session_key=f"vibe-{session['id']}",
@@ -397,38 +424,52 @@ async def vibe_chat(req: VibeChatRequest, user=Depends(get_current_user())):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM call failed: {str(e)[:200]}")
 
+    ai_text = result["text"]
+
     # Debit AFTER successful call so a failure doesn't cost the user.
-    debit = await wallet_debit(db, user, "vibe_chat", ref=session["id"])
+    debit = await debit_actual_usage(
+        db, user,
+        model=req.model, action="vibe_chat",
+        input_tokens=result["input_tokens"], output_tokens=result["output_tokens"],
+        key_source=key_info["source"], ref=session["id"],
+    )
+    credits_used = debit.get("credits_charged", 0)
 
     now = _now_iso()
     user_msg = {"role": "user", "content": req.message, "timestamp": now}
-    ai_msg = {"role": "assistant", "content": ai_text, "timestamp": now, "type": "chat", "credits_used": debit["cost"], "model": req.model, "key_source": key_info["source"]}
+    ai_msg = {
+        "role": "assistant", "content": ai_text, "timestamp": now, "type": "chat",
+        "credits_used": credits_used, "model": req.model, "key_source": key_info["source"],
+        "input_tokens": result["input_tokens"], "output_tokens": result["output_tokens"],
+    }
     await db.vibe_sessions.update_one(
         {"id": session["id"]},
         {"$push": {"messages": {"$each": [user_msg, ai_msg]}},
-         "$inc": {"total_credits_used": debit["cost"]},
+         "$inc": {"total_credits_used": credits_used},
          "$set": {"updated_at": now, "model": req.model}},
     )
     return {
         "session_id": session["id"], "type": "chat",
-        "response": ai_text, "credits_used": debit["cost"],
-        "balance_remaining": debit["balance"], "model": req.model,
+        "response": ai_text, "credits_used": credits_used,
+        "balance_remaining": debit.get("balance"), "model": req.model,
         "key_source": key_info["source"],
+        "input_tokens": result["input_tokens"], "output_tokens": result["output_tokens"],
+        "cost_breakdown": debit.get("cost_breakdown"),
     }
 
 
 @router.post("/vibe/generate")
 async def vibe_generate(req: VibeGenerateRequest, user=Depends(get_current_user())):
-    """Code-generation turn. Cost = MODELS[model].build_cost. Persists files+nodes to bot_projects."""
+    """Code-generation turn. Billed dynamically on real token usage (vibe_build action).
+    Persists files+nodes to bot_projects."""
     db = get_db()
     user_id = str(user.get("id", user.get("email")))
     _verify_model(req.model)
 
-    # Credit gate against per-model build cost (NOT the flat ACTION_COSTS['build_bot']).
-    per_model_cost = MODELS[req.model]["build_cost"]
-    check = await wallet_can_afford(db, user, "build_bot", cost_override=per_model_cost)
-    if not check.get("allowed"):
-        return JSONResponse(status_code=402, content=check)
+    # Pre-flight: estimate vibe_build cost (avg 4k in / 3k out).
+    pre = await check_can_afford(db, user, req.model, "vibe_build")
+    if not pre.get("allowed"):
+        return JSONResponse(status_code=402, content=pre)
 
     session = await db.vibe_sessions.find_one({"id": req.session_id, "user_id": user_id})
     if not session:
@@ -440,13 +481,13 @@ async def vibe_generate(req: VibeGenerateRequest, user=Depends(get_current_user(
 
     # Generate
     try:
-        raw = await _call_platform_llm(
+        result = await _call_platform_llm(
             model=req.model, system_prompt=VIBE_BUILD_PROMPT,
             history=history, user_message=req.message,
             session_key=f"vibe-gen-{session['id']}",
             api_key=key_info["api_key"],
         )
-        payload = _extract_json(raw)
+        payload = _extract_json(result["text"])
     except json.JSONDecodeError as je:
         raise HTTPException(status_code=502, detail=f"Model output was not valid JSON: {str(je)[:120]}")
     except Exception as e:
@@ -460,8 +501,15 @@ async def vibe_generate(req: VibeGenerateRequest, user=Depends(get_current_user(
     if not files or not nodes:
         raise HTTPException(status_code=502, detail="Generated bot has no files or nodes — clarify your request.")
 
-    # Debit at per-model cost AFTER successful LLM call.
-    debit = await wallet_debit(db, user, "build_bot", ref=session["id"], cost_override=per_model_cost)
+    # Debit at REAL usage cost AFTER successful LLM call.
+    debit = await debit_actual_usage(
+        db, user,
+        model=req.model, action="vibe_build",
+        input_tokens=result["input_tokens"], output_tokens=result["output_tokens"],
+        key_source=key_info["source"], ref=session["id"],
+    )
+    credits_used = debit.get("credits_charged", 0)
+
     now = _now_iso()
     commit_id = uuid.uuid4().hex[:12]
     commit_entry = {
@@ -490,19 +538,22 @@ async def vibe_generate(req: VibeGenerateRequest, user=Depends(get_current_user(
     user_msg = {"role": "user", "content": req.message, "timestamp": now}
     ai_msg = {
         "role": "assistant", "content": f"Generated **{name}** — {len(files)} files, {len(nodes)} nodes.",
-        "timestamp": now, "type": "build", "credits_used": debit["cost"],
+        "timestamp": now, "type": "build", "credits_used": credits_used,
         "model": req.model, "project_id": project_id,
+        "input_tokens": result["input_tokens"], "output_tokens": result["output_tokens"],
     }
     await db.vibe_sessions.update_one(
         {"id": session["id"]},
         {"$push": {"messages": {"$each": [user_msg, ai_msg]}},
-         "$inc": {"total_credits_used": debit["cost"]},
+         "$inc": {"total_credits_used": credits_used},
          "$set": {"updated_at": now, "model": req.model, "project_id": project_id}},
     )
     return {
         "session_id": session["id"], "type": "build",
         "project_id": project_id, "name": name, "description": description,
         "files": files, "nodes": nodes, "edges": edges,
-        "credits_used": debit["cost"], "balance_remaining": debit["balance"], "model": req.model,
+        "credits_used": credits_used, "balance_remaining": debit.get("balance"), "model": req.model,
         "key_source": key_info["source"],
+        "input_tokens": result["input_tokens"], "output_tokens": result["output_tokens"],
+        "cost_breakdown": debit.get("cost_breakdown"),
     }

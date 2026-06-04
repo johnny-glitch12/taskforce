@@ -41,8 +41,9 @@ MIN_CREDITS: dict[str, int] = {
     "build_bot":          2,
 }
 
-# Margin multiplier — we charge users 3x the raw API cost.
-PLATFORM_MARGIN: float = 3.0
+# Margin multiplier — we charge users 2.5x the raw API cost.
+# Aggressive pricing: ~60% gross margin after provider cost, before infra/Stripe fees.
+PLATFORM_MARGIN: float = 2.5
 
 # Average input/output tokens per action — used by estimate_credit_cost for
 # pre-flight UI display. Tuned from real production data; revisit quarterly.

@@ -73,6 +73,7 @@ class UserResponse(BaseModel):
     role: str
     client_id: Optional[str] = None
     tier: str = "free"
+    is_owner: bool = False
     created_at: str
 
 class TokenResponse(BaseModel):
@@ -2016,6 +2017,9 @@ app.include_router(public_api_router, prefix="/api")
 
 from routes.admin_seeds import router as admin_seeds_router
 app.include_router(admin_seeds_router, prefix="/api")
+
+from routes.credits_economics import router as credits_economics_router
+app.include_router(credits_economics_router, prefix="/api")
 
 # Mount uploads dir for exchange listing media (videos + photos)
 UPLOADS_DIR = Path(__file__).parent / "uploads"
