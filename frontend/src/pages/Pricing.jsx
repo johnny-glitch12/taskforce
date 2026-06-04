@@ -169,7 +169,7 @@ function ModelCostMatrix({ matrix, models, actions, margin }) {
         <div className="flex-1">
           <div className="text-[12px] font-mono uppercase tracking-[0.18em] t-text">Per-Model Credit Cost (Typical Usage)</div>
           <div className="text-[11px] font-mono t-text-dim mt-0.5">
-            1 credit = $0.01 · platform charges {margin.toFixed(1)}× provider cost (60% gross margin) · BYOK pays only the floor
+            1 credit = $0.01 · billed on real token usage · BYOK pays only the API cost floor
           </div>
         </div>
       </div>
