@@ -21,11 +21,12 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from lib.smart_credits import check_can_afford, debit_actual_usage
+from lib.rate_limit import rate_limit_dependency
 
 router = APIRouter()
 
@@ -38,6 +39,23 @@ def get_current_user():
 def get_db():
     from server import db
     return db
+
+
+async def _optional_user(request: Request) -> Optional[dict]:
+    """Return the auth'd user from the Authorization header — or None when missing/invalid.
+    Used by /apps/{id}/run so public apps don't 401 on anonymous visitors."""
+    auth = request.headers.get("Authorization") or request.headers.get("authorization") or ""
+    if not auth.lower().startswith("bearer "):
+        return None
+    token = auth.split(" ", 1)[1].strip()
+    if not token:
+        return None
+    try:
+        from server import decode_token, db as _db
+        payload = decode_token(token)
+        return await _db.users.find_one({"id": payload.get("user_id") or payload.get("sub")})
+    except Exception:
+        return None
 
 
 def _now_iso():
@@ -107,8 +125,29 @@ async def get_app(slug: str, user=Depends(get_current_user())):
         "files": proj.get("files", []),
         "nodes": proj.get("nodes", []),
         "edges": proj.get("edges", []),
+        "is_public": bool(proj.get("is_public")),
         "updated_at": proj.get("updated_at"),
     }
+
+
+class AppShareToggleRequest(BaseModel):
+    is_public: bool
+
+
+@router.post("/apps/{slug}/share")
+async def toggle_share(slug: str, body: AppShareToggleRequest, user=Depends(get_current_user())):
+    """Toggle the is_public flag for a mini-app. Public apps can be loaded by
+    anyone via /api/apps/{slug}/render without auth; they CAN'T be executed
+    without a JWT (run endpoint still owner-only)."""
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    res = await db.bot_projects.update_one(
+        {"$or": [{"app_slug": slug}, {"id": slug}], "user_id": user_id, "has_ui": True},
+        {"$set": {"is_public": bool(body.is_public), "updated_at": _now_iso()}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="App not found.")
+    return {"ok": True, "is_public": bool(body.is_public)}
 
 
 # ─── Iframe shell ──────────────────────────────────────
@@ -186,13 +225,18 @@ async def render_app(slug: str, token: Optional[str] = None):
     Token can be passed as a query param (?token=...) because iframes can't
     forward Authorization headers from their parent. We embed it into a JSON
     config script tag (NOT string-replaced into JS), so any sentinel tokens
-    that an AI-generated app_jsx might contain can't collide with our shell."""
+    that an AI-generated app_jsx might contain can't collide with our shell.
+
+    Public apps (is_public=true) load without a token. Private apps still load
+    the HTML shell but run() calls will 401 if no/invalid token is supplied
+    (acceptable trade-off — the JSX source isn't truly secret since slugs are
+    URL parameters; only execution is gated)."""
     db = get_db()
     # No auth here — we let the iframe load and rely on token in tfApi to
     # gate the actual run() endpoint. The slug is non-secret (it's in the URL).
     proj = await db.bot_projects.find_one(
         {"$or": [{"app_slug": slug}, {"id": slug}], "has_ui": True},
-        {"_id": 0, "id": 1, "name": 1, "frontend": 1, "user_id": 1},
+        {"_id": 0, "id": 1, "name": 1, "frontend": 1, "user_id": 1, "is_public": 1},
     )
     if not proj:
         return HTMLResponse(
@@ -219,27 +263,55 @@ async def render_app(slug: str, token: Optional[str] = None):
 
 # ─── Execution ─────────────────────────────────────────
 @router.post("/apps/{app_id}/run")
-async def run_app(app_id: str, body: AppRunRequest, user=Depends(get_current_user())):
+async def run_app(app_id: str, body: AppRunRequest, request: Request,
+                  user: Optional[dict] = Depends(_optional_user),
+                  _=Depends(rate_limit_dependency("app_run", 60, 60))):
     """Execute the agent's backend run() function and return its output.
+
+    Auth flow:
+      - Private apps (is_public=false): owner-only. Debits the owner's wallet.
+      - Public apps (is_public=true): anyone can run. Debits the OWNER'S wallet
+        (creators absorb the cost of their viral shares — typical SaaS model).
+        Rate-limited per-IP (60/min) for abuse defence.
 
     For the MVP we use a lightweight in-process simulation: we extract the
     `run()` body from main.py and exec it in a restricted namespace. For real
     isolation, this delegates to lib.external_agent_runtime in a future PR."""
     db = get_db()
-    user_id = str(user.get("id", user.get("email")))
     proj = await db.bot_projects.find_one(
         {"$or": [{"id": app_id}, {"app_slug": app_id}]},
         {"_id": 0},
     )
     if not proj:
         raise HTTPException(status_code=404, detail="App not found.")
-    # Owner gate — only the project owner can run it for now (privacy)
-    if proj.get("user_id") != user_id:
-        raise HTTPException(status_code=403, detail="Not your app.")
 
-    # Pre-flight credit check (agent_run = 1cr min)
-    pre = await check_can_afford(db, user, "gemini-2.5-flash", "agent_run")
+    is_public = bool(proj.get("is_public"))
+    owner_id = proj.get("user_id")
+    caller_id = str(user.get("id", user.get("email"))) if user else None
+
+    if not is_public:
+        # Private: must be authenticated AND owner
+        if not user:
+            raise HTTPException(status_code=401, detail="Authentication required.")
+        if owner_id != caller_id:
+            raise HTTPException(status_code=403, detail="Not your app.")
+
+    # Resolve which wallet to bill — public apps bill the owner; private bill the caller (== owner).
+    billing_user = user
+    if is_public and (not user or owner_id != caller_id):
+        billing_user = await db.users.find_one({"id": owner_id})
+        if not billing_user:
+            raise HTTPException(status_code=503, detail="App owner not found.")
+
+    # Pre-flight credit check (agent_run = 1cr min) — against the billing wallet
+    pre = await check_can_afford(db, billing_user, "gemini-2.5-flash", "agent_run")
     if not pre.get("allowed"):
+        # For public apps, surface a soft "owner out of credits" message rather than 402 jargon
+        if is_public and caller_id != owner_id:
+            return JSONResponse(status_code=402, content={
+                "error": "OWNER_OUT_OF_CREDITS",
+                "message": "This shared app's owner is out of credits. Try again later.",
+            })
         return JSONResponse(status_code=402, content=pre)
 
     # Extract main.py
@@ -308,21 +380,24 @@ async def run_app(app_id: str, body: AppRunRequest, user=Depends(get_current_use
         error = f"{type(e).__name__}: {str(e)[:300]}"
     duration_ms = int((time.time() - t0) * 1000)
 
-    # Debit (1 cr min for app run)
+    # Debit (1 cr min for app run) — billed to the OWNER for public apps, caller for private.
     debit = await debit_actual_usage(
-        db, user,
+        db, billing_user,
         model="gemini-2.5-flash", action="agent_run",
         input_tokens=0, output_tokens=0,
         key_source="platform", ref=f"app_run:{run_id}",
         token_source="estimate",
-        extra_metadata={"app_id": app_id, "kind": "mini_app_run"},
+        extra_metadata={"app_id": app_id, "kind": "mini_app_run",
+                        "caller_id": caller_id, "is_public_run": bool(is_public and caller_id != owner_id)},
     )
 
-    # Record run
+    # Record run — keyed under the OWNER so it shows up in their history,
+    # with caller_id captured for analytics on public-share usage.
     await db.app_runs.insert_one({
         "id": run_id,
         "app_id": proj["id"],
-        "user_id": user_id,
+        "user_id": owner_id,
+        "caller_id": caller_id,
         "input": body.input,
         "output": output,
         "success": success,

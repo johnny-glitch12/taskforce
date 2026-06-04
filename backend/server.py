@@ -281,6 +281,13 @@ async def join_waitlist(data: WaitlistCreate):
     doc = {"id": entry_id, "email": data.email, "created_at": now}
     await db.waitlist.insert_one(doc)
     logger.info(f"New waitlist signup: {data.email}")
+    # Fire-and-forget confirmation email — never blocks the signup.
+    try:
+        from utils.email_service import send_waitlist_email
+        import asyncio as _asyncio
+        _asyncio.create_task(send_waitlist_email(data.email))
+    except Exception as _e:
+        logger.warning(f"[email] waitlist welcome failed to schedule: {_e}")
     return WaitlistResponse(id=entry_id, email=data.email, created_at=now)
 
 @api_router.get("/waitlist/count", response_model=WaitlistCountResponse)
@@ -1933,6 +1940,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Security hardening — security headers middleware + global exception handler.
+# Stamps X-Content-Type-Options, X-Frame-Options, HSTS, Referrer-Policy, Permissions-Policy
+# on every response. CSP injected for /api/apps/*/render so iframes can load their CDN deps.
+from lib.security_middleware import install_security
+install_security(app)
 
 
 # Include router

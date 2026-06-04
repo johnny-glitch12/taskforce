@@ -1,0 +1,67 @@
+{
+  "summary": "iter59 — Share/Public mini-apps + Resend transactional emails + Security audit. Backend: 18/20 pytest pass, 2 skipped (anti-abuse signup network limit). Verified: POST /api/apps/{slug}/share toggles is_public (idempotent, 404 unknown, 404 cross-tenant), GET /apps/{slug}/render anon HTML 200 + X-Frame-Options=SAMEORIGIN + CSP allowing unpkg/cdn.tailwindcss.com + connect-src 'self', public-app run by non-owner returns 200 (stranger wallet NOT debited), private+non-owner returns 403, /vibe/generate 429 after 6 calls/min, /vibe/chat 429 after ~30 calls/min, global security headers on /api/* (X-Content-Type-Options=nosniff, X-Frame-Options=DENY, HSTS, Permissions-Policy, Referrer-Policy=strict-origin-when-cross-origin, X-XSS-Protection=1; mode=block), email module exports all 6 helpers, /auth/forgot-password no longer leaks reset_token when EMAIL_ENABLED=true, /waitlist returns id while firing email, admin/runtime/status owner-only (owner 200 / dev-admin 403 / anon 401). Frontend: Playwright verified /apps/:slug Share panel renders with all 8 testids, Public→Private toggle, Twitter+LinkedIn appear only when Public, share URL+embed snippet populated, iframe sandbox locked to 'allow-scripts allow-same-origin' (no allow-forms / allow-popups / allow-top-navigation), embed snippet carries the same tight sandbox.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/apps/{slug}/run (anon, public app)", "issue": "Spec says anon should get 401; live implementation returns 200 and bills the owner's wallet (admin has unlimited compute so the sentinel 1e9 mask hides this). Either is acceptable per the spec footnote — pin desired contract in code or docs to avoid future ambiguity."},
+      {"endpoint": "POST /api/apps/{slug}/run sandbox", "issue": "Public-app run by a non-owner with an invalid `inputs` payload still returns 200 with success=true and an in-band error in output.error. Consider returning 400/422 when the mini-app's own InputSchema rejects the payload so callers can distinguish billing failure from input failure."},
+      {"endpoint": "POST /api/auth/forgot-password", "issue": "Response body always contains the key `reset_token` (set to None when email enabled). Cleaner contract: omit the key entirely in prod mode."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/apps/:slug iframe content", "issues": ["cdn.tailwindcss.com warns 'should not be used in production'; cloudflare beacon script blocked by the iframe CSP — expected since CSP allow-list is unpkg+tailwind only. No user-facing impact."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter59_share_security_emails.py",
+    "/app/test_reports/pytest/iter59.xml"
+  ],
+  "passed_tests": [
+    "POST /api/apps/{slug}/share is_public=true → 200 {ok,is_public:true}; idempotent; 404 unknown; 404 cross-tenant",
+    "POST /api/apps/{slug}/share is_public=false → 200 {ok,is_public:false}",
+    "GET /api/apps/{slug}/render anon → 200 HTML, X-Frame-Options=SAMEORIGIN, CSP includes unpkg+tailwind+connect-src 'self'",
+    "POST /api/apps/{slug}/run by non-owner stranger on public app → 200; stranger wallet not debited",
+    "POST /api/apps/{slug}/run by non-owner on private app → 403",
+    "Global security headers on /api/*: nosniff, DENY, HSTS, Permissions-Policy, strict-origin-when-cross-origin, X-XSS-Protection",
+    "Rate limit /vibe/generate → 429 within first 7 attempts",
+    "Rate limit /vibe/chat → 429 within first ~33 attempts",
+    "email_service module exports send_email/welcome/waitlist/password_reset/bounty_awarded/submission_received/tier_upgrade",
+    "POST /api/waitlist returns 200 with entry id (email fire-and-forget)",
+    "POST /api/auth/forgot-password returns 200 with reset_token=None (no leak when EMAIL_ENABLED=true)",
+    "GET /api/admin/runtime/status: owner 200, dev-admin 403, anon 401",
+    "Frontend: Share panel + Public/Private toggle + URL/Embed/Copy + Twitter/LinkedIn share links all present and functional",
+    "Frontend: iframe sandbox='allow-scripts allow-same-origin' (no allow-forms / allow-popups / allow-top-navigation) on both live iframe and embed snippet"
+  ],
+  "skipped_tests": [
+    "test_register_returns_fast_even_if_email_fails — /auth/register hit iter38 anti-abuse 'too many accounts from your network' 429 (expected protective behaviour)",
+    "test_register_grants_50_bonus — same anti-abuse limiter"
+  ],
+  "action_items": [
+    "[NICE-TO-HAVE] Decide and pin the anon-run-on-public-app contract: spec says 401 but implementation returns 200 and bills the owner. If 200 is the desired contract, update the spec footnote; if 401 is desired, gate /apps/{slug}/run with a require_auth dep that runs before the public-share check.",
+    "[NICE-TO-HAVE] /apps/{slug}/run could return 400/422 on InputSchema validation failure (currently 200 with success=true + in-band error string).",
+    "[NICE-TO-HAVE] /auth/forgot-password could omit the reset_token key in prod mode rather than emit `reset_token: null`.",
+    "[INFO] /auth/register has tight per-network anti-abuse (iter38) which prevented refreshing test users from this CI IP; tests fall back to dev-admin benjamin as the non-owner stranger."
+  ],
+  "critical_code_review_comments": [
+    "security_middleware.SecurityHeadersMiddleware: solid OWASP defaults. The CSP whitelists 'unsafe-inline' AND 'unsafe-eval' for script-src on /render — required for Babel-standalone but worth documenting that the mini-app sandbox is the primary trust boundary (since CSP cannot stop the AI-generated JS itself).",
+    "security_middleware: HSTS is stamped on every response including non-HTTPS preview replays; browsers ignore it on HTTP so no functional risk.",
+    "email_service: send_email correctly wraps the synchronous resend SDK in loop.run_in_executor — good. It logs but never raises, satisfying the fire-and-forget contract. EMAIL_FROM uses the `taskforce.run` domain which is currently not DNS-verified in Resend, so every send returns {success:false, error:'...domain not verified...'} — INTENTIONAL until DNS is set.",
+    "apps.py share endpoint: returns 404 for both unknown and cross-tenant — privacy-by-obscurity, consistent with the rest of the API.",
+    "apps.py run on public: when the caller is anonymous and the app is public, the implementation grants the run and bills the owner. This is a coherent 'creator absorbs cost' model but the spec says 'currently 401'. Tighten one or the other.",
+    "AppViewer.jsx: iframe sandbox is correctly hardened. embed snippet exposes the SAME sandbox. The bust-cache key `iframeBust` re-triggers the GET /api/apps/{slug} fetch on every refresh — fine but creates an extra fetch per redesign; cosmetic.",
+    "AppViewer.jsx: cdn.tailwindcss.com dev warning is shown in console — production builds should ship a precompiled CSS bundle. Not blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter59_share_security_emails.py (new — 20 tests, 18 pass / 2 skipped due to anti-abuse rate limit)"
+  ],
+  "success_rate": {"backend": "100% (18/18 executed, 2 skipped by anti-abuse), 0 failures", "frontend": "100% — all 8 share-panel testids present, sandbox locked, toast confirmation observed"},
+  "test_credentials": "admin@nova.ai/admin123 (owner) · benjamin@taskforce.ai/benjamin-J7VBJ4rL (dev admin, non-owner)",
+  "seed_data_creation": "text-capitalizer-5382f8 toggled public→ran by benjamin (a few app_runs inserted with caller_id=benjamin) → toggled back to private at end of test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression: pytest /app/backend/tests/test_iter59_share_security_emails.py -v. The 2 skipped tests need a fresh IP or anti-abuse counter reset. Frontend share panel testids are: app-viewer-share-toggle, app-viewer-share-panel, app-share-public, app-share-private, app-share-url, app-share-url-copy, app-share-embed, app-share-embed-copy, app-share-twitter, app-share-linkedin. Resend domain taskforce.run is awaiting DNS verification — email sends currently log 'domain not verified' but auth flows still 200 (fire-and-forget verified). When DNS is set, no code change needed — sends will start succeeding.",
+  "rca_of_the_issue": "No bugs found. The two minor contract ambiguities (anon-run on public app returning 200 instead of 401; reset_token:null in body) are documented in action_items as nice-to-have polish, not blockers. Main agent has already live-verified the happy path; this run reproduced it deterministically in pytest."
+}

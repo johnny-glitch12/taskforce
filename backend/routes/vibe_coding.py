@@ -29,6 +29,7 @@ from pydantic import BaseModel, Field
 from lib.credit_wallet import can_afford as wallet_can_afford, debit as wallet_debit
 from lib.credit_calculator import estimate_tokens, estimate_tokens_for_call
 from lib.smart_credits import check_can_afford, debit_actual_usage
+from lib.rate_limit import rate_limit_dependency
 
 router = APIRouter()
 
@@ -434,8 +435,10 @@ def _apply_margin_bias(model: str, complexity: str, reason: str) -> tuple[str, s
 
 
 @router.post("/vibe/chat")
-async def vibe_chat(req: VibeChatRequest, user=Depends(get_current_user())):
-    """Conversational planning turn. Billed dynamically on real token usage."""
+async def vibe_chat(req: VibeChatRequest, user=Depends(get_current_user()),
+                    _=Depends(rate_limit_dependency("vibe_chat", 30, 60))):
+    """Conversational planning turn. Billed dynamically on real token usage.
+    Rate-limited: 30 messages/min/IP to deter credit-draining abuse."""
     db = get_db()
     user_id = str(user.get("id", user.get("email")))
     _verify_model(req.model)
@@ -497,8 +500,12 @@ async def vibe_chat(req: VibeChatRequest, user=Depends(get_current_user())):
 
 
 @router.post("/vibe/generate")
-async def vibe_generate(req: VibeGenerateRequest, user=Depends(get_current_user())):
+async def vibe_generate(req: VibeGenerateRequest, user=Depends(get_current_user()),
+                        _=Depends(rate_limit_dependency("vibe_generate", 5, 60))):
     """Dispatch the 5-stage code-gen pipeline as a background Celery task.
+
+    Rate-limited: 5 builds/min/IP — pipelines are expensive (5-15cr each) and a
+    rogue script could drain a user's wallet faster than they can react.
 
     Returns immediately with status='queued' and the session_id. Frontend should
     poll GET /api/vibe/build-status/{session_id} for stage progress. When the

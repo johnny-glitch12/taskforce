@@ -669,6 +669,22 @@ async def submit_to_bounty(bounty_id: str, req: SubmitRequest,
     _emit_notification(db, doc["poster_id"], "bounty_submission_new",
                        f"New submission on your bounty '{doc['title']}' from {sub['creator_name']}.",
                        payload={"bounty_id": bounty_id, "submission_id": sub["id"]})
+
+    # Email the bounty poster — fire-and-forget.
+    try:
+        from utils.email_service import send_submission_received_email
+        import asyncio as _asyncio
+        poster = await db.users.find_one({"id": doc["poster_id"]}, {"email": 1, "name": 1, "_id": 0})
+        if poster and poster.get("email"):
+            _asyncio.create_task(send_submission_received_email(
+                poster["email"],
+                poster.get("name") or poster["email"].split("@")[0],
+                doc.get("title", ""),
+                bounty_id,
+            ))
+    except Exception as _e:
+        pass
+
     sub.pop("_id", None)
     return {"success": True, "submission": sub}
 
@@ -826,6 +842,23 @@ async def award_bounty(bounty_id: str, req: AwardRequest,
                        f"You won the bounty '{doc['title']}'! {reward_label} awarded.",
                        payload={"bounty_id": bounty_id, "reward": doc["reward_amount"],
                                 "reward_type": doc.get("reward_type", "credits")})
+
+    # Email the winner — fire-and-forget.
+    try:
+        from utils.email_service import send_bounty_awarded_email
+        import asyncio as _asyncio
+        winner = await db.users.find_one({"id": sub["creator_id"]}, {"email": 1, "name": 1, "_id": 0})
+        if winner and winner.get("email"):
+            _asyncio.create_task(send_bounty_awarded_email(
+                winner["email"],
+                winner.get("name") or winner["email"].split("@")[0],
+                doc.get("title", ""),
+                reward_label,
+                bounty_id,
+            ))
+    except Exception:
+        pass
+
     # Losers
     losers = await db.bounty_submissions.find(
         {"bounty_id": bounty_id, "id": {"$ne": sub["id"]}}, {"creator_id": 1},

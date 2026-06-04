@@ -188,6 +188,23 @@ async def stripe_webhook(request: Request):
                     )
                     logger.info(f"Subscription activated: {tier} for user {tx['user_id']} (credits granted)")
 
+                    # Fire-and-forget upgrade-confirmation email.
+                    try:
+                        from utils.email_service import send_tier_upgrade_email
+                        import asyncio as _asyncio
+                        if user_doc and user_doc.get("email"):
+                            allocation = tier_info.get("monthly_credits") or {
+                                "recruit": 50, "cadet": 500, "operator": 2000,
+                                "command": 10000,
+                            }.get(tier, 50)
+                            _asyncio.create_task(send_tier_upgrade_email(
+                                user_doc["email"],
+                                user_doc.get("name") or user_doc["email"].split("@")[0],
+                                tier, int(allocation),
+                            ))
+                    except Exception:
+                        pass
+
                 # Auto-grant top-up credits if this is a credit top-up payment
                 if tx.get("type") == "credit_topup" and not tx.get("activated"):
                     from lib.credit_wallet import credit as wallet_credit

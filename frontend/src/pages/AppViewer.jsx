@@ -8,7 +8,7 @@
  */
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, Loader2, Code2, RefreshCw, Wand2, Activity, ExternalLink, Send } from "lucide-react";
+import { ChevronLeft, Loader2, Code2, RefreshCw, Wand2, Activity, ExternalLink, Send, Share2, Copy, Globe, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/App";
 
@@ -27,6 +27,8 @@ export default function AppViewer() {
   const [redesigning, setRedesigning] = useState(false);
   const [runs, setRuns] = useState([]);
   const [tab, setTab] = useState("preview"); // preview | runs
+  const [showShare, setShowShare] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
     if (!token || !slug) return;
@@ -77,6 +79,42 @@ export default function AppViewer() {
     }
   };
 
+  const handleToggleShare = async (makePublic) => {
+    setSharing(true);
+    try {
+      const r = await fetch(`${API}/api/apps/${slug}/share`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ is_public: makePublic }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        toast.error(j.detail || `Share toggle failed (${r.status})`);
+        return;
+      }
+      setApp((a) => a ? { ...a, is_public: j.is_public } : a);
+      toast.success(makePublic ? "App is now public — share away" : "App set back to private");
+    } catch {
+      toast.error("Network error.");
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const publicUrl = app ? `${window.location.origin}/apps/${app.slug || app.id}` : "";
+  const embedSnippet = app
+    ? `<iframe src="${API}/api/apps/${app.slug || app.id}/render" width="600" height="700" frameborder="0" style="border:1px solid #1e1e2e; border-radius:12px;" sandbox="allow-scripts allow-same-origin"></iframe>`
+    : "";
+
+  const copyToClipboard = async (text, label) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error("Couldn't access clipboard");
+    }
+  };
+
   const iframeUrl = app && token
     ? `${API}/api/apps/${app.slug || app.id}/render?token=${encodeURIComponent(token)}&v=${iframeBust}`
     : null;
@@ -118,6 +156,20 @@ export default function AppViewer() {
                   <RefreshCw size={10} />
                 </button>
                 <button
+                  data-testid="app-viewer-share-toggle"
+                  onClick={() => setShowShare((s) => !s)}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-sm border text-[10px] font-bold uppercase tracking-widest font-mono"
+                  style={{
+                    borderColor: app.is_public ? "rgba(16,185,129,0.4)" : "var(--border)",
+                    color: app.is_public ? "#34d399" : "var(--text-sub)",
+                    background: app.is_public ? "rgba(16,185,129,0.08)" : "transparent",
+                  }}
+                  title={app.is_public ? "Public — anyone can launch" : "Private — only you can launch"}
+                >
+                  {app.is_public ? <Globe size={10} /> : <Share2 size={10} />}
+                  Share
+                </button>
+                <button
                   data-testid="app-viewer-redesign-toggle"
                   onClick={() => setShowRedesign((s) => !s)}
                   className="inline-flex items-center gap-1 px-2 py-1 rounded-sm border text-[10px] font-bold uppercase tracking-widest font-mono text-purple-300 hover:bg-purple-400/10"
@@ -155,6 +207,114 @@ export default function AppViewer() {
             </div>
           </div>
         )}
+
+        {showShare && app && (
+          <div data-testid="app-viewer-share-panel" className="border-t" style={{ borderColor: "var(--border)" }}>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 space-y-3">
+              {/* Visibility toggle */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-[11px] font-mono uppercase tracking-[0.15em] t-text-sub">Visibility:</span>
+                <button
+                  data-testid="app-share-public"
+                  onClick={() => handleToggleShare(true)}
+                  disabled={sharing || app.is_public}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[10px] font-bold uppercase tracking-widest font-mono disabled:opacity-50"
+                  style={{
+                    background: app.is_public ? "rgba(16,185,129,0.15)" : "transparent",
+                    border: `1px solid ${app.is_public ? "rgba(16,185,129,0.5)" : "var(--border)"}`,
+                    color: app.is_public ? "#34d399" : "var(--text-sub)",
+                  }}
+                >
+                  <Globe size={11} /> Public
+                </button>
+                <button
+                  data-testid="app-share-private"
+                  onClick={() => handleToggleShare(false)}
+                  disabled={sharing || !app.is_public}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[10px] font-bold uppercase tracking-widest font-mono disabled:opacity-50"
+                  style={{
+                    background: !app.is_public ? "rgba(251,191,36,0.10)" : "transparent",
+                    border: `1px solid ${!app.is_public ? "rgba(251,191,36,0.4)" : "var(--border)"}`,
+                    color: !app.is_public ? "#fbbf24" : "var(--text-sub)",
+                  }}
+                >
+                  <Lock size={11} /> Private
+                </button>
+                <span className="text-[11px] t-text-mute font-mono">
+                  {app.is_public
+                    ? "Anyone with the link can launch this. Runs are billed to your wallet."
+                    : "Only you can run this app."}
+                </span>
+              </div>
+
+              {/* Direct URL */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-mono uppercase tracking-[0.15em] t-text-sub w-20">URL:</span>
+                <input
+                  readOnly
+                  data-testid="app-share-url"
+                  value={publicUrl}
+                  onClick={(e) => e.target.select()}
+                  className="flex-1 min-w-[260px] px-3 py-1.5 rounded-sm text-[11px] font-mono"
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-sub)" }}
+                />
+                <button
+                  data-testid="app-share-url-copy"
+                  onClick={() => copyToClipboard(publicUrl, "URL")}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-sm bg-cyan-400 text-black text-[10px] font-bold uppercase tracking-widest font-mono"
+                >
+                  <Copy size={10} /> Copy
+                </button>
+              </div>
+
+              {/* Embed snippet */}
+              <div className="flex items-start gap-2 flex-wrap">
+                <span className="text-[11px] font-mono uppercase tracking-[0.15em] t-text-sub w-20 pt-2">Embed:</span>
+                <textarea
+                  readOnly
+                  data-testid="app-share-embed"
+                  value={embedSnippet}
+                  onClick={(e) => e.target.select()}
+                  rows={3}
+                  className="flex-1 min-w-[260px] px-3 py-2 rounded-sm text-[11px] font-mono"
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-sub)", resize: "vertical" }}
+                />
+                <button
+                  data-testid="app-share-embed-copy"
+                  onClick={() => copyToClipboard(embedSnippet, "Embed code")}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-sm bg-cyan-400 text-black text-[10px] font-bold uppercase tracking-widest font-mono"
+                >
+                  <Copy size={10} /> Copy
+                </button>
+              </div>
+
+              {/* Quick share to socials */}
+              {app.is_public && (
+                <div className="flex items-center gap-2 flex-wrap pt-1">
+                  <span className="text-[11px] font-mono uppercase tracking-[0.15em] t-text-sub w-20">Share:</span>
+                  <a
+                    data-testid="app-share-twitter"
+                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`I built "${app.name}" on Task Force AI — try it: ${publicUrl}`)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-sm text-[10px] font-bold uppercase tracking-widest font-mono"
+                    style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-sub)" }}
+                  >
+                    <ExternalLink size={10} /> Twitter / X
+                  </a>
+                  <a
+                    data-testid="app-share-linkedin"
+                    href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(publicUrl)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-sm text-[10px] font-bold uppercase tracking-widest font-mono"
+                    style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-sub)" }}
+                  >
+                    <ExternalLink size={10} /> LinkedIn
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Body */}
@@ -177,7 +337,7 @@ export default function AppViewer() {
             title={app.name}
             className="w-full"
             style={{ height: "calc(100vh - 110px)", border: "none", background: "#0a0a0a" }}
-            sandbox="allow-scripts allow-same-origin allow-forms"
+            sandbox="allow-scripts allow-same-origin"
           />
         )}
         {!loading && !error && app && tab === "runs" && (

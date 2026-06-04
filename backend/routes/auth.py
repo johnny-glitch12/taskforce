@@ -126,6 +126,15 @@ async def register(req: RegisterRequest, request: Request, _=Depends(rate_limit_
     logger.info(f"User registered: {req.email} from IP {ip} (+{SIGNUP_BONUS_CREDITS} bonus credits)")
 
     token = srv.create_token(user_id, req.email, "user")
+
+    # Fire-and-forget welcome email — never blocks the registration response.
+    try:
+        from utils.email_service import send_welcome_email
+        import asyncio
+        asyncio.create_task(send_welcome_email(req.email, user_doc["name"]))
+    except Exception as _e:
+        logger.warning(f"[email] welcome send failed to schedule: {_e}")
+
     return srv.TokenResponse(
         token=token,
         user=srv.UserResponse(id=user_id, email=req.email, name=user_doc["name"], role="user", created_at=now),
@@ -190,7 +199,24 @@ async def forgot_password(req: ForgotRequest, _=Depends(rate_limit_dependency("f
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
     logger.info(f"Password reset token generated for {req.email}")
-    return {"message": "If that email exists, a reset link has been generated.", "reset_token": reset_token}
+
+    # Fire-and-forget reset email — never blocks the response so we don't leak
+    # whether the email exists via timing differences.
+    try:
+        from utils.email_service import send_password_reset_email
+        import asyncio
+        asyncio.create_task(send_password_reset_email(req.email, user.get("name"), reset_token))
+    except Exception as _e:
+        logger.warning(f"[email] reset email failed to schedule: {_e}")
+
+    # Note: we no longer return `reset_token` in production responses — it leaks
+    # via response body. Keeping it for local/dev where EMAIL is disabled so the
+    # FE password-reset flow can still be tested end-to-end without a mailbox.
+    from utils.email_service import EMAIL_ENABLED
+    payload: dict = {"message": "If that email exists, a reset link has been generated."}
+    if not EMAIL_ENABLED:
+        payload["reset_token"] = reset_token
+    return payload
 
 
 @router.post("/auth/reset-password")
