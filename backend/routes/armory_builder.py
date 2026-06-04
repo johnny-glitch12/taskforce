@@ -217,8 +217,9 @@ def _normalize_bot(payload: dict) -> dict:
 
 
 async def _generate_with_gemini(prompt: str) -> dict:
-    """Returns {bot: <normalized>, input_tokens, output_tokens, model}."""
+    """Returns {bot, input_tokens, output_tokens, model, token_source}."""
     from emergentintegrations.llm.chat import LlmChat, UserMessage
+    from lib.credit_calculator import extract_real_usage
     chat = LlmChat(
         api_key=EMERGENT_LLM_KEY,
         session_id=f"armory-builder-{uuid.uuid4().hex[:8]}",
@@ -229,12 +230,19 @@ async def _generate_with_gemini(prompt: str) -> dict:
     raw = await chat.send_message(msg)
     text = str(raw)
     payload = _extract_json(text)
-    in_tok, out_tok = estimate_tokens_for_call(BUILDER_SYSTEM_PROMPT, [], user_message, text)
+    real = extract_real_usage(raw)
+    if real is not None:
+        in_tok, out_tok = real
+        token_source = "provider"
+    else:
+        in_tok, out_tok = estimate_tokens_for_call(BUILDER_SYSTEM_PROMPT, [], user_message, text)
+        token_source = "estimate"
     return {
         "bot": _normalize_bot(payload),
         "input_tokens": in_tok,
         "output_tokens": out_tok,
         "model": GEMINI_MODEL,
+        "token_source": token_source,
     }
 
 
@@ -318,6 +326,7 @@ async def build_bot(req: BuildBotRequest, user=Depends(get_current_user())):
         model=GEMINI_MODEL, action="build_bot",
         input_tokens=gen["input_tokens"], output_tokens=gen["output_tokens"],
         key_source="platform", ref=project_id,
+        token_source=gen.get("token_source", "estimate"),
     )
 
     project = await db.bot_projects.find_one({"id": project_id}, {"_id": 0})

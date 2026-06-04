@@ -184,9 +184,50 @@ def estimate_tokens_for_call(
     return estimate_tokens(in_text), estimate_tokens(response_text or "")
 
 
+def extract_real_usage(resp) -> Optional[tuple[int, int]]:
+    """Best-effort extraction of REAL provider token usage from an LlmChat response.
+
+    emergentintegrations v1 doesn't expose usage on the response (it returns
+    plain string). This helper probes several known shapes — if the library is
+    upgraded to expose usage in the future, this function will start returning
+    real counts and `_call_platform_llm` will prefer them over tiktoken.
+
+    Returns (input_tokens, output_tokens) or None if no usage block found.
+    """
+    if resp is None:
+        return None
+    # Direct attribute access — Anthropic-style.
+    usage = getattr(resp, "usage", None)
+    if usage is not None:
+        # OpenAI: prompt_tokens, completion_tokens
+        # Anthropic: input_tokens, output_tokens
+        # Gemini: prompt_token_count, candidates_token_count
+        in_tok = (
+            getattr(usage, "input_tokens", None)
+            or getattr(usage, "prompt_tokens", None)
+            or getattr(usage, "prompt_token_count", None)
+        )
+        out_tok = (
+            getattr(usage, "output_tokens", None)
+            or getattr(usage, "completion_tokens", None)
+            or getattr(usage, "candidates_token_count", None)
+        )
+        if in_tok is not None and out_tok is not None:
+            return (int(in_tok), int(out_tok))
+    # Dict-shaped response.
+    if isinstance(resp, dict):
+        u = resp.get("usage") or resp.get("usageMetadata") or resp.get("usage_metadata")
+        if isinstance(u, dict):
+            in_tok = u.get("input_tokens") or u.get("prompt_tokens") or u.get("prompt_token_count")
+            out_tok = u.get("output_tokens") or u.get("completion_tokens") or u.get("candidates_token_count")
+            if in_tok is not None and out_tok is not None:
+                return (int(in_tok), int(out_tok))
+    return None
+
+
 __all__ = [
     "MODEL_COSTS", "MIN_CREDITS", "PLATFORM_MARGIN", "CREDIT_VALUE_USD",
     "AVERAGE_TOKENS",
     "calculate_credit_cost", "estimate_credit_cost", "estimate_range",
-    "estimate_tokens", "estimate_tokens_for_call",
+    "estimate_tokens", "estimate_tokens_for_call", "extract_real_usage",
 ]

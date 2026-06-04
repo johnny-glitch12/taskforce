@@ -58,6 +58,7 @@ async def debit_actual_usage(
     output_tokens: int,
     key_source: str,
     ref: Optional[str] = None,
+    token_source: str = "estimate",
     extra_metadata: Optional[dict] = None,
 ) -> dict:
     """Debit the ACTUAL credit cost after an LLM call returned.
@@ -88,6 +89,7 @@ async def debit_actual_usage(
         "api_cost_usd": api_cost_usd,
         "revenue_usd": revenue_usd,
         "key_source": key_source,
+        "token_source": token_source,
     }
     if extra_metadata:
         metadata.update(extra_metadata)

@@ -461,29 +461,25 @@ class TestIntegration:
         TestIntegration._proj_id = j["project_id"]
 
     def test_56_byok(self, owner_token):
-        r = requests.post(f"{API}/vault/keys", headers=_h(owner_token),
-                          json={"service": "openai", "key": "sk-test-fake-but-formatted-validly-1234567890abcdef"},
+        # BYOK CRUD is mounted at /api/workflows/credentials (not /api/vault/keys
+        # as the legacy iter56 plan assumed). Body shape: {service, api_key}.
+        r = requests.post(f"{API}/workflows/credentials", headers=_h(owner_token),
+                          json={"service": "openai", "api_key": "sk-test-fake-but-formatted-validly-1234567890abcdef"},
                           timeout=15)
-        print(f"[5.6] vault/keys POST -> {r.status_code} {r.text[:200]}")
+        print(f"[5.6] workflows/credentials POST -> {r.status_code} {r.text[:200]}")
         if r.status_code == 404:
-            pytest.skip("/api/vault/keys not mounted")
+            pytest.skip("/api/workflows/credentials not mounted")
         assert r.status_code in (200, 201)
-        j = r.json()
-        kid = j.get("id") or j.get("key_id")
-        # Verify ciphertext in mongo, not plaintext
-        col = None
-        for name in ("vault_keys", "byok_keys", "user_keys"):
-            if name in db.list_collection_names():
-                col = db[name]; break
-        if col is not None:
-            doc = col.find_one({"_id": kid}) or col.find_one({"id": kid}) or col.find_one({"service": "openai"}, sort=[("created_at", -1)])
-            if doc:
-                stored = str(doc.get("encrypted_key") or doc.get("key") or "")
-                assert "sk-test-fake-but-formatted-validly" not in stored, "plaintext leaked!"
-        if kid:
-            probe = requests.get(f"{API}/vault/keys/{kid}/probe", headers=_h(owner_token), timeout=20)
-            print(f"[5.6] probe -> {probe.status_code} {probe.text[:200]}")
-            assert probe.status_code in (200, 400, 401, 422)
+        # Verify ciphertext at rest (not plaintext) in byok_credentials.
+        doc = db.byok_credentials.find_one({"service": "openai"}, sort=[("created_at", -1)])
+        if doc:
+            stored = str(doc.get("api_key") or "")
+            assert "sk-test-fake-but-formatted-validly" not in stored, "plaintext leaked!"
+            assert stored.startswith("enc:"), f"expected enc:* prefix, got {stored[:40]}"
+        # Probe the stored credential — exercises the live test endpoint.
+        probe = requests.post(f"{API}/workflows/credentials/openai/test", headers=_h(owner_token), timeout=20)
+        print(f"[5.6] probe -> {probe.status_code} {probe.text[:200]}")
+        assert probe.status_code in (200, 400, 401, 422)
 
     def test_57_execution_engine(self, owner_token):
         pid = getattr(TestIntegration, "_proj_id", None)

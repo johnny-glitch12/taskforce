@@ -23,6 +23,25 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 57 (Feb 2026) — Backlog Sweep: Margin-aware Auto-Pick · Real-token defensive hook · Celery+Redis HA · KMS adapters · Test-path fix
+
+Cleared every item from the Phase 56 backlog in one pass.
+
+- **(a) Iter56 test path fix** — `/api/vault/keys` → `/api/workflows/credentials` (body now `{service, api_key}`); also checks `byok_credentials` collection for `enc:` prefix to verify ciphertext-at-rest. Probe call hits `/workflows/credentials/openai/test`.
+- **(b) Real-provider token defensive hook** — `credit_calculator.extract_real_usage(resp)` probes 3 known shapes (OpenAI `prompt_tokens/completion_tokens`, Anthropic `input_tokens/output_tokens`, Gemini `prompt_token_count/candidates_token_count`) on the LlmChat response. When found → returns provider truth; when not → falls back to tiktoken. `token_source: 'provider'|'estimate'` now lands in every dynamic-billed ledger row so we can audit estimator drift once emergentintegrations exposes usage.
+- **(c) Margin-aware Auto-Pick** — `/vibe/recommend-model` post-processes the LLM pick via `_apply_margin_bias()`. When `complexity=='simple'` AND the LLM picked a flagship model (gemini-2.5-pro / gpt-4o / claude-sonnet), it auto-downshifts to the cheap sibling on the same provider (flash / 4o-mini / haiku). The reason string is annotated with `(auto-downshift: ...)` so users see why. No-op on medium/complex tasks. Verified: simple "capitalize a string" → flash kept; complex multi-tenant CRM → claude-sonnet kept.
+- **(d) Celery + Redis HA async runtime** — `lib/celery_app.py` (160 lines). Three new supervisor services in `/etc/supervisor/conf.d/supervisord_celery.conf` (redis-server, celery-worker --concurrency=2, celery-beat). 4 periodic tasks registered: `tfai.hosting_expire` (crontab 0min), `tfai.bounty_expire` (5min), `tfai.scheduled_runs_tick` (300s interval), `tfai.supernova_eval` (crontab 00:30 UTC). Per-task fresh motor client via `_task_db()` to avoid "event loop is closed" cross-task bleed. `server.py` startup hook auto-detects `CELERY_BROKER_URL` and skips APScheduler `add_job` calls (jobs delegated to celery beat); APScheduler still starts as a no-op fallback. New `GET /api/admin/runtime/status` (owner-only) reports active runtime, broker URL, live Redis ping latency, KMS provider. **Verified live**: 3 manual `.delay()` dispatches return clean `{flipped:0, processed:0, dispatched:0}` results; backend reports `runtime.active='celery'` with 0ms broker latency.
+- **(e) KMS adapter rewrite** — `lib/byok_crypto.py` (now 215 lines, full concrete implementations replacing the prior stubs):
+  - **`local`** (default): Fernet derived from `BYOK_MASTER_KEY`. Format `enc:v1:<fernet>`.
+  - **`aws`**: boto3 KMS `Encrypt`/`Decrypt` via `AWS_KMS_KEY_ID` + `AWS_REGION`. Format `enc:aws-v1:<b64-blob>`.
+  - **`gcp`**: google-cloud-kms via `GCP_PROJECT_ID` + `GCP_KMS_LOCATION` + `GCP_KMS_KEYRING` + `GCP_KMS_KEY`. Format `enc:gcp-v1:<b64>`.
+  - **`vault`**: hvac Transit engine via `VAULT_ADDR` + `VAULT_TOKEN` + `VAULT_TRANSIT_KEY`. Format `enc:vault-v1:<vault-cipher>`.
+  - **Rotation-safe** by design — `decrypt_key()` dispatches on the ciphertext version prefix, NOT the active provider env var. So a database mid-rotation (some rows on local, some on aws) decrypts seamlessly. `provider_info()` reports `active_provider` + `supported` + `rotation_safe: true`.
+  - Lazy SDK imports — boto3/google-cloud-kms/hvac are only imported when their provider is selected, keeping the local-dev install zero-dep.
+
+**Verified (manual smoke)**: All 5 features tested live. Lint clean (ruff + eslint). Backend restarted twice, supervisor reports `redis RUNNING · celery-worker RUNNING · celery-beat RUNNING`. Existing iter57 dynamic-billing regression still passes (tasks unchanged, only metadata field added).
+
+
 ### Phase 56 (Feb 2026) — Smart Dynamic Credit System + Economics Dashboard + Pricing Overhaul (Prompt 14)
 
 **Switch from flat-rate pre-pay credits → usage-based post-pay billing on real LLM token counts.**
