@@ -1,6 +1,12 @@
 # ────────────────────────────────────────────────────────────────────────────
 # Railway deployment manifest — Task Force AI
 # Docs: https://docs.railway.app/reference/config-as-code
+#
+# IMPORTANT module paths (THIS codebase, not a generic Railway template):
+#   • FastAPI entry  : backend/server.py        →  `backend.server:app`
+#   • Celery app     : backend/lib/celery_app.py → `backend.lib.celery_app`
+# Do NOT use `backend.main:app` or `backend.celery_app` — those modules
+# don't exist here; the services will crash on start with ModuleNotFoundError.
 # ────────────────────────────────────────────────────────────────────────────
 
 [build]
@@ -8,14 +14,17 @@ builder = "DOCKERFILE"
 dockerfilePath = "./Dockerfile"
 
 [deploy]
+# Web service entry point.
+# scripts/start.sh runs Uvicorn (FG) + optional inline Celery worker (BG).
+# Override via Railway dashboard if running worker as a separate service.
+startCommand = "bash scripts/start.sh"
+
 # Health probe — Railway considers the service unhealthy when /api/health
-# returns non-2xx for `healthcheckTimeout` seconds and triggers a redeploy.
+# returns non-2xx for healthcheckTimeout seconds and triggers a redeploy.
 healthcheckPath = "/api/health"
 healthcheckTimeout = 300
 
-# Restart only on actual failures (not on every deploy).
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 
-# Number of concurrent replicas — start at 1, scale up via dashboard.
 numReplicas = 1

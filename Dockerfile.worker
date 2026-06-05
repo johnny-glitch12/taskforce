@@ -25,6 +25,10 @@ RUN pip install --upgrade pip \
 COPY backend/ /app/backend/
 COPY scripts/ /app/scripts/
 
+# Make all entrypoint scripts executable (defends against repos pushed
+# from Windows / git config core.fileMode=false).
+RUN chmod +x /app/scripts/*.sh
+
 RUN mkdir -p /tmp/agent_workdir /tmp/agent_venvs
 
 ENV PYTHONUNBUFFERED=1 \
@@ -33,5 +37,6 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app/backend
 
-# Two-thread worker — tune via Railway env (CELERY_CONCURRENCY).
-CMD ["sh", "-c", "celery -A lib.celery_app worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-2} -Q ${CELERY_QUEUES:-default,supernova_eval}"]
+# Worker entry — uses scripts/worker.sh which has the correct module path
+# (`lib.celery_app`, NOT `backend.celery_app` which doesn't exist).
+CMD ["bash", "/app/scripts/worker.sh"]

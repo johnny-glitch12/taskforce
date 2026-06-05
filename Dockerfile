@@ -72,6 +72,10 @@ RUN pip install --upgrade pip \
 COPY backend/ /app/backend/
 COPY scripts/ /app/scripts/
 
+# Make all entrypoint scripts executable (defends against repos pushed from
+# Windows or with git config core.fileMode=false where the +x bit was dropped).
+RUN chmod +x /app/scripts/*.sh
+
 # Copy built frontend into backend/spa — server.py auto-mounts when
 # this directory exists. We intentionally use `spa/` (not `static/`)
 # because `static/` is already in use by the csdrop debug images.
