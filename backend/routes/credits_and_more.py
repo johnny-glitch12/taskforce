@@ -56,10 +56,19 @@ async def credits_me(user=Depends(get_current_user())):
     db = get_db()
     info = await get_balance(db, user)
     txns = await list_transactions(db, user, limit=20)
+    # Strip the rich cost metadata (api_cost_usd, revenue_usd, key_source,
+    # input/output_tokens) from user-facing transactions — admins can still
+    # see those in the Economics Dashboard. We keep human-friendly fields:
+    # delta, kind, ref, pool, sub/topup_deducted, sub/topup_remaining, note,
+    # balance_after, created_at, source.
+    sanitized = []
+    for tx in txns:
+        tx.pop("metadata", None)
+        sanitized.append(tx)
     # action_costs intentionally OMITTED from the frontend response so users
     # don't see per-action credit pricing. Costs are still tracked server-side
     # and visible in the owner-only Economics Dashboard.
-    return {**info, "transactions": txns, "packs": TOPUP_PACKS}
+    return {**info, "transactions": sanitized, "packs": TOPUP_PACKS}
 
 
 class TopupRequest(BaseModel):

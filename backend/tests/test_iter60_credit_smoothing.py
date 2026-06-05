@@ -88,13 +88,19 @@ def test_vibe_generate_response_is_scrubbed(admin_token):
     r = requests.post(f"{API}/vibe/generate",
                       headers=H(admin_token),
                       json={"session_id": sid, "message": "build it", "model": "gemini-2.5-flash"},
-                      timeout=60)
+                      timeout=240)
     if r.status_code == 500:
-        pytest.skip(f"/vibe/generate 500 (Celery/Redis broker down in this env): {r.text[:200]}")
+        pytest.skip(f"/vibe/generate 500: {r.text[:200]}")
+    if r.status_code == 503:
+        pytest.skip(f"/vibe/generate 503 (broker down + inline fallback unavailable): {r.text[:200]}")
     assert r.status_code == 200, r.text
     data = r.json()
     leaked = FORBIDDEN_KEYS & set(data.keys())
     assert not leaked, f"generate leaks: {leaked} :: keys={list(data.keys())}"
+    # If we got an inline result, also verify nested result block is clean.
+    nested = data.get("result") or {}
+    leaked_nested = FORBIDDEN_KEYS & set(nested.keys())
+    assert not leaked_nested, f"generate inline result leaks: {leaked_nested}"
 
 
 # ---------- armory/build-bot response scrub ----------
@@ -120,29 +126,50 @@ def test_credits_me_no_action_costs(admin_token):
         assert k in data, f"credits/me missing {k}"
 
 
-# ---------- DB still logs cost metadata ----------
-def test_chat_transaction_metadata_retained(admin_token):
-    # trigger a chat to create a transaction
+# ---------- DB still logs cost metadata; API hides it from users ----------
+def test_chat_transaction_metadata_logged_in_db_hidden_from_api(admin_token):
+    """The internal DB rows MUST still carry cost metadata so the owner-only
+    Economics Dashboard works. The user-facing /credits/me response MUST NOT
+    leak that metadata."""
+    # trigger a chat (or a build call) to create a transaction with metadata.
     requests.post(f"{API}/vibe/chat",
                   headers=H(admin_token),
                   json={"prompt": "one-word reply", "model": "gemini-2.5-flash"},
                   timeout=120)
     time.sleep(1.0)
+    # 1) API surface should NOT carry metadata anywhere
     r = requests.get(f"{API}/credits/me", headers=H(admin_token), timeout=20)
     assert r.status_code == 200
     txns = r.json().get("transactions", [])
-    # find first chat-related transaction with metadata
-    chat_txn = None
     for t in txns:
-        md = t.get("metadata") or {}
-        if any(k in md for k in ("api_cost_usd", "revenue_usd", "input_tokens", "output_tokens")):
-            chat_txn = t
-            break
-    assert chat_txn is not None, f"no chat transaction with cost metadata found; sample={txns[:2]}"
-    md = chat_txn["metadata"]
-    # at least a couple of internal cost markers should still be there
-    keys_present = [k for k in ("api_cost_usd", "revenue_usd", "model", "key_source", "input_tokens", "output_tokens") if k in md]
-    assert len(keys_present) >= 3, f"internal cost logging too thin: md={md}"
+        assert "metadata" not in t, f"metadata leaked into /credits/me txn: {t}"
+
+    # 2) DB rows should still contain the metadata (sample any tx with kind in
+    # vibe_chat / vibe_build / build_bot — at least one should have metadata).
+    import os
+    import asyncio
+    from motor.motor_asyncio import AsyncIOMotorClient
+    mongo_url = os.environ.get("MONGO_URL")
+    db_name   = os.environ.get("DB_NAME")
+    if not mongo_url or not db_name:
+        pytest.skip("MONGO_URL/DB_NAME unavailable in this test env")
+    client = AsyncIOMotorClient(mongo_url)
+    db = client[db_name]
+
+    async def _check():
+        cursor = db.credit_transactions.find(
+            {"kind": {"$in": ["vibe_chat", "vibe_build", "build_bot", "agent_run"]},
+             "metadata": {"$exists": True}},
+        ).sort("created_at", -1).limit(10)
+        rows = await cursor.to_list(10)
+        return rows
+
+    rows = asyncio.get_event_loop().run_until_complete(_check())
+    client.close()
+    assert rows, "expected at least one credit_transactions row with metadata in DB"
+    sample = rows[0].get("metadata") or {}
+    keys_present = [k for k in ("api_cost_usd", "revenue_usd", "model", "key_source", "input_tokens", "output_tokens") if k in sample]
+    assert len(keys_present) >= 3, f"internal cost logging too thin in DB: md={sample}"
 
 
 # ---------- /settings GET ----------

@@ -535,17 +535,26 @@ async def vibe_generate(req: VibeGenerateRequest, user=Depends(get_current_user(
 
     from lib.celery_app import ENABLED as CELERY_ENABLED, vibe_build_task
     if CELERY_ENABLED:
-        async_result = vibe_build_task.delay(
-            session_id=session["id"],
-            user_id=user_id, user_email=user.get("email"),
-            user_prompt=req.message, builder_model=req.model, resume=False,
-        )
-        return {
-            "session_id": session["id"], "status": "queued",
-            "task_id": async_result.id, "model": req.model,
-            "poll_url": f"/api/vibe/build-status/{session['id']}",
-        }
-    # Inline fallback for dev
+        try:
+            async_result = vibe_build_task.delay(
+                session_id=session["id"],
+                user_id=user_id, user_email=user.get("email"),
+                user_prompt=req.message, builder_model=req.model, resume=False,
+            )
+        except Exception as exc:
+            # Broker unreachable (e.g. Redis down). Fall back to inline run so
+            # the user isn't blocked, and log a warning for ops.
+            import logging as _logging
+            _logging.getLogger("vibe").warning(
+                f"[vibe_generate] Celery dispatch failed ({exc.__class__.__name__}): {exc} — falling back to inline run.",
+            )
+        else:
+            return {
+                "session_id": session["id"], "status": "queued",
+                "task_id": async_result.id, "model": req.model,
+                "poll_url": f"/api/vibe/build-status/{session['id']}",
+            }
+    # Inline fallback for dev (and Celery-down emergencies)
     from lib.code_gen_pipeline import run_build_pipeline
     result = await run_build_pipeline(
         db, user, session_id=session["id"],
@@ -631,12 +640,19 @@ async def vibe_resume_build(session_id: str, user=Depends(get_current_user())):
 
     from lib.celery_app import ENABLED as CELERY_ENABLED, vibe_build_task
     if CELERY_ENABLED:
-        async_result = vibe_build_task.delay(
-            session_id=session_id,
-            user_id=user_id, user_email=user.get("email"),
-            user_prompt=user_prompt, builder_model=model, resume=True,
-        )
-        return {"session_id": session_id, "status": "queued", "task_id": async_result.id}
+        try:
+            async_result = vibe_build_task.delay(
+                session_id=session_id,
+                user_id=user_id, user_email=user.get("email"),
+                user_prompt=user_prompt, builder_model=model, resume=True,
+            )
+        except Exception as exc:
+            import logging as _logging
+            _logging.getLogger("vibe").warning(
+                f"[vibe_resume] Celery dispatch failed ({exc.__class__.__name__}): {exc} — falling back to inline run.",
+            )
+        else:
+            return {"session_id": session_id, "status": "queued", "task_id": async_result.id}
     from lib.code_gen_pipeline import run_build_pipeline
     result = await run_build_pipeline(
         db, user, session_id=session_id,

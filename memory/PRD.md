@@ -23,6 +23,49 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 60 (Feb 2026) — Credit Ecosystem Smoothing + Hidden Pricing (Prompt 19)
+
+**🟢 Per-action credit cost HIDDEN from the user UI and API**
+- API response scrub in all hot LLM paths — `credits_used`, `cost_breakdown`, `input_tokens`, `output_tokens`, `key_source` REMOVED from:
+  - `POST /api/vibe/chat`, `POST /api/vibe/generate` (sync + queued variants), `POST /api/vibe/recommend-model`
+  - `POST /api/armory/build-bot`
+  - `POST /api/apps/{id}/run`, `POST /api/apps/{id}/redesign`
+- `GET /api/credits/me` no longer returns `action_costs`. Transactions metadata block stripped (admins still see full metadata via the owner-only `/api/admin/economics` aggregations).
+- **DB-side logging is INTACT**: `credit_transactions.metadata.{api_cost_usd, revenue_usd, model, key_source, input_tokens, output_tokens, token_source}` still written by `lib/smart_credits.debit_actual_usage` — verified by test_iter60.
+- Frontend scrub: `Pricing.jsx` lost the ModelCostMatrix table, BYOK column, "1 credit = $0.01" subtitle, "real token usage" copy. New copy: "Simple, predictable pricing", value props, BYOK as a deep-discount perk (no specific %).
+- `Credits.jsx`: removed `ActionCostsList`; **kept** dual-pool balance + transactions list (transactions show kind + delta only, no metadata). New `PayoutSettingsCard` + `EarningsSummaryCard`.
+- `Armory` chat: `ChatMessage.jsx` `CreditMeta` block removed; stage chips no longer show "−Ncr" suffix; `ChatPanel.jsx` toolbar text "Code generation costs N credits" → "Chat freely, then click Generate Code…"; `ModelPicker.jsx` "{build_cost}cr" right-aligned chip REMOVED.
+- `VibeBuildPage.jsx`: "{chat_cost}cr chat · {build_cost}cr build" line per model card removed; Send / Generate / Auto buttons drop their cost suffixes.
+- `AppViewer.jsx`: runs table no longer has a "Credits" column; UI-redesign toast no longer carries "−Xcr".
+
+**🟢 Creator Payout Preferences (credits with +30% bonus vs cash via Stripe Connect)**
+- New `backend/lib/payouts.py` — `process_creator_earning(db, creator, amount_usd, source, ref, payout_preference)` applies the user's choice:
+  - `credits`: base_credits = round(usd × 100) + 30% bonus → topup_credits, ledgered `creator_earning_credits` with full metadata.
+  - `cash`: validates min $10 payout, returns helpful "switch to credits" message under threshold, otherwise logs `creator_earning_cash` (Stripe Transfer.create called by the route).
+  - Exported constants: `CREDIT_BONUS_RATE=0.30`, `CREDIT_VALUE_USD=0.01`, `MIN_CASH_PAYOUT=$10`. Surfaced via `/api/settings.ecosystem` so the frontend never hardcodes.
+- `lib/payouts.earnings_summary(db, user_id)` aggregates `credit_transactions` for creator dashboards (credits + cash + cashback totals, split by `marketplace_sale` vs `bounty_win`).
+- Wired into 3 transition points:
+  - `routes/bounties.py` cash branch `/award`: respects winner's `payout_preference` — credits default with +30% bonus when face value < min or pref='credits'; falls through to Stripe Transfer when pref='cash' AND winner has Connect onboarding.
+  - `routes/bounties.py` credit branch `/award`: applies CREDIT_BONUS_RATE directly (winner gets 130 cr on a 100 cr bounty).
+  - `routes/credits_and_more.py` `/deployments/from-listing`: marketplace sale routes the creator's 80% share through `process_creator_earning` with their preference.
+
+**🟢 Silent 5% Spending Cashback (variable-ratio reward, granted in 100-cr chunks)**
+- New `backend/lib/cashback.py` — `accrue_and_grant(db, user, credits_spent)` bumps `users.cashback_accumulator`. When it crosses 100, mints `cashback_rate × threshold` credits into `topup_credits`, logs `cashback_reward` ledger row, resets accumulator to remainder. Silent failure (perk should never break the debit).
+- Hooked into `lib/smart_credits.debit_actual_usage` — every successful debit triggers `accrue_and_grant`. Returns `cashback_granted` count for caller to optionally surface a toast (currently UI-hidden by design to preserve the "surprise" effect).
+- `GET /api/cashback/summary` returns `{lifetime_earned, accumulator}` for the Earnings dashboard (NO progress bar — keeps the variable-ratio engagement loop alive).
+
+**🟢 User Settings API (`backend/routes/settings.py`, mounted in `server.py`)**
+- `GET  /api/settings` → `{payout_preference, stats:{credits_earned_total, bonus_credits_earned, cashback_earned_total}, ecosystem:{credit_bonus_rate, credit_value_usd, min_cash_payout}}`
+- `PUT  /api/settings/payout-preference` body `{preference: 'credits'|'cash'}` → 422 on invalid value; persists to `users.payout_preference`.
+- `GET  /api/earnings` → full earnings summary (credits-side, cash-side, cashback totals, by source/count).
+- `GET  /api/cashback/summary` → lifetime cashback earned + accumulator.
+
+**🟢 Defensive Hardening**
+- `POST /api/vibe/generate` and `POST /api/vibe/resume-build/{id}` now wrap `vibe_build_task.delay()` in try/except → falls through to the inline pipeline run when the Celery broker is unreachable (Redis FATAL safety net). Previously raised a bare 500.
+
+**Verified (iter60)**: **14/14 backend pytest pass** (`/app/backend/tests/test_iter60_credit_smoothing.py`). 1 skipped (bounty E2E needs Exchange listing seed — covered by direct unit test on `lib/payouts.process_creator_earning` proving the +30% bonus math). 1 deselected (`test_vibe_generate_response_is_scrubbed` — runs the full inline pipeline when Redis is FATAL in this preview env; ~3min). Direct curl smoke-tests confirmed: `/api/credits/me` keys = `[balance, credit_reset_date, monthly_grant, packs, subscription_credits, subscription_credits_max, tier, topup_credits, transactions, unlimited]` (no `action_costs`); `/api/vibe/chat` keys = `[balance_remaining, model, response, session_id, type]` (no `credits_used`, `cost_breakdown`, `input_tokens`, `output_tokens`, `key_source`); `/api/settings` returns full ecosystem block; PUT toggles credits↔cash persists.
+
+
 ### Phase 59 (Feb 2026) — Viral Share + Resend Emails + Security Hardening (Prompts 13, 17 + Share)
 
 **🟢 Share Button — viral loop for hosted mini-apps**
