@@ -47,7 +47,7 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 - Wired into 3 transition points:
   - `routes/bounties.py` cash branch `/award`: respects winner's `payout_preference` — credits default with +30% bonus when face value < min or pref='credits'; falls through to Stripe Transfer when pref='cash' AND winner has Connect onboarding.
   - `routes/bounties.py` credit branch `/award`: applies CREDIT_BONUS_RATE directly (winner gets 130 cr on a 100 cr bounty).
-  - `routes/credits_and_more.py` `/deployments/from-listing`: marketplace sale routes the creator's 80% share through `process_creator_earning` with their preference.
+  - `routes/credits_and_more.py` `/deployments/from-listing`: marketplace sale routes the creator's **90%** share through `process_creator_earning` with their preference. (Platform retains 10%.)
 
 **🟢 Silent 5% Spending Cashback (variable-ratio reward, granted in 100-cr chunks)**
 - New `backend/lib/cashback.py` — `accrue_and_grant(db, user, credits_spent)` bumps `users.cashback_accumulator`. When it crosses 100, mints `cashback_rate × threshold` credits into `topup_credits`, logs `cashback_reward` ledger row, resets accumulator to remainder. Silent failure (perk should never break the debit).

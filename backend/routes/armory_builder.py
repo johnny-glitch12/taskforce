@@ -10,7 +10,7 @@ Plus GitHub-style fork/save/commit for the project lifecycle.
 Storage:
   - MongoDB collection `bot_projects` (single source of truth — pod is stateless)
   - Each commit appended to `commit_history[]` (forked_from records lineage
-    for the 80/20 creator-revenue share).
+    for the 90/10 creator-revenue share).
 """
 import json
 import os
@@ -438,7 +438,7 @@ async def fork_project(project_id: str, user=Depends(get_current_user())):
     GitHub-style fork — INTENTIONALLY PUBLIC.
 
     Any authenticated user may fork ANY bot_project by id. This mirrors GitHub's
-    fork model and is required for the 80/20 creator-revenue share: the
+    fork model and is required for the 90/10 creator-revenue share: the
     `forked_from` + `forked_from_creator` fields preserve lineage so we always
     know which original creator gets royalties when a renter runs a modified
     bot. The original creator's project is NOT modified.

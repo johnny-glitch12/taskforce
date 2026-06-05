@@ -64,7 +64,7 @@ const STARTER_FILES = [
  *   Step 1: Marketplace metadata WITH live-preview card on the right.
  *           Fields: avatar (icon + color), name, description, category, tags,
  *                   required integrations (badge multi-select), trigger type,
- *                   engine, rent/buy pricing with live 80% take-home calc.
+ *                   engine, rent/buy pricing with live 90% take-home calc.
  *   Step 2: Code files (VS-Code tabs + disk ingest).
  *   Step 3: Media (video + photos).
  */
@@ -456,8 +456,8 @@ function DetailsStep({ form, setForm, avatarPreview, onPickAvatar }) {
 
   const rent = parseFloat(form.rent_price) || 0;
   const buy = parseFloat(form.buy_price) || 0;
-  const rentTakeHome = (rent * 0.8).toFixed(2);
-  const buyTakeHome  = (buy  * 0.8).toFixed(2);
+  const rentTakeHome = (rent * 0.9).toFixed(2);
+  const buyTakeHome  = (buy  * 0.9).toFixed(2);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 lg:gap-8">
@@ -713,7 +713,7 @@ function DetailsStep({ form, setForm, avatarPreview, onPickAvatar }) {
           </div>
           <div className="text-[10px] t-text-dim mt-2 flex items-center gap-1.5">
             <BadgeCheck size={10} className="text-emerald-400" />
-            Set either to 0 to disable that purchase option · Platform takes 20%, you keep 80%
+            Set either to 0 to disable that purchase option · Platform takes 10%, you keep 90%
           </div>
         </div>
       </div>

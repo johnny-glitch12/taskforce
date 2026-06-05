@@ -2,7 +2,7 @@
 Creator earnings aggregation — surfaces USD + credit revenue history per creator.
 
 Sources:
-    - creator_revenue_ledger     (existing — 80/20 Stripe payouts on Exchange deploys)
+    - creator_revenue_ledger     (existing — 90/10 Stripe payouts on Exchange deploys)
     - credit_transactions        (bounty_award, bounty_refund, etc. — pool='topup')
     - bounties                   (cash bounties awarded, won by this creator)
     - deployment_runs            (run counts per their listings)

@@ -7,7 +7,7 @@ Two payout paths:
      The bonus is funded by the platform: minting `N` credits costs us nothing
      in DB terms but represents `N × $0.01` of future LLM-call entitlement that
      we now owe. At our typical 60% gross margin this stays profitable.
-  2. CASH — Stripe Connect payout at face value. Standard 80/20 split applies
+  2. CASH — Stripe Connect payout at face value. Standard 90/10 split applies
      upstream (we deduct platform fee before this function runs).
 
 Why default to credits: every credit kept in-platform compounds engagement.

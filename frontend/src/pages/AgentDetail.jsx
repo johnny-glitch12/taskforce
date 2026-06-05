@@ -250,7 +250,7 @@ function PurchasePanel({ agent, user, token, checkingOut, setCheckingOut }) {
             <div className="flex items-center gap-1.5 text-[10px] t-text-dim px-2.5 py-1 rounded-sm" style={{ background: 'var(--bg-secondary)' }}>
               <Lock size={10} /> Crypto
             </div>
-            <span className="text-[10px] t-text-dim">80/20 Revenue Split</span>
+            <span className="text-[10px] t-text-dim">90/10 Revenue Split</span>
           </div>
         </div>
       )}

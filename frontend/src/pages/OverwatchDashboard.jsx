@@ -174,7 +174,7 @@ export default function OverwatchDashboard() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           <KPICard label="Daily Net Income" value={dailyNet} icon={DollarSign} color="#22d3ee" prefix="$" trend="up" trendValue="+12.4%" />
           <KPICard label="Active Subscriptions" value={847} icon={Users} color="#a1a1aa" trend="up" trendValue="+23 this week" />
-          <KPICard label="Exchange Volume (20%)" value={Math.round(totalMkt * 0.2)} icon={BarChart3} color="#10b981" prefix="$" trend="up" trendValue="+8.7%" />
+          <KPICard label="Exchange Volume (10%)" value={Math.round(totalMkt * 0.1)} icon={BarChart3} color="#10b981" prefix="$" trend="up" trendValue="+8.7%" />
           <KPICard label="Compute Burn Rate" value={computeBurn} icon={Cpu} color={computeBurn > dailyNet * 0.4 ? "#ef4444" : "#10b981"} prefix="$" trend="down" trendValue="-3.2%" />
         </div>
 

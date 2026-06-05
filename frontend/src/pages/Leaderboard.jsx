@@ -28,14 +28,14 @@ export default function Leaderboard() {
         </div>
         <p className="text-[14px] t-text-mute mb-10 max-w-2xl">
           A real-time scoreboard of the top Task Force AI operators — ranked by bots compiled,
-          deploys received from forks, and revenue routed through The Exchange's 80/20 share.
+          deploys received from forks, and revenue routed through The Exchange's 90/10 share.
         </p>
 
         {/* Feature tease */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-10">
           <FeatureTile icon={Zap} label="Bots Compiled" desc="Live count of bots you've forged in The Armory" />
           <FeatureTile icon={Crown} label="Forks Earned" desc="When others fork your work, you climb the ranks" />
-          <FeatureTile icon={Trophy} label="Revenue Share" desc="80/20 royalty earnings on every fork-deploy" />
+          <FeatureTile icon={Trophy} label="Revenue Share" desc="90/10 royalty earnings on every fork-deploy" />
         </div>
 
         {/* Placeholder table */}

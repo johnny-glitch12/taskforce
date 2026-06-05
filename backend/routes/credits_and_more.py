@@ -452,13 +452,13 @@ async def _provision_deployment(db, user, listing, mode: str, ref: Optional[str]
         "updated_at": now,
     }
     await db.user_bot_deployments.insert_one(doc)
-    # Bump creator stats + revenue ledger (80/20 split — informational only here)
+    # Bump creator stats + revenue ledger (90/10 split — informational only here)
     await db.exchange_listings.update_one(
         {"id": listing["id"]}, {"$inc": {"deploy_count": 1}}
     )
     if amount_paid > 0:
-        creator_share_usd = round(amount_paid * 0.80, 2)
-        platform_share_usd = round(amount_paid * 0.20, 2)
+        creator_share_usd = round(amount_paid * 0.90, 2)
+        platform_share_usd = round(amount_paid * 0.10, 2)
         await db.creator_revenue_ledger.insert_one({
             "id": uuid.uuid4().hex,
             "listing_id": listing["id"],
