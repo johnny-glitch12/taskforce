@@ -491,6 +491,190 @@ async def _provision_deployment(db, user, listing, mode: str, ref: Optional[str]
     return {"deployment_id": deployment_id, "deployment": doc}
 
 
+# ──────────────────────────────────────────────────────────
+# CREDIT-BASED MARKETPLACE PURCHASE  (Prompt 20)
+# ──────────────────────────────────────────────────────────
+class CreditPurchaseRequest(BaseModel):
+    """No body fields — listing_id comes from path. Kept for future expansion."""
+    pass
+
+
+@router.post("/exchange/purchase/{listing_id}")
+async def exchange_purchase(listing_id: str, user=Depends(get_current_user())):
+    """Instant credit-based purchase of an Exchange listing. No Stripe.
+    Debits the buyer's wallet, credits the creator's wallet (90/10 split with
+    +30% credit bonus when pref='credits'), and provisions the deployment.
+    """
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+
+    listing = await db.exchange_listings.find_one({
+        "id": listing_id,
+        "$or": [{"status": "published"}, {"user_id": user_id}],
+    })
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found.")
+
+    # Can't buy your own listing.
+    if listing.get("user_id") == user_id:
+        raise HTTPException(status_code=400, detail="You cannot purchase your own listing.")
+
+    # Already purchased?
+    existing = await db.user_bot_deployments.find_one({
+        "user_id": user_id, "listing_id": listing_id, "status": "active",
+    })
+    if existing:
+        existing.pop("_id", None)
+        return {"already_owned": True, "deployment": existing}
+
+    price = int(listing.get("price_credits") or 0)
+
+    # Free agents — no debit needed.
+    if price <= 0:
+        dep = await _provision_deployment(
+            db, user, listing, mode="free", ref=None, amount_paid=0.0,
+        )
+        return {"success": True, "credits_charged": 0, **dep}
+
+    # Affordability check — clean error instead of ValueError.
+    from lib import credit_wallet as _cw
+    afford = await _cw.can_afford(db, user, "exchange_purchase", cost_override=price)
+    if not afford.get("allowed"):
+        return {
+            "success": False,
+            "error": "INSUFFICIENT_CREDITS",
+            "required": price,
+            "available": int(afford.get("balance") or 0),
+            "message": "Not enough credits. Top up to continue.",
+        }
+
+    # Debit buyer's credits (subscription first, then topup).
+    debit = await credit_wallet_debit(
+        db, user, "exchange_purchase", ref=listing_id,
+        cost_override=price,
+    )
+
+    # Provision the deployment. `amount_paid` is stored in USD equivalent for
+    # the legacy revenue_ledger; the creator earning is processed at
+    # credit-equivalent USD via `process_creator_earning`.
+    credit_value_usd = 0.01
+    amount_paid_usd = round(price * credit_value_usd, 2)
+    dep = await _provision_deployment(
+        db, user, listing,
+        mode="credit_purchase", ref=f"credits:{listing_id}:{uuid.uuid4().hex[:8]}",
+        amount_paid=amount_paid_usd,
+    )
+
+    # Bump listing revenue counter (credits).
+    await db.exchange_listings.update_one(
+        {"id": listing_id},
+        {"$inc": {"revenue_credits": price, "purchase_count": 1}},
+    )
+
+    return {
+        "success": True,
+        "credits_charged": price,
+        "balance_remaining": int(debit.get("balance") or 0),
+        **dep,
+    }
+
+
+# ──────────────────────────────────────────────────────────
+# LEAN CREDIT BALANCE (Prompt 20)  — fast endpoint for navbar polling
+# ──────────────────────────────────────────────────────────
+@router.get("/credits/balance")
+async def credits_balance(user=Depends(get_current_user())):
+    """Returns just the balance summary — no transactions, no packs.
+    Designed for the navbar credit counter that polls every 30s."""
+    db = get_db()
+    info = await get_balance(db, user)
+    return {
+        "subscription": int(info.get("subscription_credits") or 0),
+        "topup": int(info.get("topup_credits") or 0),
+        "total": int(info.get("balance") or 0),
+        "subscription_max": int(info.get("subscription_credits_max") or 0),
+        "monthly_grant": int(info.get("monthly_grant") or 0),
+        "reset_date": info.get("credit_reset_date"),
+        "tier": info.get("tier") or "recruit",
+        "unlimited": bool(info.get("unlimited") or False),
+    }
+
+
+# ──────────────────────────────────────────────────────────
+# CUSTOM TOP-UP  (Prompt 20) — Stripe checkout for arbitrary USD amount
+# ──────────────────────────────────────────────────────────
+class CustomTopupRequest(BaseModel):
+    amount_usd: float = Field(ge=1, le=1000)
+
+
+# $0.019 / credit = Builder pack rate. Same rate users get on the $19 pack.
+CUSTOM_TOPUP_RATE_USD_PER_CREDIT = 0.019
+
+
+@router.post("/credits/topup/custom")
+async def credits_topup_custom(
+    request: Request, body: CustomTopupRequest, user=Depends(get_current_user()),
+):
+    """Stripe checkout for a custom USD top-up. Mints credits @ Builder rate
+    ($0.019/credit) on webhook. Min $1 (~52 credits), Max $1,000 (~52,631 cr)."""
+    db = get_db()
+    amount_usd = round(float(body.amount_usd), 2)
+    if amount_usd < 1 or amount_usd > 1000:
+        raise HTTPException(status_code=400, detail="Amount must be between $1 and $1,000.")
+
+    credits = int(amount_usd / CUSTOM_TOPUP_RATE_USD_PER_CREDIT)
+    if credits <= 0:
+        raise HTTPException(status_code=400, detail="Amount too small.")
+
+    from emergentintegrations.payments.stripe.checkout import (
+        StripeCheckout, CheckoutSessionRequest,
+    )
+    host = str(request.base_url).rstrip("/")
+    api_key = os.environ.get("STRIPE_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Stripe not configured.")
+    sc = StripeCheckout(api_key=api_key, webhook_url=f"{host}/api/payments/webhook")
+
+    metadata = {
+        "kind": "credit_topup",
+        "pack": "custom",
+        "credits": str(credits),
+        "user_id": str(user.get("id", user.get("email"))),
+        "user_email": str(user.get("email", "")),
+        "custom_amount_usd": str(amount_usd),
+    }
+    sess = await sc.create_checkout_session(CheckoutSessionRequest(
+        amount=amount_usd, currency="usd",
+        success_url=f"{host}/credits?session_id={{CHECKOUT_SESSION_ID}}&topup=success",
+        cancel_url=f"{host}/credits?topup=cancel",
+        metadata=metadata,
+    ))
+    await db.payment_transactions.insert_one({
+        "id": uuid.uuid4().hex,
+        "session_id": sess.session_id,
+        "user_id": str(user.get("id", user.get("email"))),
+        "user_email": user.get("email"),
+        "type": "credit_topup",
+        "pack": "custom",
+        "credits": credits,
+        "amount": amount_usd,
+        "currency": "usd",
+        "payment_status": "pending",
+        "activated": False,
+        "metadata": metadata,
+        "created_at": _now(),
+        "updated_at": _now(),
+    })
+    return {
+        "url": sess.url,
+        "session_id": sess.session_id,
+        "amount_usd": amount_usd,
+        "credits": credits,
+        "rate_usd_per_credit": CUSTOM_TOPUP_RATE_USD_PER_CREDIT,
+    }
+
+
+
 def _default_run_limit(mode: str) -> int:
     if mode == "rent":
         return 1000

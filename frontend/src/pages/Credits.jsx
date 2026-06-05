@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/App";
+import { useCredits } from "@/lib/credits";
 import { toast } from "sonner";
 import {
   Coins, ArrowUpRight, Sparkles, TrendingUp,
@@ -162,6 +163,7 @@ function EarningsSummaryCard({ earnings }) {
 
 export default function Credits() {
   const { token } = useAuth();
+  const { refreshCredits } = useCredits();
   const [info, setInfo] = useState(null);
   const [settings, setSettings] = useState(null);
   const [earnings, setEarnings] = useState(null);
@@ -216,6 +218,7 @@ export default function Credits() {
       }).then((r) => r.json()).then((d) => {
         if (d.credits_added) toast.success(`+${d.credits_added} credits added.`);
         load();
+        refreshCredits();  // Update navbar counter immediately
       });
     }
     // eslint-disable-next-line
@@ -250,6 +253,7 @@ export default function Credits() {
         if (data.granted) toast.success(`+${data.granted} credits added to your top-up balance.`);
         else toast.success(data.message || "Code applied at next checkout.");
         load();
+        refreshCredits();
       } else {
         toast.error(data.detail || "Invalid code.");
       }

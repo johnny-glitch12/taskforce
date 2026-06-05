@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@/App";
 import { toast } from "sonner";
-import { X, Upload, Video, Image as ImgIcon, DollarSign, Tag, Trash2 } from "lucide-react";
+import { X, Upload, Video, Image as ImgIcon, Coins, Tag, Trash2 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL || "";
 
@@ -25,8 +25,7 @@ export default function PublishToExchangeModal({ open, onClose, runtimeWorkflowI
     description: "",
     category: "automation",
     tags: "",
-    rent_price: 0,
-    buy_price: 0,
+    price_credits: 0,
   });
 
   if (!open) return null;
@@ -49,8 +48,9 @@ export default function PublishToExchangeModal({ open, onClose, runtimeWorkflowI
           description: form.description,
           category: form.category,
           tags,
-          rent_price: parseFloat(form.rent_price) || 0,
-          buy_price: parseFloat(form.buy_price) || 0,
+          rent_price: 0,
+          buy_price: 0,
+          price_credits: parseInt(form.price_credits, 10) || 0,
         }),
       });
       if (!res.ok) {
@@ -160,26 +160,22 @@ export default function PublishToExchangeModal({ open, onClose, runtimeWorkflowI
                     onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="slack, notify, automation" />
                 </Field>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Rent Price ($ / run)">
+              <div>
+                <Field label="Price (credits)">
                   <div className="relative">
-                    <DollarSign size={11} className="absolute left-2 top-1/2 -translate-y-1/2 t-text-dim" />
-                    <input data-testid="listing-rent-price" type="number" step="0.01" min="0" max="10000"
-                      className="config-input pl-7" value={form.rent_price}
-                      onChange={(e) => setForm({ ...form, rent_price: e.target.value })} />
-                  </div>
-                </Field>
-                <Field label="Buy Price ($ flat)">
-                  <div className="relative">
-                    <DollarSign size={11} className="absolute left-2 top-1/2 -translate-y-1/2 t-text-dim" />
-                    <input data-testid="listing-buy-price" type="number" step="0.01" min="0" max="100000"
-                      className="config-input pl-7" value={form.buy_price}
-                      onChange={(e) => setForm({ ...form, buy_price: e.target.value })} />
+                    <Coins size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-cyan-400" />
+                    <input data-testid="listing-price-credits" type="number" step="1" min="0" max="10000"
+                      className="config-input pl-7" value={form.price_credits}
+                      onChange={(e) => setForm({ ...form, price_credits: e.target.value })} placeholder="50" />
                   </div>
                 </Field>
               </div>
-              <div className="text-[10px] t-text-dim">
-                Set either to 0 to disable that purchase option. Operators take 70% of all revenue.
+              <div className="text-[10px] t-text-dim leading-relaxed">
+                Set to <span className="text-emerald-400 font-bold">0</span> for free agents.
+                Suggested: simple agents <span className="text-cyan-400">10-50 cr</span> ·
+                advanced <span className="text-cyan-400">50-200 cr</span> ·
+                premium <span className="text-cyan-400">200-500 cr</span>.
+                You keep <span className="text-cyan-400">90%</span> of each sale.
               </div>
             </>
           )}

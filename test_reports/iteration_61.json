@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration 61 (Credit-Based Marketplace + Persistent Credit Counter + Custom Top-Ups) frontend e2e testing complete. Navbar CreditCounter, TopUpModal (both tabs incl. validation + quick chips), Marketplace credit price chips, ListingDetail Deploy button, idempotent purchase, DirectPublishModal (price_credits-only), and unauthenticated negative case all PASS. One observation: fresh credit-decrement on first deploy could not be verified because the freeuser already owned the 'Iter61 Test Bot' listing from a prior iteration; the idempotency path ('You already own this agent.' toast + redirect to /my-deployments) was confirmed instead.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Marketplace fresh purchase decrement",
+        "issue": "Could not validate the 'balance drops by 50 + toast Deployed · -50 cr' assertion because freeuser@test.com already owns the seeded 'Iter61 Test Bot' listing (idempotency kicked in on the very first click — empty toast on first attempt, then explicit 'You already own this agent.' on second). The seed/fixture should reset ownership before this scenario can be retested.",
+        "affected_selectors": ["[data-testid='listing-deploy-btn']", "[data-testid='navbar-credit-amount']"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_61.json"],
+  "action_items": [
+    "Reset freeuser@test.com's ownership of the 'Iter61 Test Bot' listing (or seed a fresh listing per test run) so the fresh-purchase decrement can be E2E-verified on the next iteration.",
+    "Minor polish: on the first-click 'already-owned' path the toast was empty before redirect; consider firing the same 'You already own this agent.' toast on Marketplace.deployFromCard / ListingDetail Deploy as on the second attempt for consistency."
+  ],
+  "critical_code_review_comments": [
+    "credits.jsx polling (30s) + on-focus refresh is solid; refreshCredits() exposed and called after purchase — good.",
+    "TopUpModal validation logic (parseFloat, 1<=x<=1000) correctly disables the Buy button for empty/0/1500/out-of-range; receipt '~1,315 credits' for $25 matches the 0.019 rate.",
+    "CreditCounter cleanly hides when token is null (unauth) — confirmed on /exchange after localStorage.clear().",
+    "DirectPublishModal no longer exposes dp-rent-price / dp-buy-price (USD fields removed). Helper copy 'Suggested: simple 10-50 cr...' and 'You keep 90%' present."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped-per-request", "frontend": "≈95% (idempotency path verified; fresh-decrement blocked by pre-owned fixture)"},
+  "test_credentials": "admin@nova.ai/admin123 (unlimited, shows ∞), freeuser@test.com/test123 (balance 4,684 at test time)",
+  "seed_data_creation": "None created; relied on existing 'Iter61 Test Bot' (id 0073a823ff294c1391a6500b231b2e92) priced at 50 cr.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All UI/UX assertions in the review request were verified against the public REACT_APP_BACKEND_URL. The single un-verified item is the visual credit-decrement after a *fresh* successful purchase — this requires the buyer to NOT already own the listing. If main agent wants explicit visual proof of decrement, they can either (a) reset listing ownership for freeuser, (b) seed a new listing per run, or (c) test with a different buyer account that doesn't yet own 'Iter61 Test Bot'.",
+  "verified_testids": [
+    "navbar-credit-counter (✓ admin shows ∞, freeuser shows 4,684, hidden when unauth)",
+    "topup-modal, topup-modal-backdrop, topup-close",
+    "topup-tab-packs (default), topup-tab-custom (switches)",
+    "topup-pack-starter/builder/operator/agency (builder has BEST VALUE badge)",
+    "topup-custom-amount-input, topup-custom-buy (disabled empty/0/1500, enabled at 25)",
+    "topup-custom-receipt → '~1,315 credits' for $25 (matches 25/0.019)",
+    "topup-custom-credits-preview",
+    "topup-quick-5/10/25/50/100 (clicking 50 populates input with '50')",
+    "agent-price-{id} → 'Free' or 'N cr' chip with NO '$' on /exchange",
+    "listing-price → '50cr' on /listing/{id}",
+    "listing-deploy-btn → 'Deploy · 50 cr' (idempotent: 2nd click shows 'You already own this agent.' toast + redirects to /my-deployments)",
+    "dp-price-credits (DirectPublishModal — replaces rent/buy USD inputs)"
+  ],
+  "rca of the issue": "N/A — no functional defect; only an environmental/data-state limitation (freeuser already owns the test listing from a prior iteration), which actually validates the backend's idempotent design."
+}

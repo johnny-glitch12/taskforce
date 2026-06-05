@@ -40,6 +40,7 @@ import EconomicsDashboard from "@/pages/EconomicsDashboard";
 import MyApps from "@/pages/MyApps";
 import AppViewer from "@/pages/AppViewer";
 import OnboardingModal from "@/components/OnboardingModal";
+import { CreditProvider } from "@/lib/credits";
 
 // API base URL: in preview/dev we hit a separate backend origin via REACT_APP_BACKEND_URL.
 // In production single-container (Railway), the frontend is served by FastAPI on the
@@ -152,9 +153,11 @@ function App() {
   return (
     <AuthContext.Provider value={{ user, token, isAdmin, isOwner, loading, login, register, logout }}>
       <ThemeProvider>
-        <BrowserRouter>
-          <AppShell />
-        </BrowserRouter>
+        <CreditProvider>
+          <BrowserRouter>
+            <AppShell />
+          </BrowserRouter>
+        </CreditProvider>
       </ThemeProvider>
     </AuthContext.Provider>
   );

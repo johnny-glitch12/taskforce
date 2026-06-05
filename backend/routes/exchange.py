@@ -96,6 +96,9 @@ class PublishListingRequest(BaseModel):
     tags: List[str] = Field(default_factory=list, max_length=10)
     rent_price: float = Field(ge=0, le=10000)
     buy_price: float = Field(ge=0, le=100000)
+    # Credit-only pricing (Prompt 20). Buyers pay this many credits from their
+    # wallet — instant, no Stripe. 0 = free agent.
+    price_credits: int = Field(default=0, ge=0, le=10000)
 
     @field_validator("tags")
     @classmethod
@@ -114,6 +117,7 @@ class UpdateListingRequest(BaseModel):
     tags: Optional[List[str]] = Field(default=None, max_length=10)
     rent_price: Optional[float] = Field(default=None, ge=0, le=10000)
     buy_price: Optional[float] = Field(default=None, ge=0, le=100000)
+    price_credits: Optional[int] = Field(default=None, ge=0, le=10000)
     status: Optional[str] = Field(default=None, pattern="^(draft|published|delisted)$")
 
 
@@ -127,6 +131,8 @@ class DirectPublishRequest(BaseModel):
     tags: List[str] = Field(default_factory=list, max_length=10)
     rent_price: float = Field(default=0, ge=0, le=10000)
     buy_price: float = Field(default=0, ge=0, le=100000)
+    # Credit-only pricing (Prompt 20). 0 = free.
+    price_credits: int = Field(default=0, ge=0, le=10000)
     # Marketplace metadata (new in iter37)
     avatar_icon: str = Field(default="Bot", max_length=40)         # lucide-react icon name
     avatar_color: str = Field(default="#22d3ee", max_length=20)    # hex
@@ -211,6 +217,7 @@ async def direct_publish(req: DirectPublishRequest, user=Depends(get_current_use
         "tags": [t.strip().lower() for t in req.tags if isinstance(t, str) and 1 <= len(t) <= 30][:10],
         "rent_price": float(req.rent_price),
         "buy_price": float(req.buy_price),
+        "price_credits": int(req.price_credits or 0),
         # Marketplace metadata (iter37)
         "avatar_icon": req.avatar_icon,
         "avatar_color": req.avatar_color,
@@ -264,6 +271,7 @@ async def publish_listing(req: PublishListingRequest, user=Depends(get_current_u
         "tags": req.tags,
         "rent_price": req.rent_price,
         "buy_price": req.buy_price,
+        "price_credits": int(req.price_credits or 0),
         "video_url": None,
         "photo_urls": [],
         "node_count": len(wf["nodes"]),

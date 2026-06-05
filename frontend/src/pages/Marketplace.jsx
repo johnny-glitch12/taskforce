@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/App";
+import { useCredits } from "@/lib/credits";
 import { toast } from "sonner";
 import DirectPublishModal from "../components/DirectPublishModal";
+import TopUpModal from "../components/TopUpModal";
 import {
   Search, Heart, Star, Shield, ChevronRight, TrendingUp,
   Sparkles, BadgeCheck, Play, Upload, Trophy,
@@ -221,7 +223,16 @@ function AgentCard({ agent, index }) {
 
         <div className="pt-3 flex items-center justify-between gap-2" style={{ borderTop: '1px solid var(--border)' }}>
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-[15px] font-semibold t-text font-mono">${agent.price}<span className="text-[11px] t-text-dim font-normal">/mo</span></span>
+            {agent.priceCredits > 0 ? (
+              <span data-testid={`agent-price-${agent.id}`} className="text-[15px] font-semibold text-cyan-400 font-mono tabular-nums">
+                {agent.priceCredits}
+                <span className="text-[10px] t-text-dim font-normal ml-1">cr</span>
+              </span>
+            ) : (
+              <span data-testid={`agent-price-${agent.id}`} className="text-[13px] font-bold text-emerald-400 font-mono uppercase tracking-wide">
+                Free
+              </span>
+            )}
           </div>
           <button
             data-testid={`agent-deploy-${agent.id}`}
@@ -238,11 +249,13 @@ function AgentCard({ agent, index }) {
 
 export default function Marketplace() {
   const { token } = useAuth();
+  const { refreshCredits } = useCredits();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showPublish, setShowPublish] = useState(false);
+  const [showTopup, setShowTopup] = useState(false);
 
   // Make the card-level Deploy button work by attaching a global handler the
   // grid's MarketplaceCard delegates to. Cleaned up on unmount.
@@ -253,23 +266,30 @@ export default function Marketplace() {
         window.location.href = "/login";
         return;
       }
-      const isFree = (parseFloat(agent.price) || 0) === 0 && (parseFloat(agent.buy_price) || 0) === 0;
-      const endpoint = isFree ? "/api/deployments/free" : "/api/deployments/checkout";
       try {
-        const res = await fetch(`${process.env.REACT_APP_BACKEND_URL || ""}${endpoint}`, {
+        const res = await fetch(`${process.env.REACT_APP_BACKEND_URL || ""}/api/exchange/purchase/${agent.id}`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ listing_id: agent.id, mode: isFree ? "free" : "rent" }),
         });
         const data = await res.json();
         if (!res.ok) { toast.error(data.detail || "Deploy failed."); return; }
-        if (data.url) { window.location.href = data.url; return; }  // Stripe redirect
-        toast.success("Deployed.");
+        if (data.error === "INSUFFICIENT_CREDITS") {
+          toast.error(`Need ${data.required} credits (you have ${data.available})`);
+          setShowTopup(true);
+          return;
+        }
+        if (data.already_owned) {
+          toast.info("You already own this agent.");
+          window.location.href = "/my-deployments";
+          return;
+        }
+        toast.success(data.credits_charged > 0 ? `Deployed · −${data.credits_charged} cr` : "Deployed!");
+        refreshCredits();
         window.location.href = "/my-deployments";
       } catch { toast.error("Network error."); }
     };
     return () => { delete window.deployFromCard; };
-  }, [token]);
+  }, [token, refreshCredits]);
 
   const fetchAgents = useCallback(async () => {
     setLoading(true);
@@ -290,6 +310,7 @@ export default function Marketplace() {
           category: l.category,
           price: l.rent_price,
           buyPrice: l.buy_price,
+          priceCredits: l.price_credits || 0,
           image: l.video_url ? `${API}${l.video_url}` : (l.photo_urls?.[0] ? `${API}${l.photo_urls[0]}` : null),
           videoUrl: l.video_url ? `${API}${l.video_url}` : null,
           photoUrls: (l.photo_urls || []).map((u) => `${API}${u}`),
@@ -382,6 +403,7 @@ export default function Marketplace() {
         onClose={() => setShowPublish(false)}
         onPublished={() => { setShowPublish(false); fetchAgents(); }}
       />
+      {showTopup && <TopUpModal onClose={() => setShowTopup(false)} />}
     </div>
   );
 }

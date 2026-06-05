@@ -4,6 +4,7 @@ import { useTheme } from "@/lib/theme";
 import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, LogOut, Coins, Rocket, Sparkles, Package, Server, Banknote, TrendingUp, Key, Layers } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import NotificationBell from "@/components/NotificationBell";
+import CreditCounter from "@/components/CreditCounter";
 
 const CENTER_LINKS_PUBLIC = [
   { to: "/armory", label: "The Armory", accent: true },
@@ -203,6 +204,7 @@ export default function Navbar() {
 
           {user ? (
             <>
+              <CreditCounter />
               <NotificationBell />
               <UserMenu user={user} logout={logout} navigate={navigate} />
             </>

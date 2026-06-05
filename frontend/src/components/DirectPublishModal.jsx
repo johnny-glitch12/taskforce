@@ -78,8 +78,7 @@ export default function DirectPublishModal({ open, onClose, onPublished }) {
     description: "",
     category: "automation",
     tags: "",
-    rent_price: 0,
-    buy_price: 0,
+    price_credits: 0,
     avatar_icon: "Bot",
     avatar_color: "#22d3ee",
     required_integrations: [],
@@ -136,8 +135,9 @@ export default function DirectPublishModal({ open, onClose, onPublished }) {
           description: form.description,
           category: form.category,
           tags,
-          rent_price: parseFloat(form.rent_price) || 0,
-          buy_price: parseFloat(form.buy_price) || 0,
+          rent_price: 0,
+          buy_price: 0,
+          price_credits: parseInt(form.price_credits, 10) || 0,
           avatar_icon: form.avatar_icon,
           avatar_color: form.avatar_color,
           required_integrations: form.required_integrations,
@@ -454,10 +454,10 @@ function DetailsStep({ form, setForm, avatarPreview, onPickAvatar }) {
     update({ required_integrations: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] });
   };
 
-  const rent = parseFloat(form.rent_price) || 0;
-  const buy = parseFloat(form.buy_price) || 0;
-  const rentTakeHome = (rent * 0.9).toFixed(2);
-  const buyTakeHome  = (buy  * 0.9).toFixed(2);
+  const priceCredits = parseInt(form.price_credits, 10) || 0;
+  const takeHomeCredits = Math.floor(priceCredits * 0.9);
+  // 30% bonus when creator's payout pref is 'credits' (the default).
+  const takeHomeWithBonus = Math.floor(takeHomeCredits * 1.3);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 lg:gap-8">
@@ -688,32 +688,43 @@ function DetailsStep({ form, setForm, avatarPreview, onPickAvatar }) {
           </div>
         </div>
 
-        {/* Pricing */}
+        {/* Pricing — credits-only (Prompt 20) */}
         <div>
-          <label className="block text-[10px] tracking-widest uppercase t-text-dim mb-2">Pricing</label>
-          <div className="grid grid-cols-2 gap-3">
-            <PriceInput
-              dataTestId="dp-rent-price"
-              label="Rent / run"
-              value={form.rent_price}
-              onChange={(v) => update({ rent_price: v })}
-              takeHome={rentTakeHome}
-              suffix="/run"
-              color={form.avatar_color}
-            />
-            <PriceInput
-              dataTestId="dp-buy-price"
-              label="Buy (flat)"
-              value={form.buy_price}
-              onChange={(v) => update({ buy_price: v })}
-              takeHome={buyTakeHome}
-              suffix="one-time"
-              color={form.avatar_color}
-            />
+          <label className="block text-[10px] tracking-widest uppercase t-text-dim mb-2">Pricing (credits)</label>
+          <div className="grid grid-cols-1 gap-3">
+            <div
+              className="rounded-sm p-3"
+              style={{ background: 'rgba(255,255,255,0.02)', border: `1px solid ${form.avatar_color}40` }}
+            >
+              <div className="flex items-baseline gap-2 mb-2">
+                <label className="text-[10px] uppercase tracking-[0.15em] font-mono t-text-dim shrink-0">Price</label>
+                <input
+                  data-testid="dp-price-credits"
+                  type="number" step="1" min="0" max="10000"
+                  value={form.price_credits}
+                  onChange={(e) => update({ price_credits: e.target.value })}
+                  placeholder="50"
+                  className="cy-input cy-price-input flex-1 text-right"
+                  style={{ '--glow': form.avatar_color }}
+                />
+                <span className="text-[11px] uppercase tracking-widest font-mono" style={{ color: form.avatar_color }}>
+                  cr
+                </span>
+              </div>
+              {priceCredits > 0 && (
+                <div className="text-[10px] t-text-dim font-mono">
+                  Take home: <span className="text-cyan-400 font-bold">{takeHomeCredits} cr</span>
+                  {" "}({takeHomeWithBonus} cr with +30% credits bonus)
+                </div>
+              )}
+            </div>
           </div>
-          <div className="text-[10px] t-text-dim mt-2 flex items-center gap-1.5">
-            <BadgeCheck size={10} className="text-emerald-400" />
-            Set either to 0 to disable that purchase option · Platform takes 10%, you keep 90%
+          <div className="text-[10px] t-text-dim mt-2 leading-relaxed">
+            <BadgeCheck size={10} className="inline -mt-px mr-1 text-emerald-400" />
+            Set to <span className="text-emerald-400 font-bold">0</span> for free agents. Suggested:
+            simple <span style={{ color: form.avatar_color }}>10-50 cr</span>,
+            advanced <span style={{ color: form.avatar_color }}>50-200 cr</span>,
+            premium <span style={{ color: form.avatar_color }}>200-500 cr</span>. You keep 90%.
           </div>
         </div>
       </div>
@@ -788,8 +799,7 @@ function LivePreviewCard({ form, avatarPreview }) {
   const trigger = TRIGGER_TYPES.find((t) => t.id === form.trigger_type) || TRIGGER_TYPES[0];
   const TriggerIcon = trigger.Icon;
   const engine = ENGINES.find((e) => e.id === form.engine);
-  const rent = parseFloat(form.rent_price) || 0;
-  const buy = parseFloat(form.buy_price) || 0;
+  const priceCredits = parseInt(form.price_credits, 10) || 0;
   const intList = (form.required_integrations || []).slice(0, 6);
 
   return (
@@ -873,12 +883,11 @@ function LivePreviewCard({ form, avatarPreview }) {
           {/* pricing */}
           <div className="flex items-end justify-between pt-2 mt-1.5" style={{ borderTop: '1px solid var(--border)' }}>
             <div>
-              <div className="text-[9px] uppercase tracking-widest t-text-dim font-mono">Pricing</div>
-              <div className="font-mono text-[12px] t-text mt-0.5">
-                {rent > 0 && <span>${rent.toFixed(2)}<span className="t-text-dim text-[10px]">/run</span></span>}
-                {rent > 0 && buy > 0 && <span className="t-text-dim mx-1">·</span>}
-                {buy > 0 && <span>${buy.toFixed(2)}<span className="t-text-dim text-[10px]"> flat</span></span>}
-                {rent === 0 && buy === 0 && <span className="t-text-dim text-[10px]">— free —</span>}
+              <div className="text-[9px] uppercase tracking-widest t-text-dim font-mono">Price</div>
+              <div className="font-mono text-[13px] mt-0.5" style={{ color: form.avatar_color }}>
+                {priceCredits > 0
+                  ? <span>{priceCredits.toLocaleString()}<span className="t-text-dim text-[10px] ml-1">cr</span></span>
+                  : <span className="text-emerald-400">FREE</span>}
               </div>
             </div>
             <button
