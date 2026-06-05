@@ -23,6 +23,40 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 61 (Feb 2026) — Credit-Based Marketplace + Persistent Credit Counter + Custom Top-Ups (Prompt 20)
+
+**🟢 Exchange purchases are now CREDIT-ONLY (no Stripe per purchase)**
+- New `POST /api/exchange/purchase/{listing_id}` — instant credit debit + provision deployment. Returns `{success, credits_charged, balance_remaining, deployment, …}` on success; `{success:false, error:'INSUFFICIENT_CREDITS', required, available}` on low balance; `{already_owned:true, deployment}` on repeat (idempotent).
+- Listings carry a new `price_credits` int field (0..10000) in `exchange_listings` documents. Legacy `rent_price` / `buy_price` (USD) remain for backwards compat but are not used in the new purchase flow.
+- 90/10 split + 30% credit bonus to creator is still applied via existing `process_creator_earning` (verified: 50-cr purchase → creator earned 45 base + 14 bonus = 59 cr).
+- Stripe is now used ONLY for adding money to the wallet (top-up packs, custom top-ups, subscriptions) and for cash bounties. Never for individual agent purchases.
+
+**🟢 Persistent Credit Counter in the Navbar**
+- New `lib/credits.jsx` — `CreditProvider` context polls `GET /api/credits/balance` every 30s + on tab focus + when called via `refreshCredits()`.
+- New `components/CreditCounter.jsx` (data-testid='navbar-credit-counter') — cyan pill in the navbar. Color shifts amber when ≤50 / red when ≤5. Admin / unlimited accounts render an ∞ glyph. Click opens TopUpModal.
+- New `GET /api/credits/balance` — lean endpoint for fast polling. Returns `{subscription, topup, total, subscription_max, monthly_grant, reset_date, tier, unlimited}`.
+
+**🟢 Top-Up Modal with Packs + Custom Amount**
+- New `components/TopUpModal.jsx` — two tabs: 'Credit Packs' (4 preset packs, Builder marked BEST VALUE) and 'Custom Amount' (input $1..$1000 + quick chips $5/$10/$25/$50/$100). Live receipt shows credits at $0.019/credit rate.
+- New `POST /api/credits/topup/custom` — accepts `{amount_usd}`, validates $1..$1000, computes credits @ Builder rate (0.019 USD/cr), returns Stripe Checkout URL. Webhook reuses the existing `credit_topup` handler with `pack='custom'` metadata so credits are minted on payment success.
+
+**🟢 Refresh-on-action**
+- `refreshCredits()` is called from: Marketplace.deployFromCard, ListingDetail.handlePurchase, Credits.jsx after promo redeem / topup poll success. The navbar counter updates instantly without manual reload.
+
+**🟢 DirectPublishModal / PublishToExchangeModal — credit pricing**
+- Replaced rent_price / buy_price USD inputs with a single `price_credits` input.
+- DirectPublishModal LivePreviewCard shows credit amount or "FREE".
+- Helper copy: "Suggested: simple 10-50 cr · advanced 50-200 cr · premium 200-500 cr · You keep 90%".
+
+**🟢 Marketplace + Listing Card UX**
+- Marketplace cards show "{N} cr" (cyan) or "FREE" (emerald) on the price line — no `$` signs.
+- ListingDetail (`/listing/{id}`) shows price with Coins icon + Deploy button (`Deploy · {N} cr`). Disabled when buyer can't afford; "Top up to deploy" link opens TopUp modal. For the listing's owner, button becomes "Your listing" copy.
+
+**Verified (iter61)**:
+- **14/14 backend pytest pass** (`/app/backend/tests/test_iter61_credit_marketplace.py`): balance shape, admin unlimited, owner-can't-buy, fresh purchase debit, idempotent repeat purchase, INSUFFICIENT_CREDITS error shape, free listing no debit, custom topup Stripe session, custom topup validation (min/max), price_credits persistence + update round-trip.
+- **Frontend ≈95% verified** by testing agent (`/app/test_reports/iteration_61.json`): navbar counter ∞/numeric/hidden states, TopUpModal both tabs, validation, quick chips, "$25 → ~1,315 credits" receipt, marketplace credit price chips, ListingDetail Deploy/Topup/idempotent flow, DirectPublishModal price_credits input, public/unauth counter hidden. Only the visual "fresh-decrement on first deploy" wasn't seen because the test buyer already owned the seeded listing (idempotent path triggered instead — which is also the correct behavior).
+
+
 ### Phase 60 (Feb 2026) — Credit Ecosystem Smoothing + Hidden Pricing (Prompt 19)
 
 **🟢 Per-action credit cost HIDDEN from the user UI and API**

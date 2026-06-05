@@ -50,8 +50,8 @@ export default function ListingDetail() {
         return;
       }
       if (data.already_owned) {
-        toast.info("You already own this agent.");
-        navigate("/my-deployments");
+        toast.info("You already own this agent.", { duration: 3000 });
+        setTimeout(() => navigate("/my-deployments"), 900);
         return;
       }
       toast.success(data.credits_charged > 0 ? `Deployed · −${data.credits_charged} cr` : "Deployed!");

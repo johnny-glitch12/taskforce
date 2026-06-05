@@ -279,8 +279,8 @@ export default function Marketplace() {
           return;
         }
         if (data.already_owned) {
-          toast.info("You already own this agent.");
-          window.location.href = "/my-deployments";
+          toast.info("You already own this agent.", { duration: 3000 });
+          setTimeout(() => { window.location.href = "/my-deployments"; }, 900);
           return;
         }
         toast.success(data.credits_charged > 0 ? `Deployed · −${data.credits_charged} cr` : "Deployed!");
