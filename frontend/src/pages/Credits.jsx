@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/App";
 import { toast } from "sonner";
 import {
-  Coins, Zap, ArrowUpRight, Sparkles, TrendingUp,
-  Gift, Loader2, Check, RefreshCw, Infinity as InfinityIcon,
-  AlertTriangle,
+  Coins, ArrowUpRight, Sparkles, TrendingUp,
+  Gift, Loader2, Check, Infinity as InfinityIcon,
+  AlertTriangle, Banknote, Gem,
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL || "";
@@ -65,32 +66,96 @@ function TopupPoolCard({ value, testid }) {
   );
 }
 
-function ActionCostsList({ costs }) {
-  const labelMap = {
-    vibe_chat: "AI chat message",
-    build_bot: "Build bot",
-    workflow_run: "Workflow run",
-    bot_deploy: "Bot deploy",
-    agent_run: "Agent run",
-    external_agent_run: "External agent",
-    publish_listing: "Publish listing",
-  };
+function PayoutSettingsCard({ settings, onChange, busy }) {
+  if (!settings) return null;
+  const pref = settings.payout_preference || "credits";
+  const bonusPct = Math.round((settings.ecosystem?.credit_bonus_rate || 0.3) * 100);
   return (
-    <div className="rounded-sm p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+    <div data-testid="payout-settings-card" className="rounded-sm p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
       <div className="flex items-center gap-2 mb-3">
-        <Zap size={12} className="text-cyan-400" />
-        <span className="text-[10px] uppercase tracking-[0.2em] t-text-sub font-mono">Action Costs</span>
+        <Banknote size={13} className="text-emerald-400" />
+        <span className="text-[10px] uppercase tracking-[0.2em] t-text-sub font-mono">Creator Payouts</span>
       </div>
-      <ul data-testid="action-costs" className="space-y-1.5 text-[11px] font-mono">
-        {Object.entries(costs || {}).map(([k, v]) => (
-          <li key={k} className="flex items-center justify-between gap-2">
-            <span className="t-text-mute">{labelMap[k] || k.replace(/_/g, " ")}</span>
-            <span className={v === 0 ? "text-emerald-400" : "text-cyan-400"}>
-              {v === 0 ? "free" : `${v} cr`}
-            </span>
-          </li>
-        ))}
+      <p className="text-[11px] t-text-mute leading-relaxed mb-3">
+        How would you like to receive earnings from bounty wins and marketplace sales?
+      </p>
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <button
+          data-testid="payout-pref-credits"
+          onClick={() => onChange("credits")}
+          disabled={busy}
+          className="px-2 py-2 rounded-sm text-[10px] font-mono uppercase tracking-[0.15em] transition-all"
+          style={{
+            background: pref === "credits" ? "rgba(34,211,238,0.1)" : "var(--bg-elevated)",
+            border: `1px solid ${pref === "credits" ? "rgba(34,211,238,0.6)" : "var(--border)"}`,
+            color: pref === "credits" ? "#22d3ee" : "var(--text-mute)",
+          }}
+        >
+          <Gem size={11} className="inline mr-1.5" />
+          Credits <span className="text-emerald-400">+{bonusPct}%</span>
+        </button>
+        <button
+          data-testid="payout-pref-cash"
+          onClick={() => onChange("cash")}
+          disabled={busy}
+          className="px-2 py-2 rounded-sm text-[10px] font-mono uppercase tracking-[0.15em] transition-all"
+          style={{
+            background: pref === "cash" ? "rgba(16,185,129,0.1)" : "var(--bg-elevated)",
+            border: `1px solid ${pref === "cash" ? "rgba(16,185,129,0.6)" : "var(--border)"}`,
+            color: pref === "cash" ? "#10b981" : "var(--text-mute)",
+          }}
+        >
+          <Banknote size={11} className="inline mr-1.5" />
+          Cash USD
+        </button>
+      </div>
+      <div className="text-[10px] t-text-dim leading-relaxed">
+        {pref === "credits" ? (
+          <span>Earnings convert at <span className="text-cyan-400">$0.01 / cr</span> plus a <span className="text-emerald-400">+{bonusPct}% bonus</span>. Credits never expire.</span>
+        ) : (
+          <span>Cash via Stripe Connect (min ${settings.ecosystem?.min_cash_payout || 10} payout). Set up payouts at <Link to="/payouts" className="text-cyan-400 underline">/payouts</Link>.</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EarningsSummaryCard({ earnings }) {
+  if (!earnings) return null;
+  const totalUsd = earnings.total_earned_usd || 0;
+  const credits = earnings.credits || {};
+  const cashback = earnings.cashback || {};
+  return (
+    <div data-testid="earnings-summary-card" className="rounded-sm p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+      <div className="flex items-center gap-2 mb-3">
+        <TrendingUp size={13} className="text-amber-400" />
+        <span className="text-[10px] uppercase tracking-[0.2em] t-text-sub font-mono">My Earnings</span>
+      </div>
+      <div className="text-2xl font-bold t-text font-mono mb-1">${totalUsd.toFixed(2)}</div>
+      <div className="text-[10px] uppercase tracking-widest t-text-dim font-mono mb-3">lifetime value</div>
+      <ul className="space-y-1.5 text-[11px] font-mono">
+        <li className="flex items-center justify-between gap-2">
+          <span className="t-text-mute">Credits earned</span>
+          <span className="text-cyan-400" data-testid="earnings-credits-total">
+            {(credits.total_credits || 0).toLocaleString()}
+          </span>
+        </li>
+        <li className="flex items-center justify-between gap-2">
+          <span className="t-text-mute">Bonus credits</span>
+          <span className="text-emerald-400" data-testid="earnings-bonus-total">
+            +{(credits.bonus_credits || 0).toLocaleString()}
+          </span>
+        </li>
+        <li className="flex items-center justify-between gap-2">
+          <span className="t-text-mute">Cashback</span>
+          <span className="text-purple-400" data-testid="earnings-cashback-total">
+            +{(cashback.total_credits || 0).toLocaleString()}
+          </span>
+        </li>
       </ul>
+      <Link to="/earnings" data-testid="earnings-detail-link" className="mt-3 text-[10px] uppercase tracking-widest font-mono text-cyan-400 hover:text-cyan-300 inline-flex items-center gap-1">
+        Full earnings dashboard <ArrowUpRight size={10} />
+      </Link>
     </div>
   );
 }
@@ -98,15 +163,47 @@ function ActionCostsList({ costs }) {
 export default function Credits() {
   const { token } = useAuth();
   const [info, setInfo] = useState(null);
+  const [settings, setSettings] = useState(null);
+  const [earnings, setEarnings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [promoCode, setPromoCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [payoutBusy, setPayoutBusy] = useState(false);
 
   const load = async () => {
     try {
-      const res = await fetch(`${API}/api/credits/me`, { headers: { Authorization: `Bearer ${token}` } });
-      setInfo(await res.json());
+      const headers = { Authorization: `Bearer ${token}` };
+      const [meRes, settingsRes, earningsRes] = await Promise.all([
+        fetch(`${API}/api/credits/me`, { headers }),
+        fetch(`${API}/api/settings`, { headers }),
+        fetch(`${API}/api/earnings`, { headers }),
+      ]);
+      setInfo(await meRes.json());
+      if (settingsRes.ok) setSettings(await settingsRes.json());
+      if (earningsRes.ok) setEarnings(await earningsRes.json());
     } finally { setLoading(false); }
+  };
+
+  const updatePayoutPref = async (preference) => {
+    if (!settings || settings.payout_preference === preference) return;
+    setPayoutBusy(true);
+    try {
+      const res = await fetch(`${API}/api/settings/payout-preference`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ preference }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSettings((s) => ({ ...s, payout_preference: data.payout_preference }));
+        toast.success(preference === "credits"
+          ? `Switched to credits payout — +${Math.round((settings.ecosystem?.credit_bonus_rate || 0.3) * 100)}% bonus active.`
+          : "Switched to cash payouts.");
+      } else {
+        toast.error("Could not update preference.");
+      }
+    } catch { toast.error("Network error."); }
+    setPayoutBusy(false);
   };
 
   useEffect(() => {
@@ -263,7 +360,7 @@ export default function Credits() {
           <span className="t-text-dim">credits</span>
         </div>
 
-        {/* Promo + Costs + Packs */}
+        {/* Promo + Payouts + Earnings */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
           {/* Promo card */}
           <div className="rounded-sm p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
@@ -293,19 +390,9 @@ export default function Credits() {
             </div>
           </div>
 
-          <ActionCostsList costs={info.action_costs} />
+          <PayoutSettingsCard settings={settings} onChange={updatePayoutPref} busy={payoutBusy} />
 
-          {/* Inline pack callout */}
-          <div className="rounded-sm p-4 flex flex-col justify-center"
-            style={{ background: "rgba(34,211,238,0.04)", border: "1px solid rgba(34,211,238,0.2)" }}>
-            <div className="flex items-center gap-2 mb-2">
-              <RefreshCw size={12} className="text-cyan-400" />
-              <span className="text-[10px] uppercase tracking-[0.2em] t-text-sub font-mono">How it works</span>
-            </div>
-            <p className="text-[11px] t-text-mute leading-relaxed">
-              Subscription credits reset each cycle. Top-up credits never expire and kick in only when your monthly pool runs dry.
-            </p>
-          </div>
+          <EarningsSummaryCard earnings={earnings} />
         </div>
 
         {/* Top-up packs */}

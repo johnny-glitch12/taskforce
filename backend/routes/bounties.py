@@ -744,46 +744,86 @@ async def award_bounty(bounty_id: str, req: AwardRequest,
 
     payout_balance = None
     transfer_id = None
+    payout_meta = None  # for the response — credit_bonus or stripe_transfer_id
     if doc.get("reward_type") == "cash":
-        # Need a fully-onboarded Stripe Connect account to receive cash.
-        from routes.stripe_connect import (
-            get_account_for_user, is_ready_for_payout, create_transfer,
-        )
-        connect = await get_account_for_user(db, sub["creator_id"])
-        if not is_ready_for_payout(connect):
-            raise HTTPException(status_code=409, detail={
-                "error": "WINNER_PAYOUTS_NOT_READY",
-                "message": "Winner has not completed Stripe Connect onboarding. "
-                           "They must finish payout setup before you can award this cash bounty.",
-                "winner_email": sub.get("creator_email"),
-                "onboarding_url": "/payouts",
-            })
-        if not doc.get("stripe_charge_id"):
-            raise HTTPException(status_code=409,
-                                detail="Cash bounty has no recorded Stripe charge — cannot transfer.")
-        try:
-            tr = create_transfer(
+        # Honor winner's payout preference. Default "credits" → convert to
+        # credits with 30% bonus, keeping money inside the ecosystem.
+        winner_pref = (winner_doc.get("payout_preference") or "credits").lower()
+        if winner_pref == "credits":
+            from lib.payouts import process_creator_earning
+            payout = await process_creator_earning(
+                db,
+                creator=winner_doc,
                 amount_usd=float(doc["reward_amount"]),
-                destination_account=connect["stripe_account_id"],
-                source_charge=doc["stripe_charge_id"],
-                transfer_group=f"bounty_{bounty_id}",
-                metadata={
-                    "bounty_id": bounty_id,
-                    "winner_user_id": sub["creator_id"],
-                    "submission_id": sub["id"],
-                },
+                source="bounty_win",
+                ref=bounty_id,
+                payout_preference="credits",
             )
-            transfer_id = tr.id
-        except Exception as e:
-            logger.error(f"Stripe Transfer.create failed for bounty {bounty_id}: {e}")
-            raise HTTPException(status_code=502,
-                                detail=f"Stripe payout failed: {e}")
+            payout_balance = payout.get("balance")
+            payout_meta = payout
+        else:
+            # Cash via Stripe Connect — needs onboarded account.
+            from routes.stripe_connect import (
+                get_account_for_user, is_ready_for_payout, create_transfer,
+            )
+            connect = await get_account_for_user(db, sub["creator_id"])
+            if not is_ready_for_payout(connect):
+                raise HTTPException(status_code=409, detail={
+                    "error": "WINNER_PAYOUTS_NOT_READY",
+                    "message": "Winner has not completed Stripe Connect onboarding. "
+                               "They must finish payout setup before you can award this cash bounty.",
+                    "winner_email": sub.get("creator_email"),
+                    "onboarding_url": "/payouts",
+                })
+            if not doc.get("stripe_charge_id"):
+                raise HTTPException(status_code=409,
+                                    detail="Cash bounty has no recorded Stripe charge — cannot transfer.")
+            try:
+                tr = create_transfer(
+                    amount_usd=float(doc["reward_amount"]),
+                    destination_account=connect["stripe_account_id"],
+                    source_charge=doc["stripe_charge_id"],
+                    transfer_group=f"bounty_{bounty_id}",
+                    metadata={
+                        "bounty_id": bounty_id,
+                        "winner_user_id": sub["creator_id"],
+                        "submission_id": sub["id"],
+                    },
+                )
+                transfer_id = tr.id
+            except Exception as e:
+                logger.error(f"Stripe Transfer.create failed for bounty {bounty_id}: {e}")
+                raise HTTPException(status_code=502,
+                                    detail=f"Stripe payout failed: {e}")
+            # Log a ledger row for analytics on cash payouts.
+            from lib.payouts import process_creator_earning
+            await process_creator_earning(
+                db, creator=winner_doc,
+                amount_usd=float(doc["reward_amount"]),
+                source="bounty_win", ref=bounty_id, payout_preference="cash",
+            )
     else:
+        # Credit bounty — apply 30% ecosystem bonus on top of the base reward.
+        from lib.payouts import CREDIT_BONUS_RATE
+        base = int(doc["reward_amount"])
+        bonus = int(round(base * CREDIT_BONUS_RATE))
+        total = base + bonus
         payout = await credit_wallet.credit(
-            db, winner_doc, doc["reward_amount"], source="bounty_award",
-            ref=bounty_id, note=f"Bounty award: {doc['title']}", pool="topup",
+            db, winner_doc, total, source="bounty_award",
+            ref=bounty_id,
+            note=f"Bounty award: {doc['title']} ({bonus} bonus)", pool="topup",
         )
         payout_balance = payout.get("balance")
+        # Persist running totals so the Earnings dashboard can render them.
+        await db.users.update_one(
+            {"id": winner_doc.get("id")},
+            {"$inc": {"credits_earned_total": total,
+                      "bonus_credits_earned_total": bonus}},
+        )
+        payout_meta = {
+            "payout_type": "credits", "base_credits": base,
+            "bonus_credits": bonus, "total_credits": total,
+        }
 
     # Tag the winning Exchange listing (if applicable) so it gets a badge.
     winner_listing_id = None
@@ -879,6 +919,7 @@ async def award_bounty(bounty_id: str, req: AwardRequest,
         "winner_listing_id": winner_listing_id,
         "winner_credits_balance": payout_balance,
         "stripe_transfer_id": transfer_id,
+        "payout": payout_meta,
         "reward_amount": doc["reward_amount"],
         "reward_type": doc.get("reward_type", "credits"),
     }

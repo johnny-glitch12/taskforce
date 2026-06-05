@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, EmailStr
 
 from lib.credit_wallet import (
     get_balance, list_transactions, credit as credit_wallet_credit,
-    debit as credit_wallet_debit, TIER_MONTHLY_GRANT, ACTION_COSTS,
+    debit as credit_wallet_debit, TIER_MONTHLY_GRANT,
 )
 
 router = APIRouter()
@@ -56,7 +56,10 @@ async def credits_me(user=Depends(get_current_user())):
     db = get_db()
     info = await get_balance(db, user)
     txns = await list_transactions(db, user, limit=20)
-    return {**info, "action_costs": ACTION_COSTS, "transactions": txns, "packs": TOPUP_PACKS}
+    # action_costs intentionally OMITTED from the frontend response so users
+    # don't see per-action credit pricing. Costs are still tracked server-side
+    # and visible in the owner-only Economics Dashboard.
+    return {**info, "transactions": txns, "packs": TOPUP_PACKS}
 
 
 class TopupRequest(BaseModel):
@@ -445,18 +448,36 @@ async def _provision_deployment(db, user, listing, mode: str, ref: Optional[str]
         {"id": listing["id"]}, {"$inc": {"deploy_count": 1}}
     )
     if amount_paid > 0:
+        creator_share_usd = round(amount_paid * 0.80, 2)
+        platform_share_usd = round(amount_paid * 0.20, 2)
         await db.creator_revenue_ledger.insert_one({
             "id": uuid.uuid4().hex,
             "listing_id": listing["id"],
             "creator_user_id": listing.get("user_id"),
             "renter_user_id": user_id,
             "amount_paid": amount_paid,
-            "creator_share": round(amount_paid * 0.80, 2),
-            "platform_share": round(amount_paid * 0.20, 2),
+            "creator_share": creator_share_usd,
+            "platform_share": platform_share_usd,
             "mode": mode,
             "ref": ref,
             "created_at": now,
         })
+
+        # Apply the creator's payout preference. Default 'credits' (with 30% bonus)
+        # keeps money inside the ecosystem. Cash path defers to the existing
+        # creator_earnings batch payout flow.
+        try:
+            from lib.payouts import process_creator_earning
+            creator_doc = await db.users.find_one({"id": listing.get("user_id")})
+            if creator_doc:
+                pref = (creator_doc.get("payout_preference") or "credits").lower()
+                await process_creator_earning(
+                    db, creator=creator_doc, amount_usd=creator_share_usd,
+                    source="marketplace_sale", ref=ref, payout_preference=pref,
+                )
+        except Exception as _e:
+            # Never block the deployment on a payout-processing hiccup.
+            pass
     doc.pop("_id", None)
     return {"deployment_id": deployment_id, "deployment": doc}
 

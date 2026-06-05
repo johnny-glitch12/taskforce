@@ -1,21 +1,24 @@
 /**
  * Pricing — public pricing page.
  *
- * Three sections:
- *   1. Subscription tier grid (existing TIERS, unchanged behaviour)
- *   2. Dynamic Per-Model Cost Table (pulled from /api/credits/estimate)
- *   3. Top-up packs strip (cards) + BYOK savings panel
+ * Sections:
+ *   1. Hero
+ *   2. Subscription tier grid
+ *   3. Top-up packs strip
+ *   4. BYOK savings panel
+ *   5. Trust bar
  *
- * Everything is single-page, scrollable, with smooth section transitions.
+ * Per-action / per-model credit pricing is intentionally hidden. The user buys
+ * a plan or top-up; the platform handles the rest behind the scenes.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/App";
 import { toast } from "sonner";
 import {
   Check, Zap, GraduationCap, Shield, Crown, Key, Lock,
-  ArrowRight, BadgeCheck, Loader2, Coins, Sparkles, Cpu, Wallet,
-  TrendingDown,
+  ArrowRight, BadgeCheck, Loader2, Coins, Sparkles, Wallet,
+  Infinity as InfinityIcon,
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL || "";
@@ -23,16 +26,16 @@ const API = process.env.REACT_APP_BACKEND_URL || "";
 const TIERS = [
   { id: "recruit",  name: "RECRUIT",  backendTier: null,        tagline: "Start building and learning the basics.",
     monthlyPrice: 0,   cta: "Get Started Free",   ctaStyle: "outline", icon: GraduationCap,
-    features: ["50 sub credits / mo", "Access to all 6 models", "Command Prompt access", "List on The Exchange (renters pay compute)"] },
+    features: ["Includes a generous starter allowance", "Access to all 6 models", "Command Prompt access", "List on The Exchange"] },
   { id: "cadet",    name: "CADET",    backendTier: "cadet",     tagline: "Ad-free advanced learning and expanded testing.",
     monthlyPrice: 19,  cta: "Start 7-Day Trial",  ctaStyle: "outline", icon: Shield,
-    features: ["500 sub credits / mo", "100% Ad-Free Academy", "Advanced Masterclass Modules", "Priority Support"] },
+    features: ["Higher monthly allowance", "100% Ad-Free Academy", "Advanced Masterclass Modules", "Priority Support"] },
   { id: "operator", name: "OPERATOR", backendTier: "operator",  tagline: "For serious builders engineering complex logic.",
     monthlyPrice: 99,  popular: true, cta: "Upgrade to Operator", ctaStyle: "primary", icon: Zap,
-    features: ["2,000 sub credits / mo", "Full React Flow Node Builder", "BYOK rebate (platform min only)", "Private Mastermind Access"] },
+    features: ["Pro-grade monthly allowance", "Full Visual Node Builder", "BYOK key support (deep discount)", "Private Mastermind Access"] },
   { id: "command",  name: "COMMAND",  backendTier: null,        tagline: "High-volume infrastructure for agencies.",
     monthlyPrice: null, cta: "Contact Sales", ctaStyle: "outline", icon: Crown,
-    features: ["10,000+ sub credits / mo", "White-label UI", "Dedicated IP Routing", "Custom SLAs"] },
+    features: ["Custom allowance & SLA", "White-label UI", "Dedicated IP Routing", "Custom integrations"] },
 ];
 
 const TOPUP_PACKS = [
@@ -41,13 +44,6 @@ const TOPUP_PACKS = [
   { id: "operator",  name: "Operator", credits: 5000,   price: 79,  blurb: "Scale your team" },
   { id: "agency",    name: "Agency",   credits: 25000,  price: 299, blurb: "Run a fleet" },
 ];
-
-const ACTION_LABELS = {
-  vibe_chat:  "Chat",
-  vibe_build: "Build (vibe)",
-  build_bot:  "Build (armory)",
-  agent_run:  "Run agent",
-};
 
 function BillingToggle({ annual, setAnnual }) {
   return (
@@ -160,68 +156,7 @@ function PricingCard({ tier, annual, onSubscribe, subscribing }) {
   );
 }
 
-function ModelCostMatrix({ matrix, models, actions, margin }) {
-  if (!matrix || !matrix.length) return null;
-  return (
-    <div data-testid="model-cost-matrix" className="rounded-sm overflow-hidden" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-      <div className="px-5 py-4 flex items-center gap-3" style={{ borderBottom: "1px solid var(--border)" }}>
-        <Cpu size={14} className="text-cyan-400" />
-        <div className="flex-1">
-          <div className="text-[12px] font-mono uppercase tracking-[0.18em] t-text">Per-Model Credit Cost (Typical Usage)</div>
-          <div className="text-[11px] font-mono t-text-dim mt-0.5">
-            1 credit = $0.01 · billed on real token usage · BYOK pays only the API cost floor
-          </div>
-        </div>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-[12px] font-mono">
-          <thead>
-            <tr className="t-text-mute uppercase text-[10px] tracking-wider" style={{ borderBottom: "1px solid var(--border)" }}>
-              <th className="px-4 py-3 text-left">Model</th>
-              {actions.map((a) => (
-                <th key={a} className="px-4 py-3 text-right">{ACTION_LABELS[a] || a}</th>
-              ))}
-              <th className="px-4 py-3 text-right text-purple-400">BYOK</th>
-            </tr>
-          </thead>
-          <tbody>
-            {models.map((m) => {
-              const rows = matrix.filter((r) => r.model === m);
-              if (!rows.length) return null;
-              const byok = rows[0].byok_cost;
-              return (
-                <tr key={m} data-testid={`model-row-${m}`} style={{ borderBottom: "1px solid var(--border)" }}>
-                  <td className="px-4 py-3 t-text">{m}</td>
-                  {actions.map((a) => {
-                    const r = rows.find((x) => x.action === a);
-                    return (
-                      <td key={a} className="px-4 py-3 text-right" data-testid={`cell-${m}-${a}`}>
-                        {r ? (
-                          <span>
-                            <span className="text-cyan-400 font-bold">{r.typical}</span>
-                            <span className="t-text-dim">cr</span>
-                            <span className="t-text-dim text-[10px] ml-1">({r.low}–{r.high})</span>
-                          </span>
-                        ) : <span className="t-text-dim">—</span>}
-                      </td>
-                    );
-                  })}
-                  <td className="px-4 py-3 text-right text-purple-400 font-bold">{byok}cr</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <div className="px-5 py-3 text-[10px] font-mono t-text-dim" style={{ borderTop: "1px solid var(--border)" }}>
-        Numbers are "typical (range)" — final charge depends on real token counts after each call.
-      </div>
-    </div>
-  );
-}
-
 function TopupPack({ pack, onBuy, busy }) {
-  const perCredit = pack.price / pack.credits;
   return (
     <div data-testid={`topup-${pack.id}`} className="rounded-sm p-5 transition-all hover:border-cyan-400/40" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
       <div className="flex items-center gap-2 mb-3">
@@ -229,7 +164,7 @@ function TopupPack({ pack, onBuy, busy }) {
         <span className="text-[10px] font-mono uppercase tracking-[0.15em] t-text-mute">{pack.name}</span>
       </div>
       <div className="text-2xl font-bold t-text font-mono mb-1">{pack.credits.toLocaleString()}<span className="text-[12px] t-text-dim ml-1">cr</span></div>
-      <div className="text-[11px] t-text-dim font-mono mb-3">${perCredit.toFixed(3)}/credit · {pack.blurb}</div>
+      <div className="text-[11px] t-text-dim font-mono mb-3">{pack.blurb}</div>
       <button
         onClick={() => onBuy(pack)}
         disabled={busy === pack.id}
@@ -244,25 +179,36 @@ function TopupPack({ pack, onBuy, busy }) {
   );
 }
 
+function ValueProps() {
+  const items = [
+    { icon: InfinityIcon, title: "Monthly allowance",
+      text: "Every plan ships with a generous monthly allowance — chat, build, and run agents without watching a meter." },
+    { icon: Sparkles, title: "Top-ups never expire",
+      text: "Need a sprint of extra builds? Add a top-up pack any time. They stay in your wallet forever." },
+    { icon: Key, title: "Bring your own keys",
+      text: "Drop in your OpenAI or Anthropic key and your usage goes deep-discount. Models stay the same." },
+  ];
+  return (
+    <div data-testid="value-props" className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-16">
+      {items.map((it) => (
+        <div key={it.title} className="rounded-sm p-5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <div className="flex items-center gap-2 mb-2">
+            <it.icon size={14} className="text-cyan-400" />
+            <span className="text-[10px] uppercase tracking-[0.18em] font-mono t-text-mute">{it.title}</span>
+          </div>
+          <p className="text-[12px] t-text-sub leading-relaxed">{it.text}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Pricing() {
   const [annual, setAnnual] = useState(false);
   const [subscribing, setSubscribing] = useState(null);
   const [topupBusy, setTopupBusy] = useState(null);
-  const [estimate, setEstimate] = useState(null);
   const { user, token } = useAuth();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    // /credits/estimate requires auth — fall back gracefully if anon.
-    fetch(`${API}/api/credits/estimate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify({}),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setEstimate(d))
-      .catch(() => {});
-  }, [token]);
 
   const handleSubscribe = async (tierId, backendTier) => {
     if (!user) {
@@ -312,12 +258,6 @@ export default function Pricing() {
     setTopupBusy(null);
   };
 
-  const sortedModels = useMemo(() => {
-    if (!estimate?.matrix) return [];
-    // Keep gemini/openai/claude order from the API response.
-    return estimate.models;
-  }, [estimate]);
-
   return (
     <div data-testid="pricing-page" className="min-h-[calc(100vh-56px)] px-6 lg:px-8 py-16 md:py-20 relative overflow-hidden">
       <div className="absolute top-[-10%] left-[20%] w-[500px] h-[500px] rounded-full bg-cyan-500/[0.02] blur-[140px] pointer-events-none t-orb" />
@@ -327,13 +267,13 @@ export default function Pricing() {
         <div className="text-center mb-4">
           <div className="inline-flex items-center gap-2 mb-6 px-3 py-1 rounded-sm" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
             <Sparkles size={11} className="text-cyan-400" />
-            <span className="text-[10px] tracking-[0.2em] uppercase font-mono t-text-sub">Pay only for what you use</span>
+            <span className="text-[10px] tracking-[0.2em] uppercase font-mono t-text-sub">One subscription. Build anything.</span>
           </div>
           <h1 className="text-4xl sm:text-5xl lg:text-[3.5rem] font-bold tracking-[-0.02em] leading-[1.08] t-text mb-5">
-            Smart, Dynamic <span className="text-gradient-cyan">Pricing</span>
+            Simple, predictable <span className="text-gradient-cyan">pricing</span>
           </h1>
           <p className="text-base md:text-lg t-text-sub max-w-2xl mx-auto leading-relaxed mb-10">
-            Credits are charged on real token usage — not flat fees. Bring your own API key and pay only the platform minimum.
+            Pick a plan that fits your workflow. Build, chat, and run AI agents with a single monthly allowance — no per-call math, no surprise bills.
           </p>
         </div>
 
@@ -346,29 +286,8 @@ export default function Pricing() {
           ))}
         </div>
 
-        {/* Dynamic model cost matrix */}
-        <div className="mb-20">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center gap-2 mb-3 px-2.5 py-1 rounded-sm" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-              <Cpu size={11} className="text-cyan-400" />
-              <span className="text-[10px] tracking-[0.2em] uppercase font-mono t-text-sub">Per-Model Cost</span>
-            </div>
-            <h2 className="text-2xl md:text-3xl font-bold tracking-tight t-text mb-2">What does each call cost?</h2>
-            <p className="text-sm t-text-sub max-w-lg mx-auto">
-              We re-price every call against actual provider rates. Pick a cheap model for simple jobs, a strong model when it matters.
-            </p>
-          </div>
-          {estimate ? (
-            <ModelCostMatrix matrix={estimate.matrix} models={sortedModels} actions={estimate.actions} margin={estimate.platform_margin} />
-          ) : (
-            <div className="rounded-sm p-8 text-center" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-              <Loader2 className="animate-spin mx-auto mb-3 t-text-mute" size={20} />
-              <div className="text-[11px] font-mono t-text-dim">
-                {token ? "Loading cost matrix…" : "Sign in to see dynamic per-model pricing."}
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Value props */}
+        <ValueProps />
 
         {/* Top-up packs */}
         <div className="mb-20">
@@ -377,8 +296,8 @@ export default function Pricing() {
               <Wallet size={11} className="text-amber-400" />
               <span className="text-[10px] tracking-[0.2em] uppercase font-mono t-text-sub">Top-Up Packs</span>
             </div>
-            <h2 className="text-2xl md:text-3xl font-bold tracking-tight t-text mb-2">Need more credits?</h2>
-            <p className="text-sm t-text-sub max-w-lg mx-auto">One-time top-ups never expire. Stack as much as you need.</p>
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight t-text mb-2">Need more headroom?</h2>
+            <p className="text-sm t-text-sub max-w-lg mx-auto">One-time top-ups never expire. Stack as much as you need on top of your plan.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {TOPUP_PACKS.map((p) => (
@@ -395,10 +314,10 @@ export default function Pricing() {
             </div>
             <div className="flex-1 min-w-[260px]">
               <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-purple-400 mb-2">BRING YOUR OWN KEY</div>
-              <h3 className="text-xl font-bold t-text mb-2">Pay only the platform floor when you bring your own API key</h3>
+              <h3 className="text-xl font-bold t-text mb-2">Already paying OpenAI or Anthropic? Drop your key in.</h3>
               <p className="text-sm t-text-sub mb-3">
-                Add your OpenAI or Anthropic key in the Vault and every call routes through your key. You pay only the platform's minimum action fee.
-                Typical savings of <span className="text-emerald-400 font-bold">60–95%</span> per call vs platform-key pricing.
+                Add a personal key in the Vault and the platform uses it for your calls.
+                You pay the API directly and your TaskForce allowance lasts dramatically longer.
               </p>
               <div className="flex items-center gap-2">
                 <button
@@ -409,10 +328,6 @@ export default function Pricing() {
                 >
                   <Lock size={11} /> Set up BYOK
                 </button>
-                <div className="text-[10px] font-mono t-text-dim ml-2 inline-flex items-center gap-1.5">
-                  <TrendingDown size={11} className="text-emerald-400" />
-                  Avg call drops from <span className="text-cyan-400 mx-0.5">3–5cr</span> → <span className="text-purple-400 mx-0.5">1–2cr</span>
-                </div>
               </div>
             </div>
           </div>

@@ -419,7 +419,6 @@ async def run_app(app_id: str, body: AppRunRequest, request: Request,
         "output": output,
         "error": error,
         "duration_ms": duration_ms,
-        "credits_used": debit.get("credits_charged", 0),
         "balance_remaining": debit.get("balance"),
     }
 
@@ -512,7 +511,6 @@ async def redesign_app(app_id: str, body: AppRedesignRequest, user=Depends(get_c
     return {
         "ok": True,
         "frontend": {"app_jsx": new_jsx, "manifest": new_manifest},
-        "credits_used": debit.get("credits_charged", 0),
         "balance_remaining": debit.get("balance"),
         "duration_ms": duration_ms,
     }

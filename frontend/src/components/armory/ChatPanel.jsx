@@ -31,7 +31,6 @@ export default function ChatPanel({
     ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
   }, [input]);
 
-  const buildCost = (models || []).find((m) => m.id === model)?.build_cost ?? "?";
   const isEmpty = messages.length === 0;
   const status = busy ? "Building" : (hasProject ? "Ready" : "Draft");
   const statusColor = busy ? "#f59e0b" : (hasProject ? "var(--armory-success)" : "var(--armory-text-mute)");
@@ -161,7 +160,7 @@ export default function ChatPanel({
                 <Paperclip size={12} />
               </button>
               <div className="flex-1 text-[10px] font-mono" style={{ color: "var(--armory-text-dim)" }}>
-                Chatting is free. <span style={{ color: "var(--armory-text-mute)" }}>Code generation costs {buildCost} credit{buildCost === 1 ? "" : "s"}.</span>
+                Chat freely, then click <span style={{ color: "var(--armory-text-mute)" }}>Generate Code</span> when you&apos;re ready.
               </div>
               <button
                 data-testid="armory-send-chat"

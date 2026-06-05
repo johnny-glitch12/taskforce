@@ -2066,6 +2066,9 @@ app.include_router(credits_economics_router, prefix="/api")
 from routes.apps import router as apps_router
 app.include_router(apps_router, prefix="/api")
 
+from routes.settings import router as settings_router
+app.include_router(settings_router, prefix="/api")
+
 
 # ─── Runtime / Infra Status (owner-only) ──────────────────
 @app.get("/api/admin/runtime/status")

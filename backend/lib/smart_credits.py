@@ -129,6 +129,15 @@ async def debit_actual_usage(
     except Exception as e:
         logger.warning(f"[smart_credits] metadata patch failed: {e}")
 
+    # Cashback accrual — silent. Granted in 100-cr chunks. Never raises.
+    cashback_granted = 0
+    try:
+        from lib.cashback import accrue_and_grant
+        cb = await accrue_and_grant(db, user, credits)
+        cashback_granted = cb.get("cashback_granted", 0)
+    except Exception as _e:
+        logger.warning(f"[smart_credits] cashback failed: {_e}")
+
     return {
         "allowed": True,
         "credits_charged": credits,
@@ -141,6 +150,7 @@ async def debit_actual_usage(
             "key_source": key_source,
         },
         "balance": debit_info.get("balance"),
+        "cashback_granted": cashback_granted,
         "metadata": metadata,
     }
 

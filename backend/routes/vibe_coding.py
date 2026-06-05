@@ -324,9 +324,7 @@ async def recommend_model(req: RecommendRequest, user=Depends(get_current_user()
         "build_cost": MODELS[pick]["build_cost"],
         "reason": reason,
         "complexity": complexity,
-        "credits_used": debit.get("credits_charged"),
         "balance_remaining": debit.get("balance"),
-        "cost_breakdown": debit.get("cost_breakdown"),
     }
 
 
@@ -491,11 +489,8 @@ async def vibe_chat(req: VibeChatRequest, user=Depends(get_current_user()),
     )
     return {
         "session_id": session["id"], "type": "chat",
-        "response": ai_text, "credits_used": credits_used,
+        "response": ai_text,
         "balance_remaining": debit.get("balance"), "model": req.model,
-        "key_source": key_info["source"],
-        "input_tokens": result["input_tokens"], "output_tokens": result["output_tokens"],
-        "cost_breakdown": debit.get("cost_breakdown"),
     }
 
 
@@ -745,8 +740,5 @@ async def vibe_generate_legacy(req: VibeGenerateRequest, user=Depends(get_curren
         "session_id": session["id"], "type": "build",
         "project_id": project_id, "name": name, "description": description,
         "files": files, "nodes": nodes, "edges": edges,
-        "credits_used": credits_used, "balance_remaining": debit.get("balance"), "model": req.model,
-        "key_source": key_info["source"],
-        "input_tokens": result["input_tokens"], "output_tokens": result["output_tokens"],
-        "cost_breakdown": debit.get("cost_breakdown"),
+        "balance_remaining": debit.get("balance"), "model": req.model,
     }

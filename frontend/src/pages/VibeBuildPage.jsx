@@ -4,7 +4,7 @@ import Editor from "@monaco-editor/react";
 import { toast } from "sonner";
 import {
   Send, Sparkles, Loader2, Zap, Bot, User, Plus, Trash2,
-  ChevronLeft, ChevronDown, FileCode2, Coins, Clock, ArrowRight,
+  ChevronLeft, ChevronDown, FileCode2, Clock, ArrowRight,
   Target, X,
 } from "lucide-react";
 import { useAuth } from "@/App";
@@ -46,10 +46,6 @@ function ModelPicker({ models, selected, onSelect }) {
               <span style={{ color: SPEED_COLOR[m.speed] }}>{m.speed}</span>
               <span className="t-text-dim">·</span>
               <span style={{ color: QUALITY_COLOR[m.quality] }}>{m.quality}</span>
-            </div>
-            <div className="flex items-center gap-1 mt-1.5 text-[10px] font-mono">
-              <Coins size={9} className="text-amber-400" />
-              <span className="t-text-sub">{m.chat_cost}cr chat · {m.build_cost}cr build</span>
             </div>
             {m.using_byok && (
               <div
@@ -148,12 +144,6 @@ function MessageBubble({ msg }) {
           color: "var(--text-primary)",
         }}>
         {msg.content}
-        {msg.credits_used !== undefined && (
-          <div className="mt-2 pt-2 text-[9px] font-mono t-text-dim uppercase tracking-widest" style={{ borderTop: "1px solid var(--border)" }}>
-            <Coins size={9} className="inline text-amber-400 mr-1" />
-            {msg.credits_used}cr · {msg.model || ""}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -338,7 +328,7 @@ export default function VibeBuildPage() {
       }
       setModel(data.model);
       setAutoPickHint({ model: data.model, reason: data.reason, complexity: data.complexity });
-      toast.success(`Auto-picked ${data.label} (${data.complexity}) · -${data.credits_used}cr`);
+      toast.success(`Auto-picked ${data.label} (${data.complexity})`);
     } catch {
       toast.error("Network error");
     } finally {
@@ -377,7 +367,6 @@ export default function VibeBuildPage() {
         role: "assistant",
         content: mode === "build" ? `Generated ${data.name} — ${data.files?.length} files, ${data.nodes?.length} nodes.` : data.response,
         type: data.type,
-        credits_used: data.credits_used,
         model: data.model,
         timestamp: new Date().toISOString(),
       };
@@ -388,7 +377,7 @@ export default function VibeBuildPage() {
         setPreviewFiles(data.files || []);
         setPreviewProject(data.project_id);
         setLastBuild({ project_id: data.project_id, name: data.name });
-        toast.success(`Generated ${data.files?.length || 0} files (-${data.credits_used}cr)`);
+        toast.success(`Generated ${data.files?.length || 0} files`);
       }
       refreshSessions();
     } catch (e) {
@@ -400,7 +389,6 @@ export default function VibeBuildPage() {
   };
 
   const activeModel = models.find((m) => m.id === model);
-  const buildCost = activeModel?.build_cost ?? 5;
 
   return (
     <div data-testid="vibe-build-page" className="h-[calc(100vh-56px)] flex t-bg">
@@ -464,7 +452,7 @@ export default function VibeBuildPage() {
                 data-testid="vibe-auto-pick"
                 onClick={autoPick}
                 disabled={busy || !input.trim()}
-                title={!input.trim() ? "Type your idea first" : "Auto-pick the best model (1cr)"}
+                title={!input.trim() ? "Type your idea first" : "Auto-pick the best model"}
                 className="px-2.5 py-1 text-[9px] font-bold tracking-[0.18em] uppercase font-mono rounded-sm transition-all flex items-center gap-1 disabled:opacity-40"
                 style={{
                   background: busyMode === "auto" ? "rgba(34,211,238,0.18)" : "rgba(34,211,238,0.06)",
@@ -473,7 +461,7 @@ export default function VibeBuildPage() {
                 }}
               >
                 {busyMode === "auto" ? <Loader2 size={9} className="animate-spin" /> : <Sparkles size={9} />}
-                Auto · 1cr
+                Auto
               </button>
               <span className="text-[10px] font-mono t-text-dim">
                 {messages.length} msgs · {activeModel?.label || model}
@@ -511,7 +499,7 @@ export default function VibeBuildPage() {
               <Bot size={32} className="text-cyan-400 mb-3 opacity-60" />
               <div className="text-[14px] t-text font-medium mb-2">Describe the bot you want to build.</div>
               <div className="text-[11px] t-text-dim font-mono leading-relaxed">
-                Chat to plan ({models.find(m=>m.id===model)?.chat_cost || 1}cr per AI reply). Click <span className="text-cyan-400">GENERATE CODE</span> when you're ready ({buildCost}cr).
+                Chat to plan, then click <span className="text-cyan-400">GENERATE CODE</span> when you&apos;re ready.
               </div>
               <div className="grid grid-cols-1 gap-2 mt-6 w-full">
                 {[
@@ -566,7 +554,7 @@ export default function VibeBuildPage() {
                 className="px-3 py-1.5 text-[10px] font-mono tracking-widest uppercase rounded-sm t-text-sub disabled:opacity-30 hover:t-text flex items-center gap-1.5"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
               >
-                <Send size={10} /> Send · 1cr
+                <Send size={10} /> Send
               </button>
               <button
                 data-testid="vibe-send-build"
@@ -575,7 +563,7 @@ export default function VibeBuildPage() {
                 title={!currentSession ? "Start the conversation first" : ""}
                 className="px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase rounded-sm bg-cyan-400 text-black hover:bg-cyan-300 disabled:opacity-30 flex items-center gap-1.5"
               >
-                <Zap size={10} /> Generate · {buildCost}cr
+                <Zap size={10} /> Generate
               </button>
             </div>
           </div>

@@ -1,7 +1,7 @@
 /* eslint-disable react/prop-types */
 /**
  * ModelPicker — Compact model selection radio group, grouped by Platform / Your Keys.
- * Shows credit cost next to each model. Locked models render with a Connect link.
+ * Per-model credit costs are hidden — users pick on capability, not cost.
  */
 import { Lock, Zap, Crown, ExternalLink } from "lucide-react";
 
@@ -71,9 +71,6 @@ function ModelRow({ m, selected, onSelect }) {
       <Icon size={10} style={{ color: selected ? "var(--armory-accent)" : "var(--armory-text-mute)" }} />
       <span className="flex-1 text-[10.5px] font-mono truncate" style={{ color: selected ? "var(--armory-text)" : "var(--armory-text-mute)" }}>
         {m.label}
-      </span>
-      <span className="text-[9px] font-mono shrink-0" style={{ color: "var(--armory-text-dim)" }}>
-        {m.build_cost}cr
       </span>
       {needs ? (
         <Lock size={9} style={{ color: "var(--armory-text-dim)" }} />

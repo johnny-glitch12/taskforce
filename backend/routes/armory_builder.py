@@ -332,9 +332,7 @@ async def build_bot(req: BuildBotRequest, user=Depends(get_current_user())):
     project = await db.bot_projects.find_one({"id": project_id}, {"_id": 0})
     return {
         "success": True, "project_id": project_id, "project": project,
-        "credits_used": debit.get("credits_charged"),
         "balance_remaining": debit.get("balance"),
-        "cost_breakdown": debit.get("cost_breakdown"),
     }
 
 

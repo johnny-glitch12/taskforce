@@ -2,8 +2,11 @@
 /**
  * ChatMessage — one row in the chat thread.
  * Renders user / assistant / error / code-generation / build-progress cards.
+ *
+ * Per-action credit costs are intentionally NOT displayed. The app uses a
+ * dual-pool credit balance shown in the navbar + Credits page only.
  */
-import { Bot, User, AlertCircle, Coins, CheckCircle2, Loader2, Circle, AlertTriangle, ArrowUpRight } from "lucide-react";
+import { Bot, User, AlertCircle, CheckCircle2, Loader2, Circle, AlertTriangle, ArrowUpRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import CodeGenerationCard from "./CodeGenerationCard";
 
@@ -17,7 +20,7 @@ const STAGE_LABELS = {
 };
 const ALL_STAGES = ["architect", "planner", "builder", "reviewer", "polisher", "ui_builder"];
 
-function StageChip({ stage, status, creditsUsed, durationMs }) {
+function StageChip({ stage, status, durationMs }) {
   const Icon = status === "done" ? CheckCircle2
     : status === "running" || status === "queued" ? Loader2
     : status === "failed" ? AlertTriangle
@@ -43,9 +46,6 @@ function StageChip({ stage, status, creditsUsed, durationMs }) {
     >
       <Icon size={10} className={status === "running" ? "animate-spin" : ""} />
       <span>{STAGE_LABELS[stage] || stage}</span>
-      {status === "done" && creditsUsed != null && (
-        <span className="opacity-60">−{creditsUsed}cr</span>
-      )}
       {status === "done" && durationMs != null && (
         <span className="opacity-60">{Math.round(durationMs / 100) / 10}s</span>
       )}
@@ -57,7 +57,6 @@ function BuildProgressCard({ msg, onResume }) {
   const progress = msg.progress || [];
   const byStage = Object.fromEntries(progress.map((p) => [p.stage, p]));
   const status = msg.status;
-  const totalCr = msg.total_credits_used || 0;
 
   return (
     <div
@@ -76,9 +75,6 @@ function BuildProgressCard({ msg, onResume }) {
             {status === "complete" ? "Build Complete" : status === "paused" ? "Build Paused" : status === "failed" ? "Build Failed" : "Building Agent"}
           </span>
         </div>
-        <span className="text-[10px] font-mono opacity-60" style={{ color: "var(--armory-text-mute)" }}>
-          {totalCr}cr so far
-        </span>
       </div>
 
       <div className="flex flex-wrap gap-1.5">
@@ -89,7 +85,6 @@ function BuildProgressCard({ msg, onResume }) {
               key={s}
               stage={s}
               status={entry?.status}
-              creditsUsed={entry?.credits_used}
               durationMs={entry?.duration_ms}
             />
           );
@@ -150,8 +145,7 @@ export default function ChatMessage({ msg, onViewFiles, onOpenInWorkflows, onRes
                 const entry = msg.progress.find((p) => p.stage === s);
                 if (!entry) return null;
                 return (
-                  <StageChip key={s} stage={s} status={entry.status}
-                    creditsUsed={entry.credits_used} durationMs={entry.duration_ms} />
+                  <StageChip key={s} stage={s} status={entry.status} durationMs={entry.duration_ms} />
                 );
               })}
             </div>
@@ -175,9 +169,6 @@ export default function ChatMessage({ msg, onViewFiles, onOpenInWorkflows, onRes
               </Link>
               <span className="text-[10px] font-mono opacity-50">/apps/{msg.app_slug}</span>
             </div>
-          )}
-          {msg.credits_used !== undefined && (
-            <CreditMeta credits={msg.credits_used} model={msg.model} inputTokens={msg.input_tokens} outputTokens={msg.output_tokens} keySource={msg.key_source} />
           )}
         </div>
       </div>
@@ -238,9 +229,6 @@ export default function ChatMessage({ msg, onViewFiles, onOpenInWorkflows, onRes
         <div className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: "var(--armory-text)" }}>
           {renderWithCodeBlocks(msg.content || "")}
         </div>
-        {msg.credits_used !== undefined && (
-          <CreditMeta credits={msg.credits_used} model={msg.model} inputTokens={msg.input_tokens} outputTokens={msg.output_tokens} keySource={msg.key_source} />
-        )}
       </div>
     </div>
   );
@@ -262,28 +250,6 @@ function Avatar({ role }) {
       }}
     >
       <c.Icon size={13} style={{ color: c.color }} />
-    </div>
-  );
-}
-
-function CreditMeta({ credits, model, inputTokens, outputTokens, keySource }) {
-  const totalTokens = (inputTokens || 0) + (outputTokens || 0);
-  const isByok = keySource === "byok";
-  return (
-    <div data-testid="armory-credit-meta" className="mt-2 inline-flex items-center gap-2 text-[10px] font-mono opacity-70 flex-wrap" style={{ color: "var(--armory-text-dim)" }}>
-      <span className="inline-flex items-center gap-1">
-        <Coins size={9} style={{ color: "var(--armory-accent)" }} />
-        <span data-testid="credit-meta-cost">−{credits}cr</span>
-      </span>
-      {model && <span>· {model.split("-").slice(0, 2).join("-")}</span>}
-      {totalTokens > 0 && (
-        <span data-testid="credit-meta-tokens">· {inputTokens || 0}→{outputTokens || 0} tok</span>
-      )}
-      {isByok && (
-        <span data-testid="credit-meta-byok" className="px-1.5 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-wider" style={{ background: "rgba(168,85,247,0.15)", color: "#c084fc", border: "1px solid rgba(168,85,247,0.3)" }}>
-          BYOK
-        </span>
-      )}
     </div>
   );
 }

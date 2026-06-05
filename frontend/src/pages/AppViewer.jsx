@@ -68,7 +68,7 @@ export default function AppViewer() {
         toast.error(j.detail || `Redesign failed (${r.status})`);
         return;
       }
-      toast.success(`UI updated · −${j.credits_used}cr`);
+      toast.success(`UI updated`);
       setShowRedesign(false);
       setRedesignPrompt("");
       setIframeBust((n) => n + 1);
@@ -379,7 +379,6 @@ function RunsTable({ runs }) {
                 <th className="px-3 py-2">Status</th>
                 <th className="px-3 py-2">When</th>
                 <th className="px-3 py-2 hidden sm:table-cell">Duration</th>
-                <th className="px-3 py-2 hidden sm:table-cell">Credits</th>
                 <th className="px-3 py-2">Output / Error</th>
               </tr>
             </thead>
@@ -393,7 +392,6 @@ function RunsTable({ runs }) {
                   </td>
                   <td className="px-3 py-2 t-text-sub">{(r.created_at || "").slice(0, 19).replace("T", " ")}</td>
                   <td className="px-3 py-2 hidden sm:table-cell t-text-sub">{r.duration_ms}ms</td>
-                  <td className="px-3 py-2 hidden sm:table-cell t-text-sub">{r.credits_used}cr</td>
                   <td className="px-3 py-2 t-text-sub max-w-md truncate" title={JSON.stringify(r.output || r.error)}>
                     {r.success ? JSON.stringify(r.output).slice(0, 80) : (r.error || "—").slice(0, 80)}
                   </td>

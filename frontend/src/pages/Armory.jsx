@@ -291,7 +291,7 @@ export default function Armory() {
           setEdges(last.project.edges || []);
           if (last.project.id) await loadProject(last.project.id);
           else setPreviewOpen(true);
-          toast.success(`${last.project.name || "Agent"} generated · −${last.total_credits_used}cr`);
+          toast.success(`${last.project.name || "Agent"} generated`);
           setSession((s) => ({ ...(s || {}), id: sid, project_id: last.project.id }));
         } else if (last && last.status === "paused") {
           toast.warning(`Build paused — top up credits and click Resume`);
@@ -389,7 +389,7 @@ export default function Armory() {
         setNodes(last.project.nodes || []);
         setEdges(last.project.edges || []);
         if (last.project.id) await loadProject(last.project.id);
-        toast.success(`Build complete · −${last.total_credits_used}cr`);
+        toast.success(`Build complete`);
       } else if (last && last.status === "paused") {
         toast.warning("Build paused again — add more credits.");
       }
