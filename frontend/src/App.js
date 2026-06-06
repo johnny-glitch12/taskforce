@@ -256,10 +256,7 @@ function AppShell() {
           <Route path="/auth/register" element={<Login />} />
           <Route path="/auth/forgot-password" element={<Login />} />
           <Route path="/auth/reset-password" element={<Login />} />
-          <Route
-            path="/academy"
-            element={<AdminGate feature="The Academy" subtitle="Free training videos, drops, and operator playbooks land here when we publicly open Task Force AI." />}
-          />
+          <Route path="/academy" element={<Academy />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/exchange" element={<Marketplace />} />
           <Route path="/leaderboard" element={<Leaderboard />} />

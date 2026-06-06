@@ -1,0 +1,55 @@
+{
+  "summary": "Retest of Prompt 22 /academy route after App.js fix (AdminGate → <Academy />). Logged in as freeuser@test.com, navigated to /academy, verified all data-testids, validated invalid-email path (form retained, no POST sent) and successful waitlist submit (POST /api/waitlist with correct body, 200 OK, success block + success toast). All criteria PASSED.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/academy_loaded.png",
+    "/app/test_reports/academy_signup_done.png"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Academy.jsx is clean (~200 lines), uses env-based API URL, proper toast feedback, regex-based email validation, all interactive elements have data-testids. No issues."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a (frontend-only test)", "frontend": "100%" },
+  "test_credentials": "freeuser@test.com / test123 (works)",
+  "seed_data_creation": "Added 1 waitlist row via POST /api/waitlist {email:'iter63-retest@example.com', source:'academy'} (status 200).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Academy page is fully wired. Route in App.js line 259-260 correctly renders <Academy />. Login flow stable. Sonner toasts work but may dismiss before Playwright captures — assert presence of [data-testid='academy-signup-success'] block as the canonical success indicator (more reliable than toast text scraping).",
+  "detailed_results": {
+    "login": { "url_after_login": "/armory", "token_in_localStorage": true },
+    "academy_route": {
+      "renders_new_component": true,
+      "contains_RESTRICTED_ACCESS": false
+    },
+    "testids_found": {
+      "academy-page": true, "academy-badge": "COMING SOON",
+      "academy-title": "The Academy", "academy-subtitle": true,
+      "academy-courses": true,
+      "academy-course-01": "Locked chip + 01 numeral + Rocket icon + Build Your First Agent",
+      "academy-course-02": "Locked chip + 02 numeral + Coins icon + Agent Monetization",
+      "academy-course-03": "Locked chip + 03 numeral + Plug icon + Advanced Integrations",
+      "academy-signup-form": true, "academy-email-input": true, "academy-notify-btn": true
+    },
+    "invalid_email_test": {
+      "input": "not-an-email",
+      "POST_sent": false,
+      "form_still_visible": true,
+      "success_block_appeared": false,
+      "note": "Toast text not captured in 1.5s window (likely auto-dismissed), but the canonical behavior — validation blocked submission — is confirmed: no network POST and form remained mounted."
+    },
+    "valid_email_test": {
+      "input": "iter63-retest@example.com",
+      "network": "POST /api/waitlist body={\"email\":\"iter63-retest@example.com\",\"source\":\"academy\"} → 200",
+      "success_block_visible": true,
+      "success_block_text": "You're on the list",
+      "success_toast_text": "You're on the list. We'll email you when courses unlock.",
+      "form_replaced": true
+    }
+  }
+}
