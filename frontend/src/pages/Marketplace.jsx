@@ -26,15 +26,24 @@ const categories = [
 function SearchHero({ searchQuery, setSearchQuery }) {
   return (
     <div className="text-center mb-10">
+      <div className="inline-flex items-center gap-2 mb-5 px-3 py-1 rounded-sm" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+        <span
+          className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"
+          style={{ boxShadow: "0 0 8px rgba(34,211,238,0.7)" }}
+        />
+        <span className="text-[10px] tracking-[0.25em] uppercase font-mono" style={{ color: "rgba(255,255,255,0.55)" }}>
+          The Exchange · Live Marketplace
+        </span>
+      </div>
       <h1
         data-testid="marketplace-title"
-        className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-[-0.03em] t-text mb-3"
+        className="text-3xl sm:text-4xl lg:text-[3.25rem] font-bold tracking-[-0.02em] t-text mb-3"
         style={{ fontFamily: "'Outfit', sans-serif" }}
       >
-        The <span className="text-gradient-cyan">Exchange</span>
+        Production-ready <span className="text-gradient-cyan">AI agents</span>
       </h1>
       <p className="text-[15px] t-text-sub mb-8 max-w-md mx-auto">
-        Discover, rent, and deploy production-ready AI agents.
+        Discover, deploy, and earn. Buy with credits — instant, no checkout.
       </p>
       <div className="max-w-xl mx-auto relative" data-testid="marketplace-search">
         <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 t-text-mute" />
@@ -42,7 +51,7 @@ function SearchHero({ searchQuery, setSearchQuery }) {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="What kind of agent do you need today?"
+          placeholder="Search agents…"
           data-testid="marketplace-search-input"
           className="w-full t-input focus:outline-none focus:border-cyan-400/40 transition-all pl-12 pr-5 py-4 text-[15px] rounded-sm"
           style={{ border: '1px solid var(--input-border)' }}
@@ -147,9 +156,15 @@ function AgentCard({ agent, index }) {
   return (
     <div
       data-testid={`agent-card-${agent.id}`}
-      className="rounded-sm overflow-hidden transition-all duration-300 hover:border-cyan-400/25 hover:shadow-lg group opacity-0 animate-fade-in-up"
+      className="agent-card-glow rounded-sm overflow-hidden transition-all duration-300 hover:border-cyan-400/30 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(0,0,0,0.35),0_0_30px_rgba(34,211,238,0.05)] group opacity-0 animate-fade-in-up relative"
       style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', animationDelay: `${index * 60}ms`, animationFillMode: "forwards" }}
     >
+      {/* Animated top-border glow on hover */}
+      <span
+        aria-hidden="true"
+        className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+        style={{ background: "linear-gradient(90deg, transparent, rgba(34,211,238,0.6), transparent)" }}
+      />
       {/* Image / Gradient */}
       <div className="h-36 relative overflow-hidden" style={{ background: 'var(--bg-secondary)' }}>
         {agent.image ? (

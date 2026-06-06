@@ -1,236 +1,198 @@
-import { GraduationCap, Play, Code2, BookOpen, Clock, Users, Star, Lock, ArrowRight } from "lucide-react";
+/**
+ * Academy — placeholder Coming Soon experience while curriculum is in production.
+ *
+ * Three locked-course teaser cards (matched to TaskForce's actual workflow:
+ * build → monetize → integrate) + a waitlist email signup hitting the existing
+ * /api/waitlist endpoint with source="academy" so we can segment leads.
+ */
+import { useState } from "react";
+import {
+  GraduationCap, Lock, Rocket, Coins, Plug, Loader2, Check, ArrowRight,
+} from "lucide-react";
+import { toast } from "sonner";
+
+const API = process.env.REACT_APP_BACKEND_URL || "";
 
 const COURSES = [
   {
-    id: 1,
-    title: "Build Your First AI Agent",
-    description: "Learn the fundamentals of autonomous agents from scratch. No ML experience required.",
-    level: "Beginner",
-    duration: "2h 30m",
-    lessons: 12,
-    students: 1847,
-    rating: 4.9,
-    tags: ["Python", "LLMs", "Prompting"],
-    free: true,
+    n: "01",
+    Icon: Rocket,
+    title: "Build Your First Agent",
+    blurb: "From zero to deployed in 30 minutes. Vibe coding, model picking, deployment basics.",
   },
   {
-    id: 2,
-    title: "Prompt Engineering Masterclass",
-    description: "Master the art of writing effective prompts that make agents reliable and safe.",
-    level: "Intermediate",
-    duration: "3h 15m",
-    lessons: 18,
-    students: 2340,
-    rating: 4.8,
-    tags: ["Prompt Design", "Safety", "Testing"],
-    free: true,
+    n: "02",
+    Icon: Coins,
+    title: "Agent Monetization",
+    blurb: "List, price, and sell on The Exchange. Credits, payouts, and the 90/10 split explained.",
   },
   {
-    id: 3,
-    title: "Agent Security & Trust Scoring",
-    description: "Implement firewalls, sandboxing, and trust score systems for production agents.",
-    level: "Advanced",
-    duration: "4h 00m",
-    lessons: 22,
-    students: 983,
-    rating: 4.9,
-    tags: ["Security", "Firewalls", "Sandboxing"],
-    free: false,
-  },
-  {
-    id: 4,
-    title: "Multi-Agent Orchestration",
-    description: "Design systems where multiple agents collaborate, delegate, and verify each other's work.",
-    level: "Advanced",
-    duration: "5h 20m",
-    lessons: 28,
-    students: 671,
-    rating: 4.7,
-    tags: ["Architecture", "Workflows", "Scaling"],
-    free: false,
+    n: "03",
+    Icon: Plug,
+    title: "Advanced Integrations",
+    blurb: "Gmail, Stripe, Slack, custom webhooks — wire your agent into anything.",
   },
 ];
 
-const LEVEL_COLORS = {
-  Beginner: "text-emerald-400 bg-emerald-500/10",
-  Intermediate: "text-amber-400 bg-amber-500/10",
-  Advanced: "text-cyan-300 bg-cyan-400/10",
-};
+function EmailSignup() {
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
 
-function CourseCard({ course }) {
+  const submit = async (e) => {
+    e?.preventDefault?.();
+    const value = email.trim();
+    if (!value || !/.+@.+\..+/.test(value)) {
+      toast.error("Enter a valid email.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch(`${API}/api/waitlist`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: value, source: "academy" }),
+      });
+      if (res.ok) {
+        setDone(true);
+        toast.success("You're on the list. We'll email you when courses unlock.");
+      } else {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body.detail || "Could not add you to the list.");
+      }
+    } catch {
+      toast.error("Network error.");
+    }
+    setBusy(false);
+  };
+
+  if (done) {
+    return (
+      <div
+        data-testid="academy-signup-success"
+        className="inline-flex items-center gap-2 px-4 py-3 rounded-sm text-[12px] font-mono uppercase tracking-[0.15em]"
+        style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.35)", color: "#10b981" }}
+      >
+        <Check size={13} /> You&apos;re on the list
+      </div>
+    );
+  }
+
   return (
-    <div
-      data-testid={`course-card-${course.id}`}
-      className="rounded-sm overflow-hidden transition-all duration-300 hover:shadow-lg group"
-      style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border)',
-      }}
+    <form
+      onSubmit={submit}
+      data-testid="academy-signup-form"
+      className="flex items-stretch gap-2 max-w-md mx-auto"
     >
-      {/* Video Placeholder */}
-      <div className="relative h-44 overflow-hidden" style={{ background: 'var(--bg-secondary)' }}>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div
-            className="w-14 h-14 rounded-sm flex items-center justify-center backdrop-blur-sm transition-transform duration-300 group-hover:scale-110"
-            style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)' }}
-          >
-            <Play size={22} className="text-cyan-300 ml-0.5" fill="currentColor" />
-          </div>
-        </div>
-        {/* Course number overlay */}
-        <div className="absolute top-3 left-3 text-[10px] font-mono t-text-dim px-2 py-1 rounded-md" style={{ background: 'var(--bg-card)' }}>
-          {String(course.id).padStart(2, '0')}
-        </div>
-        {!course.free && (
-          <div className="absolute top-3 right-3 flex items-center gap-1 text-[10px] text-amber-400 bg-amber-500/10 px-2 py-1 rounded-md">
-            <Lock size={10} /> Pro
-          </div>
-        )}
-      </div>
-
-      <div className="p-5">
-        {/* Level + Duration */}
-        <div className="flex items-center gap-2 mb-3">
-          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-sm ${LEVEL_COLORS[course.level]}`}>
-            {course.level}
-          </span>
-          <span className="text-[11px] t-text-dim flex items-center gap-1">
-            <Clock size={10} /> {course.duration}
-          </span>
-        </div>
-
-        {/* Title */}
-        <h3
-          className="text-[15px] font-medium t-text leading-snug mb-2"
-          style={{ fontFamily: "'Outfit', sans-serif" }}
-        >
-          {course.title}
-        </h3>
-
-        {/* Description */}
-        <p className="text-[12px] t-text-mute leading-relaxed mb-4 line-clamp-2">
-          {course.description}
-        </p>
-
-        {/* Tags */}
-        <div className="flex flex-wrap gap-1.5 mb-4">
-          {course.tags.map((tag) => (
-            <span key={tag} className="text-[10px] t-text-dim px-2 py-0.5 rounded-md" style={{ background: 'var(--bg-card-hover)' }}>
-              {tag}
-            </span>
-          ))}
-        </div>
-
-        {/* Footer stats */}
-        <div className="flex items-center justify-between pt-3" style={{ borderTop: '1px solid var(--border)' }}>
-          <div className="flex items-center gap-3 text-[11px] t-text-dim">
-            <span className="flex items-center gap-1"><BookOpen size={10} /> {course.lessons} lessons</span>
-            <span className="flex items-center gap-1"><Users size={10} /> {course.students.toLocaleString()}</span>
-          </div>
-          <span className="flex items-center gap-1 text-[11px]">
-            <Star size={10} className="fill-amber-400 text-amber-400" />
-            <span className="t-text font-medium">{course.rating}</span>
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CodePlayground() {
-  return (
-    <div
-      data-testid="code-playground"
-      className="rounded-sm overflow-hidden"
-      style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
-    >
-      <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
-        <Code2 size={13} className="text-cyan-400" />
-        <span className="text-[12px] t-text-sub font-medium">Interactive Playground</span>
-        <span className="ml-auto text-[10px] t-text-dim">Coming Soon</span>
-      </div>
-      <div className="p-5 font-mono text-[12px] leading-relaxed" style={{ background: '#0d0d0f' }}>
-        <div className="text-zinc-500"># Build your first agent</div>
-        <div><span className="text-cyan-300">from</span> <span className="text-emerald-400">nova</span> <span className="text-cyan-300">import</span> <span className="text-white">Agent, Tool</span></div>
-        <div className="mt-2"><span className="text-cyan-300">agent</span> = <span className="text-emerald-400">Agent</span>(</div>
-        <div className="pl-4"><span className="text-amber-300">name</span>=<span className="text-emerald-300">"my_first_agent"</span>,</div>
-        <div className="pl-4"><span className="text-amber-300">model</span>=<span className="text-emerald-300">"gemini-2.5-flash"</span>,</div>
-        <div className="pl-4"><span className="text-amber-300">tools</span>=[<span className="text-emerald-400">Tool</span>.<span className="text-white">web_search</span>()],</div>
-        <div>)</div>
-        <div className="mt-2"><span className="text-cyan-300">result</span> = <span className="text-white">agent</span>.<span className="text-amber-300">run</span>(<span className="text-emerald-300">"Find latest AI news"</span>)</div>
-        <div className="mt-1 text-zinc-500">{`# Output: {"headline": "..."}`}</div>
-      </div>
-    </div>
+      <input
+        data-testid="academy-email-input"
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="you@example.com"
+        autoComplete="email"
+        className="flex-1 px-3.5 py-3 rounded-sm text-[13px] focus:outline-none transition-colors"
+        style={{
+          background: "rgba(255,255,255,0.02)",
+          border: "1px solid rgba(34,211,238,0.18)",
+          color: "var(--text)",
+        }}
+      />
+      <button
+        type="submit"
+        data-testid="academy-notify-btn"
+        disabled={busy}
+        className="px-5 py-3 text-[11px] font-bold font-mono tracking-[0.18em] uppercase rounded-sm bg-cyan-400 text-black hover:bg-cyan-300 transition disabled:opacity-50 flex items-center gap-2"
+      >
+        {busy ? <Loader2 size={12} className="animate-spin" /> : <ArrowRight size={12} />}
+        Notify Me
+      </button>
+    </form>
   );
 }
 
 export default function Academy() {
   return (
-    <div data-testid="academy-page" className="min-h-[calc(100vh-60px)] px-6 lg:px-8 py-12 md:py-16 relative">
-      <div className="absolute top-[10%] left-1/2 -translate-x-1/2 w-[350px] h-[350px] rounded-sm bg-cyan-400/[0.05] blur-[100px] pointer-events-none t-orb" />
+    <div data-testid="academy-page" className="min-h-[calc(100vh-60px)] px-6 lg:px-8 py-12 md:py-20 relative overflow-hidden">
+      {/* Background orb */}
+      <div className="absolute top-[18%] left-1/2 -translate-x-1/2 w-[480px] h-[480px] rounded-full bg-cyan-400/[0.05] blur-[140px] pointer-events-none t-orb" />
 
-      <div className="max-w-5xl mx-auto relative">
-        {/* Header */}
-        <div className="text-center mb-14">
-          <div className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 rounded-sm" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-            <GraduationCap size={13} className="text-cyan-400" />
-            <span data-testid="academy-badge" className="text-[11px] tracking-[0.15em] t-text-sub">
-              Free Education Platform
-            </span>
-          </div>
-
-          <h1
-            className="text-4xl sm:text-5xl lg:text-[4.25rem] font-bold tracking-[-0.03em] leading-[1.08] t-text mb-5"
-            style={{ fontFamily: "'Outfit', sans-serif" }}
-          >
-            Task Force <span className="text-gradient-cyan">Academy</span>
-          </h1>
-
-          <p
-            data-testid="academy-subtext"
-            className="text-base md:text-lg t-text-sub max-w-md mx-auto leading-relaxed"
-          >
-            Master autonomous AI agents. From zero to production.
-          </p>
+      <div className="max-w-4xl mx-auto relative text-center">
+        {/* Icon + Title */}
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-sm mb-6"
+          style={{
+            background: "linear-gradient(135deg, rgba(34,211,238,0.15), rgba(34,211,238,0.04))",
+            border: "1px solid rgba(34,211,238,0.4)",
+            boxShadow: "0 0 30px rgba(34,211,238,0.15)",
+          }}
+        >
+          <GraduationCap size={28} className="text-cyan-400" />
         </div>
 
-        {/* Course Grid */}
-        <section className="mb-14">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold t-text" style={{ fontFamily: "'Outfit', sans-serif" }}>
-              Featured Courses
-            </h2>
-            <span className="text-[12px] t-text-dim">{COURSES.length} courses</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {COURSES.map((course) => (
-              <CourseCard key={course.id} course={course} />
-            ))}
-          </div>
-        </section>
+        <div className="inline-flex items-center gap-2 mb-5 px-3 py-1 rounded-sm"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <span
+            data-testid="academy-badge"
+            className="text-[10px] tracking-[0.25em] uppercase font-mono"
+            style={{ color: "rgba(34,211,238,0.85)" }}
+          >
+            COMING SOON
+          </span>
+        </div>
 
-        {/* Interactive Playground */}
-        <section className="mb-14">
-          <h2 className="text-lg font-semibold t-text mb-6" style={{ fontFamily: "'Outfit', sans-serif" }}>
-            Try It Live
-          </h2>
-          <CodePlayground />
-        </section>
-
-        {/* CTA */}
-        <div
-          className="text-center py-12 rounded-sm"
-          style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+        <h1
+          className="text-4xl sm:text-5xl lg:text-[3.5rem] font-bold tracking-[-0.02em] leading-[1.05] t-text mb-4"
+          data-testid="academy-title"
         >
-          <h3 className="text-xl font-semibold t-text mb-3" style={{ fontFamily: "'Outfit', sans-serif" }}>
-            Ready to build your first agent?
-          </h3>
-          <p className="text-[14px] t-text-sub mb-6">
-            Start with our free beginner course. No credit card required.
+          The <span className="text-gradient-cyan">Academy</span>
+        </h1>
+
+        <p
+          data-testid="academy-subtitle"
+          className="text-base md:text-lg t-text-sub max-w-xl mx-auto leading-relaxed mb-14"
+        >
+          Master AI agent development — from first build to scaled, monetized deployments.
+        </p>
+
+        {/* 3 locked course teasers */}
+        <div data-testid="academy-courses" className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-16 text-left">
+          {COURSES.map((c) => (
+            <div
+              key={c.n}
+              data-testid={`academy-course-${c.n}`}
+              className="relative rounded-sm p-5 transition-transform duration-300 hover:-translate-y-1"
+              style={{
+                background: "rgba(255,255,255,0.02)",
+                border: "1px solid rgba(34,211,238,0.10)",
+                opacity: 0.85,
+              }}
+            >
+              <span
+                className="absolute top-3 right-3 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[8px] font-mono font-bold tracking-[0.15em] uppercase text-cyan-300"
+                style={{ background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.3)" }}
+              >
+                <Lock size={8} /> Locked
+              </span>
+              <div className="text-[28px] font-bold font-mono leading-none mb-3" style={{ color: "rgba(34,211,238,0.18)" }}>
+                {c.n}
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <c.Icon size={13} className="text-cyan-400" />
+                <h3 className="text-[14px] font-semibold t-text">{c.title}</h3>
+              </div>
+              <p className="text-[12px] leading-relaxed" style={{ color: "rgba(255,255,255,0.45)" }}>
+                {c.blurb}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* Email signup */}
+        <div className="mb-3">
+          <p className="text-[11px] uppercase tracking-[0.2em] font-mono mb-4" style={{ color: "rgba(255,255,255,0.4)" }}>
+            Want early access? Drop your email.
           </p>
-          <button className="px-7 py-3 bg-cyan-400 text-black font-bold text-[14px] font-medium rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.25)] flex items-center gap-2 mx-auto">
-            Start Learning <ArrowRight size={15} />
-          </button>
+          <EmailSignup />
         </div>
       </div>
     </div>

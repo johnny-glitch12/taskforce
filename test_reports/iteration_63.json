@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration 63 (Prompt 22 — UI polish) testing. Backend waitlist source field 3/3 pass. Frontend: Navbar bug-fix (Armory not permanently cyan), Marketplace hero kicker + card hover styling, and BountyBoard stacked-list redesign all VERIFIED. CRITICAL BLOCKER: the new Academy redesign is NOT live — /academy still renders the OLD lock-screen ('RESTRICTED ACCESS / The Academy is coming soon' + Back to Home / Browse the Exchange buttons). Every new academy-* data-testid (academy-page, academy-badge, academy-title, academy-subtitle, academy-course-01/02/03, academy-signup-form, academy-email-input, academy-notify-btn) is missing in the DOM. The email-signup → /api/waitlist flow could therefore NOT be exercised end-to-end (backend POST works fine in pytest, the UI just never reaches it).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Academy page (/academy)",
+        "issue": "New 'Coming Soon experience with 3 locked course cards + email signup' is NOT live. The route still serves the prior lock-screen (lock-icon + 'RESTRICTED ACCESS' / 'The Academy is coming soon' / Back-to-Home + Browse-the-Exchange CTAs). Every new data-testid is absent from the DOM: academy-page, academy-badge, academy-title, academy-subtitle, academy-course-01/02/03, academy-signup-form, academy-email-input, academy-notify-btn. Likely cause: either (a) the rewritten Academy.jsx component was not wired into the router (App routes may still point at a legacy ComingSoonAcademy / RestrictedRoute component), or (b) the /academy path is intercepted by a SITE_LOCKED guard before reaching the new page, or (c) the file was edited but the production build is still serving the prior chunk.",
+        "selector": "[data-testid='academy-page']",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Academy email signup → /api/waitlist (source='academy')",
+        "issue": "Cannot test because the new signup UI is not rendered. Backend itself is fine (pytest /api/waitlist with source='academy' returns 200, see /app/test_reports/pytest/iter63_ui_polish.xml).",
+        "affected_selectors": ["[data-testid='academy-email-input']", "[data-testid='academy-notify-btn']", "[data-testid='academy-signup-success']"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter63_ui_polish.py",
+    "/app/test_reports/pytest/iter63_ui_polish.xml"
+  ],
+  "action_items": [
+    "MAIN AGENT: Verify /app/frontend/src/App.jsx (or wherever the router lives) actually imports + routes to the NEW /app/frontend/src/pages/Academy.jsx — currently /academy is still serving the old 'RESTRICTED ACCESS / The Academy is coming soon' lock-screen. Likely fix is one of: (a) update the <Route path='/academy'> element to the rewritten component, (b) remove an obsolete RestrictedRoute / ComingSoonAcademy wrapper, or (c) ensure SITE_LOCKED gating does not bypass /academy for authenticated users.",
+    "After fixing the route, re-test Academy: data-testids, invalid email toast, valid email → POST /api/waitlist body {email, source:'academy'} → academy-signup-success block + success toast."
+  ],
+  "critical_code_review_comments": [
+    "Navbar bug-fix is solid: on /armory the Armory link is rgb(34,211,238) cyan-400; on / and /exchange and /bounties the Armory link is rgb(113,113,122) muted zinc-500 (the previously-permanent cyan branch is GONE). Active link gets the underline glow.",
+    "Navbar spacing fix works: each link has computed padding 6px 16px (= py-1.5 px-4) — no longer cramped.",
+    "BountyBoard redesign: data-testid='bounty-board-page' present; stat-active='7 Open', stat-paid='0 cr Credits Awarded', stat-awarded='0 Completed'; post-bounty-btn present; cards container is display:flex / flex-direction:column (single-col stacked, not 3-col grid); 7 bounty cards rendered, each with status pill, category, deadline, title, description, reward, submission count, View Bounty CTA, and visible left urgency stripe (cyan in this seed since no <24h bounties).",
+    "Marketplace hero kicker 'The Exchange · Live Marketplace' (with pulsing cyan dot) renders ABOVE 'Production-ready AI agents'. AgentCard root carries the expected hover classes: 'agent-card-glow … hover:-translate-y-1 hover:shadow-[0_12px_40px_…,_0_0_30px_rgba(34,211,238,0.05)] group'. Category pill click + search input regression both pass.",
+    "Academy.jsx file presumably exists but is dead code until App router is repointed at it."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (3/3)", "frontend": "~80% (3/4 features pass; Academy redesign blocked)"},
+  "test_credentials": "freeuser@test.com / test123 (authenticated via /api/auth/login → localStorage.taskforce_token)",
+  "seed_data_creation": "None. Sent one /api/waitlist POST (qa-academy-iter63@example.com, source=academy) via pytest — succeeds at backend.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 4 sub-features of Prompt 22 verified EXCEPT the Academy redesign. The Academy page DOM still belongs to the legacy lock-screen ('RESTRICTED ACCESS', 'The Academy is coming soon', Back to Home / Browse the Exchange). Main agent must wire the new Academy.jsx into the router (likely /app/frontend/src/App.jsx) and re-deploy. After that, re-run: data-testid presence, invalid-email toast (typing 'not-an-email'), valid email POST → success block + success toast, and confirm network panel shows POST /api/waitlist with body {email, source:'academy'}. Backend pytest already passes the source-field contract. Navbar spacing/active-state, Marketplace kicker+card-hover, and BountyBoard stacked-list redesign are all confirmed live and do NOT need re-testing.",
+  "rca of the issue": "Academy page route mis-wired. The new Academy.jsx exists at /app/frontend/src/pages/Academy.jsx (per review_request 'full rewrite'), but visiting /academy as an authenticated freeuser serves a different component — a generic 'RESTRICTED ACCESS · The Academy is coming soon' lock-screen with Back-to-Home + Browse-the-Exchange CTAs. Reproduction: (1) POST /api/auth/login {freeuser@test.com/test123} → store token in localStorage as 'taskforce_token'; (2) goto /academy; (3) query selector [data-testid='academy-page'] → null; visible heading is 'The Academy is coming soon'. Mitigation: the main agent should grep the frontend router for '/academy' and ensure it renders the rewritten Academy component (not a ComingSoonAcademy / RestrictedRoute wrapper). Also confirm REACT_APP_SITE_LOCKED gating does not intercept the route for authenticated users."
+}

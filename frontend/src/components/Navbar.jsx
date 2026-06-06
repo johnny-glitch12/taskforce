@@ -157,38 +157,49 @@ export default function Navbar() {
         </Link>
 
         {/* ── Center Links (Desktop) ── */}
-        <div className="hidden md:flex items-center gap-0.5 absolute left-1/2 -translate-x-1/2">
-          {(user?.role === "admin" ? CENTER_LINKS_ADMIN : CENTER_LINKS_PUBLIC).map((link) => (
-            <Link
-              key={link.to}
-              to={link.to}
-              data-testid={`nav-link-${link.label.toLowerCase().replace(/\s/g, "-")}`}
-              className={`px-3.5 py-1.5 text-[11px] tracking-[0.1em] uppercase font-medium font-mono transition-all duration-200 flex items-center gap-1.5 ${
-                link.accent
-                  ? (location.pathname === link.to ? "text-cyan-300 font-bold" : "text-cyan-400 hover:text-cyan-300 font-bold")
-                  : (location.pathname === link.to ? "text-cyan-400" : "text-zinc-500 hover:text-cyan-400")
-              }`}
-            >
-              {link.accent && <Sparkles size={9} className="text-cyan-400" />}
-              {link.label}
-              {link.soon && (
-                <span
-                  className="px-1 py-0.5 text-[7px] tracking-[0.1em] font-bold rounded-sm text-amber-300"
-                  style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)' }}
-                >
-                  SOON
-                </span>
-              )}
-              {link.accent && (
-                <span
-                  className="px-1 py-0.5 text-[7px] tracking-[0.1em] font-bold rounded-sm text-cyan-300"
-                  style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.35)' }}
-                >
-                  NEW
-                </span>
-              )}
-            </Link>
-          ))}
+        <div className="hidden md:flex items-center gap-1 lg:gap-2 absolute left-1/2 -translate-x-1/2">
+          {(user?.role === "admin" ? CENTER_LINKS_ADMIN : CENTER_LINKS_PUBLIC).map((link) => {
+            const isActive = location.pathname === link.to;
+            return (
+              <Link
+                key={link.to}
+                to={link.to}
+                data-testid={`nav-link-${link.label.toLowerCase().replace(/\s/g, "-")}`}
+                data-active={isActive || undefined}
+                className={`relative px-3 lg:px-4 py-1.5 text-[11px] tracking-[0.1em] uppercase font-medium font-mono transition-colors duration-200 flex items-center gap-1.5 ${
+                  isActive
+                    ? "text-cyan-400"
+                    : "text-zinc-500 hover:text-cyan-400"
+                }`}
+              >
+                {link.accent && <Sparkles size={9} className={isActive ? "text-cyan-400" : "text-cyan-500/60"} />}
+                {link.label}
+                {link.soon && (
+                  <span
+                    className="px-1 py-0.5 text-[7px] tracking-[0.1em] font-bold rounded-sm text-amber-300"
+                    style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)' }}
+                  >
+                    SOON
+                  </span>
+                )}
+                {link.accent && (
+                  <span
+                    className="px-1 py-0.5 text-[7px] tracking-[0.1em] font-bold rounded-sm text-cyan-300"
+                    style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.35)' }}
+                  >
+                    NEW
+                  </span>
+                )}
+                {isActive && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute left-3 right-3 -bottom-0.5 h-px bg-cyan-400"
+                    style={{ boxShadow: "0 0 6px rgba(34,211,238,0.5)" }}
+                  />
+                )}
+              </Link>
+            );
+          })}
         </div>
 
         {/* ── Right Side (Desktop) ── */}

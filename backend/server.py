@@ -89,6 +89,7 @@ class ResetPasswordRequest(BaseModel):
 
 class WaitlistCreate(BaseModel):
     email: str
+    source: Optional[str] = None  # e.g. "academy", "landing" — segmentation only.
 
 class WaitlistResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -279,6 +280,8 @@ async def join_waitlist(data: WaitlistCreate):
     entry_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     doc = {"id": entry_id, "email": data.email, "created_at": now}
+    if data.source:
+        doc["source"] = data.source
     await db.waitlist.insert_one(doc)
     logger.info(f"New waitlist signup: {data.email}")
     # Fire-and-forget confirmation email — never blocks the signup.
