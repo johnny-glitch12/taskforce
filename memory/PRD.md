@@ -23,6 +23,46 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 62 (Feb 2026) — Legacy Migration + Golden Examples + 5 Seed Agents (Prompts 21 + backlog)
+
+**🟢 Legacy listing migration (P1 backlog clear)**
+- New CLI: `backend/scripts/migrate_listings_to_credits.py` — idempotent backfill that converts pre-Prompt-20 listings (with USD rent/buy prices) to `price_credits` using `max(buy_usd, rent_usd × 5) × 100`, capped at 10,000.
+- 7 legacy listings migrated successfully on first run. Re-running is a no-op.
+
+**🟢 Golden Examples Library (P1 backlog clear)**
+- New module: `backend/lib/golden_examples.py` with 5 curated patterns: `gmail_classifier`, `content_repurpose`, `stripe_billing`, `meeting_notes`, `slack_notifier`.
+- Each carries: keyword set, compressed planner-output reference (files + nodes + edges), and a representative `run()` snippet for the Builder.
+- Wired into `lib/code_gen_pipeline.py` Planner + Builder stages — when the user prompt matches a pattern (≥1 keyword), the relevant snippet is spliced into the LLM context as a "shape guide" (~2 KB per stage).
+- Goal: lift code-gen quality vs. cold-start prompting without burning tokens on long few-shot stacks.
+
+**🟢 5 Day-One Seed Agents (Prompt 21 — Exchange inventory)**
+- New module: `backend/seeds/official_agents.py` — registry of 5 hand-authored production-grade agents.
+- New CLI: `backend/scripts/seed_official_agents.py` — idempotent upserter (owner = `admin@nova.ai`).
+- Each agent ships with:
+  - `main.py` (with valid `run(input, env, keys)` contract)
+  - `handlers.py` (real implementations — Gmail REST, Stripe API, OpenAI completions, JSON parsing with fallbacks)
+  - `config.py`, `requirements.txt`, `.env.example`, `README.md`
+  - `App.jsx` — single-file React dashboard matching the TaskForce dark theme
+  - Hand-tuned node graph (5-8 nodes, 6-8 edges per agent)
+- Listings carry new `is_official: True` flag + cyan "Official" badge surfaced in Marketplace cards (`data-testid='official-badge-{id}'`) and ListingDetail header (`data-testid='listing-official-badge'`).
+- Inventory:
+
+| Agent | Price | Category | Slug |
+|---|---|---|---|
+| Lead Responder | 30 cr | Sales & Marketing | `lead-responder` |
+| Social Media Repurposer | 25 cr | Content & Social | `social-media-repurposer` |
+| Invoice Chaser | 35 cr | Finance & Operations | `invoice-chaser` |
+| Customer Support Classifier | 20 cr | Customer Support | `customer-support-classifier` |
+| Meeting Notes → Action Items | 15 cr | Productivity | `meeting-notes-action-items` |
+
+**Verified (iter62)**:
+- **21/21 pytest pass** across `test_iter61_credit_marketplace.py` + `test_iter62_seed_agents.py`.
+- Golden-example keyword matching covers all 5 patterns, returns None for unrelated prompts, hints format correctly.
+- All 5 seed listings are `status=published`, `is_official=True`, have `source_project_id` pointing to a `bot_projects` doc whose files include `main.py` (with `def run(`) + `handlers.py` + `App.jsx`.
+- Migration is idempotent (`Found 0 listings to migrate` on second run).
+- Seed script is idempotent (re-runs `update`, not `create`).
+
+
 ### Phase 61 (Feb 2026) — Credit-Based Marketplace + Persistent Credit Counter + Custom Top-Ups (Prompt 20)
 
 **🟢 Exchange purchases are now CREDIT-ONLY (no Stripe per purchase)**

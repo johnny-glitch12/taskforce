@@ -27,6 +27,7 @@ from typing import Optional
 
 from lib.llm_client import call_llm
 from lib.smart_credits import check_can_afford, debit_actual_usage
+from lib.golden_examples import planner_hint, builder_hint
 from prompts.code_gen_prompts import (
     ARCHITECT_PROMPT,
     BUILDER_PROMPT,
@@ -356,7 +357,12 @@ async def run_build_pipeline(
         # ── Stage 2: PLANNER ──
         if "planner" not in done_stages:
             await _record_stage(db, session_id, "planner", "running")
-            plan_user_msg = f"ARCHITECT SPEC:\n{json.dumps(architect, indent=2)}\n\nReturn the plan JSON."
+            plan_user_msg = (
+                f"ARCHITECT SPEC:\n{json.dumps(architect, indent=2)}\n\n"
+                f"USER REQUEST (verbatim):\n{user_prompt}"
+                f"{planner_hint(user_prompt)}\n\n"
+                "Return the plan JSON."
+            )
             r = await _run_stage(
                 db, user, stage="planner", model=CHEAP_STAGE_MODEL,
                 system_prompt=PLANNER_PROMPT, user_message=plan_user_msg,
@@ -378,6 +384,8 @@ async def run_build_pipeline(
             build_user_msg = (
                 f"ARCHITECT SPEC:\n{json.dumps(architect, indent=2)}\n\n"
                 f"PLANNER OUTPUT:\n{json.dumps(planner, indent=2)}\n\n"
+                f"USER REQUEST (verbatim):\n{user_prompt}"
+                f"{builder_hint(user_prompt)}\n\n"
                 "Now write ALL python files. Return the JSON with files."
             )
             r = await _run_stage(

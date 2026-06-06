@@ -105,6 +105,20 @@ export default function ListingDetail() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <h1 data-testid="listing-name" className="text-2xl font-bold t-text">{listing.name}</h1>
+                {listing.is_official && (
+                  <span
+                    data-testid="listing-official-badge"
+                    title="TaskForce Official agent"
+                    className="px-2 py-0.5 text-[10px] font-mono uppercase tracking-[0.15em] rounded-sm inline-flex items-center gap-1"
+                    style={{
+                      background: "linear-gradient(90deg, #22d3ee, #06b6d4)",
+                      color: "#0a0e1a",
+                      boxShadow: "0 0 12px rgba(34,211,238,0.3)",
+                    }}
+                  >
+                    <Trophy size={10} /> Official
+                  </span>
+                )}
                 {listing.bounty_winner && (
                   <span className="px-2 py-0.5 text-[10px] font-mono uppercase tracking-[0.15em] rounded-sm inline-flex items-center gap-1"
                         style={{ background: "linear-gradient(90deg, #f59e0b, #fbbf24)", color: "#0a0e1a" }}>

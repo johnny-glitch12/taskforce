@@ -157,7 +157,22 @@ function AgentCard({ agent, index }) {
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-violet-950/80 to-zinc-950 opacity-60" />
         )}
-        {agent.trendingLabel && (
+        {agent.isOfficial && (
+          <span
+            data-testid={`official-badge-${agent.id}`}
+            title="TaskForce Official agent"
+            className="absolute top-3 left-3 text-[10px] backdrop-blur-sm px-2.5 py-1 rounded-sm font-bold flex items-center gap-1"
+            style={{
+              background: "linear-gradient(90deg, #22d3ee, #06b6d4)",
+              color: "#0a0e1a",
+              boxShadow: "0 0 14px rgba(34,211,238,0.35)",
+            }}
+          >
+            <BadgeCheck size={10} className="shrink-0" />
+            <span className="font-mono uppercase tracking-[0.1em]">Official</span>
+          </span>
+        )}
+        {agent.trendingLabel && !agent.isOfficial && (
           <span className="absolute top-3 left-3 text-[10px] bg-cyan-400/90 backdrop-blur-sm text-black px-2.5 py-1 rounded-sm font-bold flex items-center gap-1">
             <TrendingUp size={10} /> {agent.trendingLabel}
           </span>
@@ -311,6 +326,7 @@ export default function Marketplace() {
           price: l.rent_price,
           buyPrice: l.buy_price,
           priceCredits: l.price_credits || 0,
+          isOfficial: !!l.is_official,
           image: l.video_url ? `${API}${l.video_url}` : (l.photo_urls?.[0] ? `${API}${l.photo_urls[0]}` : null),
           videoUrl: l.video_url ? `${API}${l.video_url}` : null,
           photoUrls: (l.photo_urls || []).map((u) => `${API}${u}`),
