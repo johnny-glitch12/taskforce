@@ -23,6 +23,45 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 63 (Feb 2026) — UI Polish: Navbar + Academy + Marketplace + BountyBoard (Prompt 22)
+
+**🟢 Fix 1: Armory nav link no longer permanently cyan**
+- Bug: `Navbar.jsx` had a special `link.accent` branch that forced the Armory link cyan on EVERY page. Replaced with unified isActive logic — link is muted zinc-500 by default, turns cyan-400 on hover, cyan-400 + bottom-underline-glow when on `/armory`.
+- Sparkles icon + "NEW" pill badge kept (those are intentional accent, not the bug).
+- Verified: on `/`, `/exchange`, `/bounties` the Armory link computed color is `rgb(113,113,122)` (muted); on `/armory` it's `rgb(34,211,238)` (cyan-400) + underline glow.
+
+**🟢 Fix 2: Navbar spacing — breathing room**
+- Container gap bumped from `gap-0.5` → `gap-1 lg:gap-2`. Each link's padding bumped from `px-3.5 py-1.5` → `px-3 lg:px-4 py-1.5`.
+- Active link gets an absolute-positioned cyan underline (`boxShadow: 0 0 6px rgba(34,211,238,0.5)`) instead of just a color change.
+
+**🟢 Fix 3: Academy — Coming Soon redesign + waitlist signup**
+- Full rewrite of `pages/Academy.jsx`. Hero with GraduationCap icon + "COMING SOON" pill + "The Academy" gradient title + subtitle.
+- 3 locked-course teaser cards (`academy-course-01..03`): Build Your First Agent, Agent Monetization, Advanced Integrations. Each has Lock chip, large faded numeral, icon, title, blurb.
+- Email signup wired to **`POST /api/waitlist` with `{email, source:"academy"}`** — success replaces the form with a check-mark confirmation block + success toast. Invalid email blocks submission with an error toast.
+- Backend: `server.py.WaitlistCreate` gained optional `source: Optional[str]` field, persisted into the `waitlist` document. Backwards-compatible — existing landing form submissions still work.
+- Route fix: `App.js` was wrapping `/academy` in a legacy `AdminGate` lock-screen — now points directly at `<Academy />`.
+
+**🟢 Fix 4a: Marketplace (Exchange) hero polish**
+- Added a small kicker label above the title: a pulsing cyan dot + "The Exchange · Live Marketplace" (`tracking-[0.25em]` uppercase mono).
+- Title changed from "The Exchange" to "Production-ready AI agents" (with the second word in the cyan gradient) for stronger value-prop framing.
+- AgentCard gained an animated top-border gradient glow on hover + `-translate-y-1` lift + soft cyan shadow.
+
+**🟢 Fix 4b: BountyBoard redesign — stacked list with urgency stripe**
+- Rewrote the hero: kicker + 3-line layout + 3 large stat numbers (`stat-active`, `stat-paid`, `stat-awarded`).
+- Cards switched from 3-column grid → single-column `flex-col gap-3` list.
+- Each `BountyCard` is now a horizontal row with:
+  - 4-px vertical urgency stripe on the left (red for <24h, orange for <3 days, cyan otherwise; red has glow shadow)
+  - Status pill + category label + deadline (with "URGENT" prefix when <24h) in the top row
+  - 1-line title + 2-line description
+  - Reward + submission count + "View Bounty →" CTA in the bottom row
+  - Hover translates the card right (+4px) with cyan glow.
+
+**Verified (iter63 + iter64)**:
+- Backend pytest **3/3 pass** (`test_iter63_ui_polish.py`): `source` field accepted, legacy payloads still work, count endpoint healthy.
+- iter63 frontend testing agent: Navbar bug-fix (Armory muted off-page, cyan on /armory) ✓, Marketplace hero + card hover ✓, BountyBoard stacked-list ✓.
+- iter64 retest: Academy route now serves `<Academy />` ✓, all 9 data-testids present ✓, invalid email blocked ✓, valid email submission → POST `/api/waitlist {source:"academy"}` 200 OK + success block + toast ✓.
+
+
 ### Phase 62 (Feb 2026) — Legacy Migration + Golden Examples + 5 Seed Agents (Prompts 21 + backlog)
 
 **🟢 Legacy listing migration (P1 backlog clear)**
