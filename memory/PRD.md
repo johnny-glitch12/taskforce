@@ -23,6 +23,28 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 65 (Feb 2026) — Redesign-with-AI: History + Revert (Prompt 24)
+
+**🟢 Iterative UI refinement loop on hosted mini-apps**
+- The legacy `POST /api/apps/{id}/redesign` already worked but discarded the prior `App.jsx` — one bad redesign and the user lost the previous (often better) version. This release adds versioning + revert so the loop is genuinely iterative.
+- `redesign_app` now pushes the OLD `frontend.app_jsx` + `manifest` + the user's prompt + a fresh `version_id` into `bot_projects.frontend.history[]` BEFORE writing the new design. History is FIFO-capped at `REDESIGN_HISTORY_CAP = 10` entries so docs stay bounded.
+- New `GET /api/apps/{slug}/redesign-history` returns the list **newest-first**, **excluding** the full `app_jsx` payload (only `version_id`, `prompt`, `created_at`, `jsx_size`) — keeps the response lean for the panel's polling.
+- New `POST /api/apps/{slug}/revert {version_id}` restores the target version AND pushes the CURRENT design back into history (as a "Revert ↔ …" entry) — so revert itself is reversible. No credit charge for revert (pure DB swap).
+
+**🟢 Premium frontend Redesign panel (`/apps/:slug` AppViewer)**
+- Replaced the single-line input with a **3-row multi-line textarea** (Cmd/Ctrl+Enter submits).
+- 6 **quick-suggestion chips** above the textarea (data-testid `redesign-suggestion-0..5`): "Make it darker with a moody black & cyan palette" · "Add a sidebar with quick navigation links" · "Switch the layout to a card grid with 3 columns" · "Bigger headings and more breathing room…" · "Add a stats row showing total runs at the top" · "Use a softer pastel color scheme with rounded corners". One-click pre-fills the textarea.
+- Submit is disabled when the textarea has < 5 chars (prevents accidental empty submissions and the wasted credits that come with them).
+- During redesign, a purple loader strip appears under the input: "Building new UI with Gemini Flash — usually 5-15s. Hang tight…" so the user knows something is happening.
+- Success toast now surfaces credits charged: "UI updated · 3 cr" (the legacy version said only "UI updated").
+- **History strip** below the panel — shows up to 10 recent versions, each row with `MM-DD HH:MM` timestamp + truncated prompt + **Revert** button (`history-revert-{version_id}`). Revert prompts a window.confirm before firing the POST, then refreshes the iframe.
+
+**Verified (iter65) — 100% PASS**
+- **7/7 backend pytest** in `/app/backend/tests/test_iter65_redesign_history.py`: empty default, newest-first listing, jsx stripped from listing payload, revert 404 on unknown id, revert restores + reversibly pushes current into history, auth-gated, cap-of-10 FIFO eviction.
+- **Frontend testing agent** verified: panel opens on toggle, all 6 suggestion chips render with correct text + click-populates-textarea, textarea is `<textarea rows={3}>` (NOT `<input>`), submit disabled at 0 + 3 chars + enabled at ≥5 chars, history strip renders when history exists, revert button fires window.confirm + POST returns 200 + iframe updates to reverted jsx + history grows by one entry containing the prior version. Share + tabs regression intact.
+- Code review notes: AppViewer.jsx is ~548 lines, approaching but below the 700-line split threshold — flagged for future extraction. Redesign endpoint correctly strips full app_jsx from list payloads.
+
+
 ### Phase 64 (Feb 2026) — Lazy Service Init + Railway Boot Crash Fix (Prompt 23)
 
 **🟢 Fixed Railway "Application failed to start" crash**
