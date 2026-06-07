@@ -585,18 +585,40 @@ async def exchange_purchase(listing_id: str, user=Depends(get_current_user())):
 @router.get("/credits/balance")
 async def credits_balance(user=Depends(get_current_user())):
     """Returns just the balance summary — no transactions, no packs.
-    Designed for the navbar credit counter that polls every 30s."""
+    Designed for the navbar credit counter that polls every 30s.
+
+    Also surfaces cashback_lifetime so the FE can detect a delta between polls
+    and fire a celebration toast when the user earns cashback (Phase 65)."""
     db = get_db()
     info = await get_balance(db, user)
+    # Pull the latest cashback total (lib.cashback writes to users.cashback_earned_total).
+    # Fast — already pinned by user_id in the user doc.
+    user_id = user.get("id") or user.get("_id") or user.get("email")
+    cashback_row = await db.users.find_one(
+        {"id": user_id},
+        {"cashback_earned_total": 1, "_id": 0},
+    ) or {}
+    sub = int(info.get("subscription_credits") or 0)
+    sub_max = int(info.get("subscription_credits_max") or 0)
+    # Subscription pool % FILLED (i.e. credits still available / max). 0..100.
+    # When unlimited we report 100 (full bar).
+    if info.get("unlimited"):
+        sub_pct = 100
+    elif sub_max > 0:
+        sub_pct = max(0, min(100, int(round(sub / sub_max * 100))))
+    else:
+        sub_pct = 0
     return {
-        "subscription": int(info.get("subscription_credits") or 0),
+        "subscription": sub,
         "topup": int(info.get("topup_credits") or 0),
         "total": int(info.get("balance") or 0),
-        "subscription_max": int(info.get("subscription_credits_max") or 0),
+        "subscription_max": sub_max,
+        "subscription_pct": sub_pct,
         "monthly_grant": int(info.get("monthly_grant") or 0),
         "reset_date": info.get("credit_reset_date"),
         "tier": info.get("tier") or "recruit",
         "unlimited": bool(info.get("unlimited") or False),
+        "cashback_lifetime": int(cashback_row.get("cashback_earned_total") or 0),
     }
 
 

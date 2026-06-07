@@ -1,0 +1,78 @@
+{
+  "summary": "Iter65 Phase-2 — Smart Allowance ring + Cashback celebration toast. Backend pytest 4/4 PASS (test_iter65_smart_allowance.py). Public-URL smoke confirmed both NEW keys (subscription_pct + cashback_lifetime) on /api/credits/balance — admin returns subscription_pct=100/unlimited=true, freeuser returns subscription_pct=0/unlimited=false/topup=4644. Frontend e2e verified end-to-end: ring + tooltip render for freeuser with exact spec text; admin (unlimited) shows neither ring nor tooltip — by design the Infinity icon replaces both. Cashback celebration toast was triggered live by bumping users.cashback_earned_total via Mongo and dispatching a window 'focus' event; the sonner toast appeared with text '+7 cashback credits earned!' + description 'Spending cashback dropped into your wallet.' and the Gift icon. The no-phantom-toast rule also verified — 0 toasts in the first 5s after sign-in (baseline-only first poll). A second consecutive bump (+3) also produced a second toast, confirming lastCashbackRef updates correctly between polls.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Navbar (admin/unlimited)",
+        "issues": ["Spec said 'full ring for unlimited admin (pct=100)' — implementation instead omits the SVG ring entirely and renders the Infinity icon. Visually clean and consistent ('irrelevant for admin' per request note), but if a literal full ring is desired for the admin path, the !unlimited gate on line 104 of CreditCounter.jsx would need to be removed."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter65_smart_allowance.py",
+    "/app/test_reports/pytest/iter65_smart_allowance.xml",
+    "/app/backend/tests/test_iter65_redesign_history.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "CreditCounter.jsx renders the SVG ring only for non-unlimited users (line 104). This is a small deviation from the spec wording ('full ring for unlimited admin') but is a reasonable design choice — Infinity icon already communicates unlimited. Note it in changelog if shipping; otherwise no action needed.",
+    "credits.jsx lastCashbackRef correctly resets to null on token change (line 71) and on first successful poll merely captures the baseline. Delta-only toast logic is solid and matches spec.",
+    "Toast uses duration=5000ms + emerald Gift icon — consistent with the rest of the celebration toasts in the app.",
+    "Sonner toast container is mounted globally (verified by data-sonner-toast attr present on emission). No extra wiring needed in pages that didn't have toaster previously."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (4/4 smart-allowance + 7/7 redesign regression)",
+    "frontend": "100% (ring renders, tooltip on hover with exact spec text, mouseout closes, admin shows neither, cashback toast fires on delta only, no phantom toast on initial poll)"
+  },
+  "test_credentials": "admin@nova.ai / admin123 (unlimited, owner) and freeuser@test.com / test123 (free, 0/50 sub, 4644 topup, cashback_lifetime=10 → restored after testing).",
+  "seed_data_creation": "Temporarily incremented users.cashback_earned_total for freeuser@test.com by 7 then by 3 (total +10) via /tmp/bump_cashback.py to trigger the celebration toast end-to-end. After verification, restored cashback_earned_total back to 10 with a direct $set so DB state is identical to pre-test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "To exercise the cashback toast: (1) sign in as freeuser, navigate to /armory, wait ~4s for baseline poll, (2) python /tmp/bump_cashback.py 7 to $inc cashback_earned_total +7, (3) page.evaluate(\"window.dispatchEvent(new Event('focus'))\") to force an immediate poll instead of waiting 30s, (4) wait ~3s, (5) toast selector is [data-sonner-toast] OR text=/cashback credits earned/i. The no-phantom-toast rule is verified by checking 0 toasts during the first 5s of session (baseline-only first poll). Remember to restore cashback_earned_total afterward.",
+  "verification_details": {
+    "backend_pytest": {
+      "command": "pytest /app/backend/tests/test_iter65_smart_allowance.py -v",
+      "result": "4 passed in 1.02s",
+      "tests": [
+        "test_balance_response_shape",
+        "test_admin_unlimited_pct_is_100",
+        "test_free_user_pct_within_bounds",
+        "test_cashback_lifetime_grows_with_grant"
+      ]
+    },
+    "public_url_balance_keys": {
+      "admin": "{subscription_pct:100, cashback_lifetime:0, unlimited:true, subscription:1000000000, topup:1000000000, total:1000000000, subscription_max:1000000000, monthly_grant:1000000000, reset_date:null, tier:'admin'}",
+      "freeuser": "{subscription_pct:0, cashback_lifetime:10, unlimited:false, subscription:0, topup:4644, total:4644, subscription_max:50, monthly_grant:50, reset_date:'2026-07-03T13:54:24Z', tier:'recruit'}"
+    },
+    "frontend_smart_allowance_ring": {
+      "freeuser_navbar-credit-counter_present": true,
+      "freeuser_navbar-allowance-ring_present": true,
+      "freeuser_tooltip_on_hover_300ms": true,
+      "tooltip_text": "SMART ALLOWANCE / Subscription 0 / 50 / Top-up 4,644 / Subscription resets Jul 3 · Top-up never expires",
+      "mouseout_closes_tooltip": true,
+      "admin_counter_present": true,
+      "admin_ring_present": false,
+      "admin_tooltip_on_hover": false
+    },
+    "frontend_cashback_toast": {
+      "no_toast_during_baseline_5s": true,
+      "toast_after_mongo_bump_+7_and_window_focus": true,
+      "toast_title": "+7 cashback credits earned!",
+      "toast_description": "Spending cashback dropped into your wallet.",
+      "gift_icon_visible_emerald": true,
+      "second_consecutive_bump_+3_also_toasts": true,
+      "second_toast_title": "+3 cashback credits earned!"
+    },
+    "regression_iter65_redesign_history": {
+      "command": "pytest /app/backend/tests/test_iter65_redesign_history.py -v",
+      "result": "7 passed in 1.16s"
+    }
+  }
+}
