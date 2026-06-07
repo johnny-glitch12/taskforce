@@ -33,6 +33,7 @@ restartPolicyMaxRetries = 3
 numReplicas = 1
 
 [variables]
-MONGO_URL = "${{ secrets.MONGO_URL }}"
+# MONGO_URL must be set directly in the Railway dashboard for each service
+# (web, worker, beat) — railway.toml cannot reference dashboard variables.
 DB_NAME = "taskforce"
 JWT_SECRET = "${{ secret() }}"
