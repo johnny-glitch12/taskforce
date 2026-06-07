@@ -22,7 +22,10 @@ load_dotenv()
 # ── Supabase ──
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-_sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+if SUPABASE_URL and SUPABASE_KEY:
+    _sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+else:
+    _sb = None
 
 # ── LLM ──
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
@@ -71,6 +74,13 @@ async def run_agent(
         raise HTTPException(
             status_code=429,
             detail=f"Rate limit exceeded. Try again in {rate_check['retry_after']}s.",
+        )
+
+    # ── Supabase availability check ──
+    if _sb is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Agent execution requires Supabase, which is not configured.",
         )
 
     # ── Gate 2: Concurrent Execution Cap (1 active per user) ──
@@ -146,6 +156,8 @@ async def run_agent(
 # ──────────────────────────────────────────────
 @router.get("/agent-logs/{log_id}")
 async def get_agent_log(log_id: str, user=Depends(get_current_user())):
+    if _sb is None:
+        raise HTTPException(status_code=503, detail="Supabase is not configured.")
     result = _sb.table("agent_logs").select("*").eq("log_id", log_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Execution log not found.")
@@ -158,6 +170,8 @@ async def get_agent_log(log_id: str, user=Depends(get_current_user())):
 # WORKER: Agent Brain
 # ──────────────────────────────────────────────
 def _update_log(log_id: str, **fields):
+    if _sb is None:
+        return
     now = datetime.now(timezone.utc).isoformat()
     current = _sb.table("agent_logs").select("terminal_history").eq("log_id", log_id).execute()
     history = current.data[0]["terminal_history"] if current.data else []
