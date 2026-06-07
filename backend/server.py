@@ -285,7 +285,14 @@ async def join_waitlist(data: WaitlistCreate):
     try:
         from utils.email_service import send_waitlist_email
         import asyncio as _asyncio
-        _asyncio.create_task(send_waitlist_email(data.email))
+
+        async def _send_waitlist_email_safe(email: str):
+            try:
+                await send_waitlist_email(email)
+            except Exception as _task_err:
+                logger.exception(f"[email] waitlist welcome task raised an unhandled exception for {email}: {_task_err}")
+
+        _asyncio.create_task(_send_waitlist_email_safe(data.email))
     except Exception as _e:
         logger.warning(f"[email] waitlist welcome failed to schedule: {_e}")
     return WaitlistResponse(id=entry_id, email=data.email, created_at=now)
@@ -1435,7 +1442,13 @@ async def csdrop_launch_bot(data: CsdropBotLaunch, user=Depends(get_csdrop_user)
             except Exception:
                 pass
 
-        aio.create_task(_read_output())
+        async def _read_output_safe():
+            try:
+                await _read_output()
+            except Exception as _task_err:
+                logger.exception(f"[csdrop] _read_output background task crashed: {_task_err}")
+
+        aio.create_task(_read_output_safe())
         logger.info(f"CSDROP bot launched by {user['email']}")
         return {"status": "ok", "message": "Sovereign bot launched."}
     except Exception as e:
@@ -1567,7 +1580,13 @@ async def csdrop_sync_session(user=Depends(get_csdrop_user)):
             else:
                 _sync_logs.append(f"[{ts}] Session sync ended (exit code: {exit_code}).")
 
-        aio.create_task(_read_sync_output())
+        async def _read_sync_output_safe():
+            try:
+                await _read_sync_output()
+            except Exception as _task_err:
+                logger.exception(f"[csdrop] _read_sync_output (session sync) background task crashed: {_task_err}")
+
+        aio.create_task(_read_sync_output_safe())
         logger.info(f"Session sync started by {user['email']}")
         return {"status": "ok", "message": "Session sync started. Scan the QR code."}
     except Exception as e:
@@ -1722,7 +1741,13 @@ async def csdrop_manual_login(data: ManualLoginData, user=Depends(get_csdrop_use
             else:
                 _sync_logs.append(f"[{ts}] Manual login ended (exit code: {exit_code}).")
 
-        aio.create_task(_read_sync_output())
+        async def _read_manual_login_output_safe():
+            try:
+                await _read_sync_output()
+            except Exception as _task_err:
+                logger.exception(f"[csdrop] _read_sync_output (manual login) background task crashed: {_task_err}")
+
+        aio.create_task(_read_manual_login_output_safe())
         logger.info(f"Manual login started by {user['email']}")
         return {"status": "ok", "message": "Manual login started. Entering credentials..."}
     except Exception as e:
@@ -2174,40 +2199,69 @@ async def startup():
 
 
 async def _startup_inner():
+    logger.info("[startup] _startup_inner() BEGIN")
+
+    # ── Step 1: MongoDB connectivity probe ──────────────────────────────────
+    logger.info("[startup] Step 1/7 — probing MongoDB connection...")
+    try:
+        count = await db.agents.count_documents({})
+        logger.info(f"[startup] MongoDB OK — agents collection has {count} document(s)")
+    except Exception as e:
+        logger.exception(f"[startup] FATAL: MongoDB connection probe failed: {e}")
+        raise
+
     # Auto-seed on startup
     # Marketplace intentionally starts EMPTY (user adds real agents)
     # — Disabled auto-seed of mock agents.
-    count = await db.agents.count_documents({})
     if False and count == 0:
         logger.info("No data found, seeding database...")
         await seed_database()
-    admin = await db.users.find_one({"email": "admin@nova.ai"})
-    if not admin:
-        admin_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
-        await db.users.insert_one({
-            "id": admin_id, "email": "admin@nova.ai",
-            "password_hash": hash_password("admin123"),
-            "name": "Task Force Admin", "role": "admin", "created_at": now,
-        })
-        logger.info("Admin user created")
+
+    # ── Step 2: Admin / seed users ──────────────────────────────────────────
+    logger.info("[startup] Step 2/7 — ensuring seed users exist...")
+    try:
+        admin = await db.users.find_one({"email": "admin@nova.ai"})
+        if not admin:
+            admin_id = str(uuid.uuid4())
+            now = datetime.now(timezone.utc).isoformat()
+            await db.users.insert_one({
+                "id": admin_id, "email": "admin@nova.ai",
+                "password_hash": hash_password("admin123"),
+                "name": "Task Force Admin", "role": "admin", "created_at": now,
+            })
+            logger.info("[startup] Admin user created")
+        else:
+            logger.info("[startup] Admin user already exists")
+    except Exception as e:
+        logger.exception(f"[startup] Admin user seed failed: {e}")
+        raise
 
     # Seed CSDROP client user
-    csdrop_user = await db.users.find_one({"client_id": "csdrop"})
-    if not csdrop_user:
-        csdrop_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
-        await db.users.insert_one({
-            "id": csdrop_id, "email": "admin@csdrop.com",
-            "password_hash": hash_password("nova_csdrop_2026"),
-            "name": "CSDROP", "role": "client", "client_id": "csdrop",
-            "tier": "pro", "created_at": now,
-        })
-        logger.info("CSDROP client user created")
+    try:
+        csdrop_user = await db.users.find_one({"client_id": "csdrop"})
+        if not csdrop_user:
+            csdrop_id = str(uuid.uuid4())
+            now = datetime.now(timezone.utc).isoformat()
+            await db.users.insert_one({
+                "id": csdrop_id, "email": "admin@csdrop.com",
+                "password_hash": hash_password("nova_csdrop_2026"),
+                "name": "CSDROP", "role": "client", "client_id": "csdrop",
+                "tier": "pro", "created_at": now,
+            })
+            logger.info("[startup] CSDROP client user created")
+        else:
+            logger.info("[startup] CSDROP client user already exists")
+    except Exception as e:
+        logger.exception(f"[startup] CSDROP user seed failed: {e}")
+        raise
+
+    # ── Step 3: Index creation ───────────────────────────────────────────────
+    logger.info("[startup] Step 3/7 — creating database indexes...")
 
     # Ensure csdrop_executions collection index
     try:
         await db.csdrop_executions.create_index("user_id")
+        logger.info("[startup] csdrop_executions index OK")
     except Exception as e:
         logger.warning(f"[startup] csdrop_executions index creation failed: {e}")
 
@@ -2218,16 +2272,19 @@ async def _startup_inner():
     except Exception as e:
         logger.warning(f"[startup] ensure_indexes failed: {e}")
 
-    # ─── Celery handoff probe ───
+    # ── Step 4: Celery handoff probe ─────────────────────────────────────────
     # If CELERY_BROKER_URL is set, the celery beat process is the source of
     # truth for these jobs — we skip APScheduler add_job calls to avoid double
     # execution. APScheduler itself is still started (no-op when empty) for
     # any ad-hoc in-process jobs other modules may register later.
+    logger.info("[startup] Step 4/7 — probing Celery availability...")
     _celery_enabled = False
     try:
         from lib.celery_app import ENABLED as _celery_enabled, status as _celery_status
         if _celery_enabled:
             logger.info(f"[startup] Celery enabled — periodic jobs delegated to celery beat ({_celery_status()['broker_url']}).")
+        else:
+            logger.info("[startup] Celery not enabled — will use APScheduler if needed.")
     except Exception as e:
         logger.warning(f"[startup] celery_app probe failed, falling back to APScheduler: {e}")
 
@@ -2284,33 +2341,35 @@ async def _startup_inner():
     #     logger.info("APScheduler started (jobs: %d)" % len(scheduler.get_jobs()))
     logger.info("[startup] APScheduler skipped (disabled for crash isolation)")
 
-    # Run initial evaluation
+    # ── Step 5: Supernova evaluation ─────────────────────────────────────────
+    logger.info("[startup] Step 5/7 — running initial Supernova evaluation...")
     try:
         await evaluate_supernovas()
+        logger.info("[startup] Supernova evaluation complete")
     except Exception as e:
         logger.exception(f"[startup] Initial evaluate_supernovas() failed: {e}")
 
-    # ─── Startup Health Check + Auto-Repair ───
-    logger.info("Running environment health check...")
+    # ── Step 6: Startup Health Check + Auto-Repair ───────────────────────────
+    logger.info("[startup] Step 6/7 — running environment health check...")
     missing_modules = []
     for mod_name, import_name in [("playwright", "playwright"), ("playwright_stealth", "playwright_stealth"), ("RestrictedPython", "RestrictedPython")]:
         if _check_module(import_name):
-            logger.info(f"  [OK] {mod_name}")
+            logger.info(f"[startup]   [OK] {mod_name}")
         else:
-            logger.warning(f"  [MISSING] {mod_name}")
+            logger.warning(f"[startup]   [MISSING] {mod_name}")
             missing_modules.append(mod_name)
 
     chromium_ok = _check_chromium()
     if chromium_ok:
-        logger.info("  [OK] chromium")
+        logger.info("[startup]   [OK] chromium")
     else:
-        logger.warning("  [MISSING] chromium")
+        logger.warning("[startup]   [MISSING] chromium")
         missing_modules.append("chromium")
 
-    logger.info(f"Python executable: {sys.executable}")
+    logger.info(f"[startup] Python executable: {sys.executable}")
 
     if missing_modules:
-        logger.info(f"Auto-repair triggered for: {', '.join(missing_modules)}")
+        logger.info(f"[startup] Auto-repair triggered for: {', '.join(missing_modules)}")
 
         def _startup_repair():
             global _repair_status
@@ -2319,7 +2378,7 @@ async def _startup_inner():
                 return datetime.now(timezone.utc).strftime('%H:%M:%S')
 
             _repair_status["logs"].append(f"[{_ts()}] Auto-repair on startup...")
-            logger.info("Startup auto-repair: installing dependencies...")
+            logger.info("[startup] Startup auto-repair: installing dependencies...")
 
             req_file = CSDROP_BOT_DIR / "requirements.txt"
             if req_file.exists():
@@ -2340,28 +2399,47 @@ async def _startup_inner():
             _repair_status["logs"].append(f"[{_ts()}] Auto-repair complete. All OK: {all_ok}")
             _repair_status["running"] = False
             _repair_status["last_result"] = "success" if all_ok else "partial"
-            logger.info(f"Startup auto-repair finished. All OK: {all_ok}")
+            logger.info(f"[startup] Startup auto-repair finished. All OK: {all_ok}")
 
         import threading
         threading.Thread(target=_startup_repair, daemon=True).start()
     else:
-        logger.info("All dependencies OK. No repair needed.")
+        logger.info("[startup] All dependencies OK. No repair needed.")
 
-    # Sweep stale workflow_jobs orphaned by previous worker
+    # ── Step 7: Stale workflow-job sweep ─────────────────────────────────────
+    logger.info("[startup] Step 7/7 — sweeping stale workflow jobs...")
     try:
         from lib.workflow_jobs import mark_stale_jobs_failed
         swept = await mark_stale_jobs_failed(db, max_age_seconds=600)
         if swept:
             logger.info(f"[startup] Marked {swept} stale workflow_jobs as failed.")
+        else:
+            logger.info("[startup] No stale workflow jobs found.")
     except Exception as e:
         logger.warning(f"[startup] Stale-job sweep failed: {e}")
+
+    logger.info("[startup] _startup_inner() COMPLETE — all steps finished successfully")
 
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    if scheduler.running:
-        scheduler.shutdown(wait=False)
-    client.close()
+    logger.info("[shutdown] Shutdown event received — beginning graceful teardown")
+    try:
+        if scheduler.running:
+            logger.info("[shutdown] Stopping APScheduler...")
+            scheduler.shutdown(wait=False)
+            logger.info("[shutdown] APScheduler stopped")
+        else:
+            logger.info("[shutdown] APScheduler was not running — skipping")
+    except Exception as e:
+        logger.exception(f"[shutdown] Error stopping APScheduler: {e}")
+    try:
+        logger.info("[shutdown] Closing MongoDB client...")
+        client.close()
+        logger.info("[shutdown] MongoDB client closed")
+    except Exception as e:
+        logger.exception(f"[shutdown] Error closing MongoDB client: {e}")
+    logger.info("[shutdown] Graceful teardown complete")
 
 
 # ─── Production SPA Serving (Railway / single-container deploy) ──────────
