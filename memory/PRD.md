@@ -23,6 +23,38 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 67 (Feb 2026) — Mini-App Customization Panel (Prompt 27)
+
+**🟢 Per-app branding + sharing surface for hosted Mini-Apps**
+- Each `bot_projects.frontend` document now carries an optional `theme` dict with: `display_name`, `logo_url`, `primary`, `accent`, `background`, `text`, `border_radius` (`sharp|rounded|pill`), `show_branding`. Saved values are merged on top of `DEFAULT_THEME` at render time so user can update one knob at a time.
+- **New `GET /api/apps/{slug}/theme`** — owner-only. Returns the merged theme + `is_public` + name + slug. Used to hydrate the Customize panel.
+- **New `PATCH /api/apps/{slug}/theme`** — partial updates. Hex colors validated with regex `^#(?:[0-9a-fA-F]{3}){1,2}$`, border_radius restricted to the three enum values. Bad inputs return Pydantic 422 errors with field-level detail. Only keys actually sent by the caller are written — preserves untouched fields.
+- **Iframe shell injects theme** — `_IFRAME_HTML_TEMPLATE` now exposes `--tf-primary`, `--tf-accent`, `--tf-bg`, `--tf-text`, `--tf-radius` as CSS custom properties so AI-generated `App.jsx` can `var(--tf-primary)` to honour user branding automatically.
+- **Branded header bar** — thin strip with logo + display name + "Built on Task Force" tagline appears at the top of the iframe when `show_branding=true`. Suppressed via `theme.show_branding=false` OR `?embed=1` query flag (so third-party embeds don't get the chrome). User-controlled fields (`display_name`, `logo_url`) are HTML-escaped to prevent stored XSS.
+
+**🟢 Customize modal in AppViewer (`/app/frontend/src/components/MiniAppCustomize.jsx`, ~430 lines)**
+- New "Customize" button (`data-testid="app-viewer-customize-toggle"`) between Share and Redesign in the AppViewer header, with cyan palette icon.
+- Two-tab modal: **Branding** + **Share & Embed**.
+- **Branding tab**:
+  - Live-preview swatch at the top showing how the saved colors + radius will look on a mini button. Updates as the user picks colors.
+  - 6 one-click palette presets: Cyber Cyan, Sunset Glow, Forest, Candy Pop, Arctic Ice, Mono Paper. Each renders a tiny stacked-dot indicator + the palette name. Clicking writes all 4 color fields at once.
+  - Display Name (80-char cap) + Logo URL (600-char cap) text inputs.
+  - 4 color controls (Primary / Accent / Background / Text), each pairing a native `<input type="color">` with a synced 7-char hex text input.
+  - Corner Style toggle (Sharp / Rounded / Pill) — buttons themselves render with the matching radius for instant visual feedback.
+  - "Branded Header" eye-icon toggle with a friendly label ("Showing branded header" / "Hidden — clean canvas").
+  - Footer: Reset to defaults · Cancel · Save changes (cyan filled, disabled during in-flight PATCH).
+- **Share & Embed tab**:
+  - Status pill showing Public/Private state + a guard line ("Make this app public from Share menu before embedding").
+  - Public URL field with one-click Copy.
+  - Pre-formatted `<iframe>` embed snippet auto-targeting `/api/apps/{slug}/render?embed=1` (no branded chrome) + Copy snippet button.
+  - QR code (180×180, rendered client-side via `qrcode` package) for the public URL + Download PNG button.
+
+**Verified (iter67) — 9/9 backend pytest pass**
+- `/app/backend/tests/test_iter67_app_customize.py` — defaults, partial update (no clobber), bad-hex 422, bad-radius 422, render-injects-theme (CSS var + branded header), `?embed=1` strips chrome, `show_branding=false` strips chrome, auth-gated GET + PATCH.
+- **Frontend self-test** (screenshot probes): modal opens via `[data-testid="app-viewer-customize-toggle"]`, all 6 presets render + click writes 4 colors to hex inputs (verified Sunset preset → `#fb923c`), 8 color inputs total (4 pickers + 4 hex), QR renders as visible PNG data URL, embed snippet contains the correct `?embed=1` flag, tab switching works.
+- **Self-discovered bug fixed mid-flight**: initial commit accidentally mounted `<MiniAppCustomize/>` inside the `RunsTable` sub-component instead of the top-level `AppViewer`, so the modal stayed unmounted regardless of state. Moved into the proper return-tree before the closing `</div>`.
+
+
 ### Phase 66 (Feb 2026) — Navbar Polish & Branded Browser Tab (Prompt 26)
 
 **🟢 Browser tab finally says "Task Force"**

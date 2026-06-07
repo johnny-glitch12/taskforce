@@ -8,9 +8,10 @@
  */
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, Loader2, Code2, RefreshCw, Wand2, Activity, ExternalLink, Send, Share2, Copy, Globe, Lock, History, Undo2, Sparkles } from "lucide-react";
+import { ChevronLeft, Loader2, Code2, RefreshCw, Wand2, Activity, ExternalLink, Send, Share2, Copy, Globe, Lock, History, Undo2, Sparkles, Palette } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/App";
+import MiniAppCustomize from "@/components/MiniAppCustomize";
 
 const API = process.env.REACT_APP_BACKEND_URL || "";
 
@@ -41,6 +42,7 @@ export default function AppViewer() {
   const [tab, setTab] = useState("preview"); // preview | runs
   const [showShare, setShowShare] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [showCustomize, setShowCustomize] = useState(false);
 
   useEffect(() => {
     if (!token || !slug) return;
@@ -213,6 +215,15 @@ export default function AppViewer() {
                 >
                   {app.is_public ? <Globe size={10} /> : <Share2 size={10} />}
                   Share
+                </button>
+                <button
+                  data-testid="app-viewer-customize-toggle"
+                  onClick={() => setShowCustomize(true)}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-sm border text-[10px] font-bold uppercase tracking-widest font-mono text-cyan-300 hover:bg-cyan-400/10"
+                  style={{ borderColor: "rgba(34,211,238,0.3)" }}
+                  title="Branding, layout, embed code & QR"
+                >
+                  <Palette size={10} /> Customize
                 </button>
                 <button
                   data-testid="app-viewer-redesign-toggle"
@@ -485,6 +496,14 @@ export default function AppViewer() {
           <RunsTable runs={runs} />
         )}
       </div>
+
+      {showCustomize && (
+        <MiniAppCustomize
+          slug={slug}
+          onClose={() => setShowCustomize(false)}
+          onSaved={() => setIframeBust((n) => n + 1)}
+        />
+      )}
     </div>
   );
 }

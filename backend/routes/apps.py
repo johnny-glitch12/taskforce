@@ -16,6 +16,7 @@ at load time, then injects window.tfApi.run() pointing back at /api/apps/{id}/ru
 from __future__ import annotations
 
 import json
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -23,7 +24,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from lib.smart_credits import check_can_afford, debit_actual_usage
 from lib.rate_limit import rate_limit_dependency
@@ -74,8 +75,52 @@ class AppRevertRequest(BaseModel):
     version_id: str = Field(min_length=1, max_length=64)
 
 
+# ─── Theme / branding (Phase 67 App Customization Panel) ───────────────
+# Validated by AppThemeRequest below. Any unspecified field is left untouched
+# during PATCH so the user can update one knob at a time.
+_HEX_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}){1,2}$")
+
+
+def _validate_hex(v: Optional[str]) -> Optional[str]:
+    if v is None or v == "":
+        return None
+    if not _HEX_RE.match(v):
+        raise ValueError("Color must be a hex value like #22d3ee")
+    return v.lower()
+
+
+class AppThemeRequest(BaseModel):
+    """Per-mini-app branding. All fields optional — partial updates supported."""
+    display_name: Optional[str] = Field(default=None, max_length=80)
+    logo_url: Optional[str] = Field(default=None, max_length=600)
+    primary: Optional[str] = Field(default=None, max_length=9)
+    accent: Optional[str] = Field(default=None, max_length=9)
+    background: Optional[str] = Field(default=None, max_length=9)
+    text: Optional[str] = Field(default=None, max_length=9)
+    border_radius: Optional[str] = Field(default=None, pattern=r"^(sharp|rounded|pill)$")
+    show_branding: Optional[bool] = None
+
+    @field_validator("primary", "accent", "background", "text")
+    @classmethod
+    def _hex(cls, v):
+        return _validate_hex(v)
+
+
 # Max number of redesign snapshots to retain per app (FIFO eviction).
 REDESIGN_HISTORY_CAP = 10
+
+
+# Default theme applied at render time if the user has saved no customizations.
+DEFAULT_THEME = {
+    "display_name": "",
+    "logo_url": "",
+    "primary": "#22d3ee",
+    "accent": "#a855f7",
+    "background": "#0a0a0a",
+    "text": "#e5e7eb",
+    "border_radius": "rounded",
+    "show_branding": True,
+}
 
 
 # ─── Listing endpoints ─────────────────────────────────
@@ -158,6 +203,57 @@ async def toggle_share(slug: str, body: AppShareToggleRequest, user=Depends(get_
     return {"ok": True, "is_public": bool(body.is_public)}
 
 
+# ─── Theme / branding endpoints (App Customization Panel) ───────────────
+@router.get("/apps/{slug}/theme")
+async def get_app_theme(slug: str, user=Depends(get_current_user())):
+    """Return the saved theme merged with defaults. Owner-only — no auth bypass.
+    Used to hydrate the Customize panel."""
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    proj = await db.bot_projects.find_one(
+        {"$or": [{"app_slug": slug}, {"id": slug}], "user_id": user_id, "has_ui": True},
+        {"_id": 0, "id": 1, "name": 1, "app_slug": 1, "is_public": 1, "frontend.theme": 1},
+    )
+    if not proj:
+        raise HTTPException(status_code=404, detail="App not found.")
+    saved = ((proj.get("frontend") or {}).get("theme")) or {}
+    theme = {**DEFAULT_THEME, **saved}
+    return {
+        "theme": theme,
+        "is_public": bool(proj.get("is_public")),
+        "slug": proj.get("app_slug") or proj.get("id"),
+        "name": proj.get("name"),
+    }
+
+
+@router.patch("/apps/{slug}/theme")
+async def update_app_theme(slug: str, body: AppThemeRequest, user=Depends(get_current_user())):
+    """Patch the per-app branding/theme. Only the fields the user provided are
+    overwritten — everything else is preserved (partial update)."""
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    proj = await db.bot_projects.find_one(
+        {"$or": [{"app_slug": slug}, {"id": slug}], "user_id": user_id, "has_ui": True},
+        {"_id": 0, "frontend.theme": 1, "id": 1},
+    )
+    if not proj:
+        raise HTTPException(status_code=404, detail="App not found.")
+    current = ((proj.get("frontend") or {}).get("theme")) or {}
+    # Only merge keys the caller actually sent (exclude_unset). Pydantic's
+    # default would otherwise clobber saved values with None.
+    incoming = body.model_dump(exclude_unset=True, exclude_none=True)
+    merged = {**current, **incoming}
+    # Lock the merged dict down to the keys we know about so a future
+    # validator change doesn't accidentally persist trash.
+    merged = {k: v for k, v in merged.items() if k in DEFAULT_THEME}
+
+    await db.bot_projects.update_one(
+        {"id": proj["id"]},
+        {"$set": {"frontend.theme": merged, "updated_at": _now_iso()}},
+    )
+    return {"ok": True, "theme": {**DEFAULT_THEME, **merged}}
+
+
 # ─── Iframe shell ──────────────────────────────────────
 _IFRAME_HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en" class="dark">
@@ -170,12 +266,37 @@ _IFRAME_HTML_TEMPLATE = """<!DOCTYPE html>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
-  body { background: #0a0a0a; color: #e5e7eb; font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; min-height: 100vh; }
+  /* User-customizable theme. The AI-generated App.jsx can reference these
+     CSS custom properties (var(--tf-primary), var(--tf-accent), …) to honour
+     the owner's branding choices. */
+  :root {
+    --tf-primary: __THEME_PRIMARY__;
+    --tf-accent: __THEME_ACCENT__;
+    --tf-bg: __THEME_BG__;
+    --tf-text: __THEME_TEXT__;
+    --tf-radius: __THEME_RADIUS__;
+  }
+  body { background: var(--tf-bg); color: var(--tf-text); font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; min-height: 100vh; }
   #root { min-height: 100vh; }
   .tf-err { padding: 24px; color: #f43f5e; font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; }
+  /* Optional branded header — rendered when show_branding=true. Stays a thin
+     strip so it doesn't fight the AI-generated UI for attention. */
+  .tf-brand-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px;
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    font-family: ui-monospace, 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--tf-text); opacity: 0.85;
+  }
+  .tf-brand-bar img { width: 18px; height: 18px; object-fit: contain; border-radius: 3px; }
+  .tf-brand-bar .tf-brand-name { font-weight: 700; color: var(--tf-primary); }
+  .tf-brand-bar .tf-brand-poweredby { margin-left: auto; font-size: 9px; color: rgba(255,255,255,0.3); letter-spacing: 0.15em; }
 </style>
 </head>
 <body data-tf-app-id="__APP_ID__" data-tf-base="__BASE__">
+__BRAND_BAR_HTML__
 <script id="tf-cfg" type="application/json">__TF_CFG__</script>
 <div id="root"></div>
 <script>
@@ -227,7 +348,7 @@ try {
 
 
 @router.get("/apps/{slug}/render", response_class=HTMLResponse)
-async def render_app(slug: str, token: Optional[str] = None):
+async def render_app(slug: str, token: Optional[str] = None, embed: int = 0):
     """Serve the iframe-friendly HTML shell for an AI-generated mini-app.
 
     Token can be passed as a query param (?token=...) because iframes can't
@@ -238,7 +359,10 @@ async def render_app(slug: str, token: Optional[str] = None):
     Public apps (is_public=true) load without a token. Private apps still load
     the HTML shell but run() calls will 401 if no/invalid token is supplied
     (acceptable trade-off — the JSX source isn't truly secret since slugs are
-    URL parameters; only execution is gated)."""
+    URL parameters; only execution is gated).
+
+    `?embed=1` strips the branded chrome — useful when the app is iframed into
+    a third-party site (the parent site already provides its own header)."""
     db = get_db()
     # No auth here — we let the iframe load and rely on token in tfApi to
     # gate the actual run() endpoint. The slug is non-secret (it's in the URL).
@@ -254,15 +378,45 @@ async def render_app(slug: str, token: Optional[str] = None):
     frontend = proj.get("frontend") or {}
     app_jsx = frontend.get("app_jsx") or "window.__TF_APP = () => React.createElement('div', {className: 'p-8 text-amber-400'}, 'This agent has no UI yet.');"
 
+    # Merge saved theme overrides on top of defaults. Owners customize via the
+    # PATCH /apps/{slug}/theme endpoint (see App Customization Panel).
+    theme = {**DEFAULT_THEME, **(frontend.get("theme") or {})}
+    radius_map = {"sharp": "0px", "rounded": "8px", "pill": "9999px"}
+    radius_value = radius_map.get(theme.get("border_radius"), "8px")
+
+    # Branded header bar — opt-out via theme.show_branding=false OR ?embed=1.
+    brand_html = ""
+    show_brand = bool(theme.get("show_branding")) and not bool(embed)
+    if show_brand:
+        display_name = (theme.get("display_name") or proj.get("name") or "App")
+        # Escape user-controlled text before injecting into the HTML body to
+        # prevent stored XSS via the customization panel.
+        from html import escape as _esc
+        logo_url_esc = _esc(theme.get("logo_url") or "", quote=True)
+        name_esc = _esc(display_name)
+        logo_tag = f'<img src="{logo_url_esc}" alt="" onerror="this.style.display=\'none\'"/>' if logo_url_esc else ""
+        brand_html = (
+            f'<div class="tf-brand-bar">{logo_tag}'
+            f'<span class="tf-brand-name">{name_esc}</span>'
+            f'<span class="tf-brand-poweredby">Built on Task Force</span>'
+            f'</div>'
+        )
+
     # Resolve a base URL the iframe can call back to. Same-origin works because
     # the frontend serves the iframe from /apps/:slug which calls /api/apps/...
     base = ""  # same-origin
     cfg_json = json.dumps({"app_id": proj["id"], "base": base, "token": token or ""})
     html = (
         _IFRAME_HTML_TEMPLATE
-        .replace("__APP_TITLE__", (proj.get("name") or "Agent") + " — Mini App")
+        .replace("__APP_TITLE__", (theme.get("display_name") or proj.get("name") or "Agent") + " — Mini App")
         .replace("__APP_ID__", proj["id"])
         .replace("__BASE__", base)
+        .replace("__THEME_PRIMARY__", theme["primary"])
+        .replace("__THEME_ACCENT__", theme["accent"])
+        .replace("__THEME_BG__", theme["background"])
+        .replace("__THEME_TEXT__", theme["text"])
+        .replace("__THEME_RADIUS__", radius_value)
+        .replace("__BRAND_BAR_HTML__", brand_html)
         .replace("__TF_CFG__", cfg_json.replace("</", "<\\/"))
         .replace("__APP_JSX__", app_jsx)
     )
