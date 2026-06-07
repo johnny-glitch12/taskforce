@@ -2231,51 +2231,58 @@ async def _startup_inner():
     except Exception as e:
         logger.warning(f"[startup] celery_app probe failed, falling back to APScheduler: {e}")
 
-    if not _celery_enabled:
-        # Start Supernova scheduler (runs daily at midnight)
-        scheduler.add_job(evaluate_supernovas, 'interval', hours=24, id='supernova_eval', replace_existing=True)
-
-    if not _celery_enabled:
-        # Hosting subscription janitor — runs hourly; flips cancelled/active rows whose
-        # current_period_end has passed to status='expired' so cap enforcement engages.
-        async def _expire_hosting_subs():
-            try:
-                from routes.hosting import expire_lapsed_subscriptions
-                n = await expire_lapsed_subscriptions(db)
-                if n:
-                    logger.info(f"[hosting-janitor] expired {n} lapsed subscription(s)")
-            except Exception as e:
-                logger.warning(f"[hosting-janitor] failed: {e}")
-        scheduler.add_job(_expire_hosting_subs, 'interval', hours=1, id='hosting_expire', replace_existing=True)
-
-        # Bounty Board janitor — hourly. Flips open→in_review when deadline lapses
-        # and auto-refunds the escrow back to the poster once the 7-day grace is up.
-        async def _expire_bounties():
-            try:
-                from routes.bounties import expire_lapsed_bounties
-                n = await expire_lapsed_bounties(db)
-                if n:
-                    logger.info(f"[bounty-janitor] processed {n} lapsed bounty/-ies")
-            except Exception as e:
-                logger.warning(f"[bounty-janitor] failed: {e}")
-        scheduler.add_job(_expire_bounties, 'interval', hours=1, id='bounty_expire', replace_existing=True)
-
-        # Scheduled deployment runs — every 5 minutes the tick scans
-        # user_bot_deployments.schedule.enabled and runs any whose next_run_at <= now.
-        async def _tick_scheduled_runs():
-            try:
-                from routes.schedules import tick_scheduled_runs
-                n = await tick_scheduled_runs(db)
-                if n:
-                    logger.info(f"[sched-tick] dispatched {n} scheduled run(s)")
-            except Exception as e:
-                logger.warning(f"[sched-tick] failed: {e}")
-        scheduler.add_job(_tick_scheduled_runs, 'interval', minutes=5,
-                          id='scheduled_runs_tick', replace_existing=True)
-
-    if not scheduler.running:
-        scheduler.start()
-        logger.info("APScheduler started (jobs: %d)" % len(scheduler.get_jobs()))
+    # ─── APScheduler TEMPORARILY DISABLED ────────────────────────────────────
+    # Disabled to isolate a silent crash that occurs ~20 seconds after startup.
+    # The log line "APScheduler started (jobs: 4)" was the last entry before the
+    # crash, making the scheduler the primary suspect. Re-enable once the root
+    # cause is confirmed to be elsewhere.
+    #
+    # if not _celery_enabled:
+    #     # Start Supernova scheduler (runs daily at midnight)
+    #     scheduler.add_job(evaluate_supernovas, 'interval', hours=24, id='supernova_eval', replace_existing=True)
+    #
+    # if not _celery_enabled:
+    #     # Hosting subscription janitor — runs hourly; flips cancelled/active rows whose
+    #     # current_period_end has passed to status='expired' so cap enforcement engages.
+    #     async def _expire_hosting_subs():
+    #         try:
+    #             from routes.hosting import expire_lapsed_subscriptions
+    #             n = await expire_lapsed_subscriptions(db)
+    #             if n:
+    #                 logger.info(f"[hosting-janitor] expired {n} lapsed subscription(s)")
+    #         except Exception as e:
+    #             logger.warning(f"[hosting-janitor] failed: {e}")
+    #     scheduler.add_job(_expire_hosting_subs, 'interval', hours=1, id='hosting_expire', replace_existing=True)
+    #
+    #     # Bounty Board janitor — hourly. Flips open→in_review when deadline lapses
+    #     # and auto-refunds the escrow back to the poster once the 7-day grace is up.
+    #     async def _expire_bounties():
+    #         try:
+    #             from routes.bounties import expire_lapsed_bounties
+    #             n = await expire_lapsed_bounties(db)
+    #             if n:
+    #                 logger.info(f"[bounty-janitor] processed {n} lapsed bounty/-ies")
+    #         except Exception as e:
+    #             logger.warning(f"[bounty-janitor] failed: {e}")
+    #     scheduler.add_job(_expire_bounties, 'interval', hours=1, id='bounty_expire', replace_existing=True)
+    #
+    #     # Scheduled deployment runs — every 5 minutes the tick scans
+    #     # user_bot_deployments.schedule.enabled and runs any whose next_run_at <= now.
+    #     async def _tick_scheduled_runs():
+    #         try:
+    #             from routes.schedules import tick_scheduled_runs
+    #             n = await tick_scheduled_runs(db)
+    #             if n:
+    #                 logger.info(f"[sched-tick] dispatched {n} scheduled run(s)")
+    #         except Exception as e:
+    #             logger.warning(f"[sched-tick] failed: {e}")
+    #     scheduler.add_job(_tick_scheduled_runs, 'interval', minutes=5,
+    #                       id='scheduled_runs_tick', replace_existing=True)
+    #
+    # if not scheduler.running:
+    #     scheduler.start()
+    #     logger.info("APScheduler started (jobs: %d)" % len(scheduler.get_jobs()))
+    logger.info("[startup] APScheduler skipped (disabled for crash isolation)")
 
     # Run initial evaluation
     try:
