@@ -13,7 +13,10 @@ load_dotenv()
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-_sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+if SUPABASE_URL and SUPABASE_KEY:
+    _sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+else:
+    _sb = None
 
 router = APIRouter()
 
@@ -25,6 +28,8 @@ def get_current_user():
 
 def log_security_event(executor_id: str, verdict: str, prompt_snippet: str, blocked: bool, metadata: dict = None):
     """Fire-and-forget logger for security events. Called from agent route."""
+    if _sb is None:
+        return
     try:
         _sb.table("security_events").insert({
             "event_id": str(uuid.uuid4()),
@@ -50,6 +55,9 @@ async def get_security_events(
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required.")
 
+    if _sb is None:
+        raise HTTPException(status_code=503, detail="Supabase is not configured.")
+
     query = _sb.table("security_events").select("*").order("created_at", desc=True).limit(limit)
 
     if verdict:
@@ -64,6 +72,9 @@ async def get_security_stats(user=Depends(get_current_user())):
     """Get aggregated security stats. Admin-only."""
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required.")
+
+    if _sb is None:
+        raise HTTPException(status_code=503, detail="Supabase is not configured.")
 
     all_events = _sb.table("security_events").select("verdict,blocked").execute()
     events = all_events.data or []
