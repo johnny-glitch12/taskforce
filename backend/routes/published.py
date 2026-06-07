@@ -15,7 +15,10 @@ load_dotenv()
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-_sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+if SUPABASE_URL and SUPABASE_KEY:
+    _sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+else:
+    _sb = None
 
 router = APIRouter()
 
@@ -48,6 +51,8 @@ class UpdateAgentRequest(BaseModel):
 # ──────────────────────────────────────────────
 @router.post("/published-agents/publish")
 async def publish_agent(req: PublishAgentRequest, user=Depends(get_current_user())):
+    if _sb is None:
+        raise HTTPException(status_code=503, detail="Supabase is not configured.")
     user_id = str(user.get("id", user.get("email", "unknown")))
     agent_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -86,6 +91,8 @@ async def publish_agent(req: PublishAgentRequest, user=Depends(get_current_user(
 # ──────────────────────────────────────────────
 @router.put("/published-agents/{agent_id}")
 async def update_published_agent(agent_id: str, req: UpdateAgentRequest, user=Depends(get_current_user())):
+    if _sb is None:
+        raise HTTPException(status_code=503, detail="Supabase is not configured.")
     user_id = str(user.get("id", user.get("email", "unknown")))
 
     existing = _sb.table("published_agents").select("*").eq("agent_id", agent_id).eq("user_id", user_id).execute()
@@ -132,6 +139,8 @@ async def update_published_agent(agent_id: str, req: UpdateAgentRequest, user=De
 # ──────────────────────────────────────────────
 @router.get("/published-agents")
 async def list_published_agents(user=Depends(get_current_user())):
+    if _sb is None:
+        raise HTTPException(status_code=503, detail="Supabase is not configured.")
     user_id = str(user.get("id", user.get("email", "unknown")))
     result = _sb.table("published_agents").select("*").eq("user_id", user_id).order("updated_at", desc=True).execute()
     return {"agents": result.data or []}
@@ -142,6 +151,8 @@ async def list_published_agents(user=Depends(get_current_user())):
 # ──────────────────────────────────────────────
 @router.get("/published-agents/{agent_id}")
 async def get_published_agent(agent_id: str, user=Depends(get_current_user())):
+    if _sb is None:
+        raise HTTPException(status_code=503, detail="Supabase is not configured.")
     user_id = str(user.get("id", user.get("email", "unknown")))
     result = _sb.table("published_agents").select("*").eq("agent_id", agent_id).eq("user_id", user_id).execute()
     if not result.data:
@@ -154,6 +165,8 @@ async def get_published_agent(agent_id: str, user=Depends(get_current_user())):
 # ──────────────────────────────────────────────
 @router.delete("/published-agents/{agent_id}")
 async def delete_published_agent(agent_id: str, user=Depends(get_current_user())):
+    if _sb is None:
+        raise HTTPException(status_code=503, detail="Supabase is not configured.")
     user_id = str(user.get("id", user.get("email", "unknown")))
     existing = _sb.table("published_agents").select("agent_id").eq("agent_id", agent_id).eq("user_id", user_id).execute()
     if not existing.data:
@@ -167,6 +180,8 @@ async def delete_published_agent(agent_id: str, user=Depends(get_current_user())
 # ──────────────────────────────────────────────
 @router.get("/creator/analytics")
 async def get_creator_analytics(user=Depends(get_current_user())):
+    if _sb is None:
+        raise HTTPException(status_code=503, detail="Supabase is not configured.")
     user_id = str(user.get("id", user.get("email", "unknown")))
 
     agents = _sb.table("published_agents").select("*").eq("user_id", user_id).execute()
