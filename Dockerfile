@@ -39,6 +39,19 @@ ENV PUBLIC_URL=/spa
 ARG REACT_APP_BACKEND_URL=""
 ENV REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL}
 
+# Supabase JS client requires both of these at runtime. CRA bakes them into
+# the bundle at BUILD time — if missing here, the deployed SPA crashes with
+# "supabaseUrl is required" on first render. Railway passes any variable
+# declared as ARG via --build-arg automatically when it's also set as a
+# service variable. Defaults to empty so local Docker builds without
+# Supabase configured still succeed (the SPA just won't have audit logging).
+ARG REACT_APP_SUPABASE_URL=""
+ARG REACT_APP_SUPABASE_ANON_KEY=""
+ARG REACT_APP_SITE_LOCKED="false"
+ENV REACT_APP_SUPABASE_URL=${REACT_APP_SUPABASE_URL}
+ENV REACT_APP_SUPABASE_ANON_KEY=${REACT_APP_SUPABASE_ANON_KEY}
+ENV REACT_APP_SITE_LOCKED=${REACT_APP_SITE_LOCKED}
+
 RUN npm run build
 
 
