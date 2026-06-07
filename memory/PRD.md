@@ -23,6 +23,29 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 65 (Feb 2026) — Smart Allowance Indicator + Cashback Celebration Toast (Prompt 25)
+
+**🟢 `GET /api/credits/balance` extended with two new keys**
+- `subscription_pct` (int 0..100) — percentage of the monthly subscription pool still available. For unlimited admins → 100; for fully-drained users → 0.
+- `cashback_lifetime` (int) — total cashback credits ever earned by the user. Surfaced from `users.cashback_earned_total`. The FE compares this across polls to detect a grant event and fire the celebration toast.
+
+**🟢 Smart Allowance ring + tooltip on the navbar CreditCounter**
+- A thin SVG arc (`data-testid='navbar-allowance-ring'`, r=8, circumference≈50.27) draws around the coin icon and fills clockwise based on `subscription_pct`. Matches the pill color (cyan healthy / amber low / rose critical). Suppressed for unlimited users — Infinity icon already conveys it.
+- Hovering the pill for 250ms surfaces a glassmorphic tooltip (`data-testid='navbar-allowance-tooltip'`) with the dual-pool breakdown: `Subscription N / M` + thin gradient bar at `subscription_pct` width, `Top-up K` (emerald), and a footer `Subscription resets {Month Day} · Top-up never expires`. Mouseout closes it. No tooltip for unlimited admins by design.
+
+**🟢 Cashback Celebration Toast**
+- `CreditProvider` (lib/credits.jsx) now keeps a `lastCashbackRef` and compares the latest `cashback_lifetime` to the previous value on every poll.
+- On first poll: silently captures the baseline. No toast (prevents phantom toasts when a user with existing cashback signs in).
+- On subsequent poll with `newCashback > previous`: fires `toast.success('+N cashback credits earned!')` with description "Spending cashback dropped into your wallet." + emerald Gift icon + 5s duration.
+- Baseline ref resets to `null` on token/user change so account-swap doesn't cross-talk.
+- Preserves the variable-ratio surprise loop while still giving users a clear visual acknowledgement when the silent perk fires.
+
+**Verified (iter65 part 2) — 100% PASS**
+- **4/4 new backend pytest** in `/app/backend/tests/test_iter65_smart_allowance.py`: balance response shape (new keys present), admin unlimited → pct=100, free user pct matches `subscription/subscription_max`, cashback grant lifts both `users.cashback_earned_total` AND the API's `cashback_lifetime`.
+- **7/7 redesign-history pytest regression** also green.
+- **Frontend e2e** (testing agent): ring + tooltip render with exact spec text ("SMART ALLOWANCE / Subscription 0 / 50 / Top-up 4,644 / Subscription resets Jul 3 · Top-up never expires"), mouseout closes, admin shows neither (Infinity replaces both). Cashback toast triggered live by bumping `users.cashback_earned_total` +7 via Mongo + dispatching window focus — sonner toast appeared with exact "+7 cashback credits earned!" text and Gift icon. No phantom toast during the first 5s of a session. Second consecutive +3 bump also toasts correctly.
+
+
 ### Phase 65 (Feb 2026) — Redesign-with-AI: History + Revert (Prompt 24)
 
 **🟢 Iterative UI refinement loop on hosted mini-apps**
