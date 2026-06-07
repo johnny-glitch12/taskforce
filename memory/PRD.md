@@ -23,6 +23,37 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 64 (Feb 2026) — Lazy Service Init + Railway Boot Crash Fix (Prompt 23)
+
+**🟢 Fixed Railway "Application failed to start" crash**
+- 3 route modules (`routes/security.py`, `routes/published.py`, `routes/agent.py`) used to create Supabase clients at **module-import time**: `_sb = create_client(SUPABASE_URL, SUPABASE_KEY)`. With env vars unset, `create_client(None, None)` raised an exception during `import server` → the entire FastAPI app failed to start before serving a single request. Pure Railway-killer.
+- **All 3 modules now use a lazy `get_supabase()` factory** that returns `None` when `SUPABASE_URL` / `SUPABASE_KEY` aren't configured. Calls to those endpoints now return HTTP 503 ("Service not configured") instead of crashing the server. Internal log writers (e.g. `log_security_event`) silently no-op.
+
+**🟢 Hardened required-env-var validation**
+- `server.py` now raises clear `RuntimeError` messages for the two truly REQUIRED env vars:
+  - `MONGO_URL is required. Set it in your environment or .env file.`
+  - `JWT_SECRET is required. Generate one with: python -c "import secrets; print(secrets.token_urlsafe(32))"`
+- `DB_NAME` made optional with default `'taskforce'` (was `os.environ['DB_NAME']` → KeyError if missing).
+
+**🟢 Startup status banner**
+- New `check_env()` function runs once on import, logs:
+  - `[startup] Required env OK: MONGO_URL, JWT_SECRET, DB_NAME=…`
+  - `[startup] Configured optional services (N): [STRIPE_API_KEY, RESEND_API_KEY, …]`
+  - `[startup] Disabled — env vars not set (N): [REDIS_URL, FERNET_KEY, …]`
+- Optional services tracked: `STRIPE_API_KEY`, `STRIPE_SECRET_KEY`, `RESEND_API_KEY`, `SUPABASE_URL`, `REDIS_URL`, `CELERY_BROKER_URL`, `FERNET_KEY`, `EMERGENT_LLM_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`/`GEMINI_API_KEY`, `AWS_ACCESS_KEY_ID`.
+
+**🟢 Audit pass**
+- Searched all `backend/**.py` for `os.environ[…]` bracket access (raises `KeyError` when missing). Found only `lib/agent_runner_harness.py:77` which is a WRITE not a read (`os.environ[k] = …`), so safe.
+- Stripe / Resend / Fernet / Celery initialisers were already either lazy-imported or safe-with-None (e.g. `stripe.api_key = None`).
+
+**Verified (iter64) — 7/7 pytest pass** in `/app/backend/tests/test_iter64_lazy_imports.py`:
+- All 3 supabase-dependent route modules lazy-init correctly (return `None` when env unset, no crash on import)
+- `server.py` imports cleanly with only `MONGO_URL` + `JWT_SECRET` set
+- `server.py` raises a clear error when either required var is missing
+- Startup banner logs the expected summary
+- Live API endpoints still respond correctly post-fix (`/api/health` → 200, `/api/credits/balance` → admin balance, etc.)
+
+
 ### Phase 63 (Feb 2026) — UI Polish: Navbar + Academy + Marketplace + BountyBoard (Prompt 22)
 
 **🟢 Fix 1: Armory nav link no longer permanently cyan**

@@ -29,13 +29,22 @@ from fastapi import BackgroundTasks
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
+# MongoDB connection — REQUIRED env vars (fail fast with clear messages).
+mongo_url = os.environ.get('MONGO_URL')
+if not mongo_url:
+    raise RuntimeError(
+        "MONGO_URL is required. Set it in your environment or .env file."
+    )
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[os.environ.get('DB_NAME') or 'taskforce']
 
-# JWT config
-JWT_SECRET = os.environ['JWT_SECRET']
+# JWT config — REQUIRED.
+JWT_SECRET = os.environ.get('JWT_SECRET')
+if not JWT_SECRET:
+    raise RuntimeError(
+        "JWT_SECRET is required. Generate one with: "
+        "python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+    )
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 24
 
@@ -50,6 +59,36 @@ api_router = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+
+def check_env():
+    """Log which optional services are configured at startup. Required env
+    vars are already validated above (would raise RuntimeError before we
+    got here). This helper just gives operators a clear status banner."""
+    optional = {
+        "STRIPE_API_KEY":     bool(os.getenv("STRIPE_API_KEY")),
+        "STRIPE_SECRET_KEY":  bool(os.getenv("STRIPE_SECRET_KEY")),
+        "RESEND_API_KEY":     bool(os.getenv("RESEND_API_KEY")),
+        "SUPABASE_URL":       bool(os.getenv("SUPABASE_URL")),
+        "REDIS_URL":          bool(os.getenv("REDIS_URL")),
+        "CELERY_BROKER_URL":  bool(os.getenv("CELERY_BROKER_URL")),
+        "FERNET_KEY":         bool(os.getenv("FERNET_KEY")),
+        "EMERGENT_LLM_KEY":   bool(os.getenv("EMERGENT_LLM_KEY")),
+        "OPENAI_API_KEY":     bool(os.getenv("OPENAI_API_KEY")),
+        "ANTHROPIC_API_KEY":  bool(os.getenv("ANTHROPIC_API_KEY")),
+        "GOOGLE_API_KEY":     bool(os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")),
+        "AWS_ACCESS_KEY_ID":  bool(os.getenv("AWS_ACCESS_KEY_ID")),
+    }
+    configured = sorted([k for k, v in optional.items() if v])
+    missing = sorted([k for k, v in optional.items() if not v])
+    logger.info(f"[startup] Required env OK: MONGO_URL, JWT_SECRET, DB_NAME={os.environ.get('DB_NAME') or 'taskforce'}")
+    if configured:
+        logger.info(f"[startup] Configured optional services ({len(configured)}): {configured}")
+    if missing:
+        logger.warning(f"[startup] Disabled — env vars not set ({len(missing)}): {missing}")
+
+
+check_env()
 
 # Scheduler
 scheduler = AsyncIOScheduler()

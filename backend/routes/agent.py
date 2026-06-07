@@ -1,16 +1,19 @@
 """
 Agent Execution Engine — nidoai architecture on Supabase.
 Security layers: Semantic Firewall → Rate Limit → Concurrent Cap → Execute.
+
+Supabase is LAZY-initialised so the module imports cleanly without env vars;
+endpoints return 503 when called without configuration.
 """
 import os
 import uuid
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
-from supabase import create_client
 
 from lib.firewall import audit_prompt
 from lib.rate_limiter import check_rate_limit, check_concurrent_cap, mark_execution_active, mark_execution_done
@@ -18,11 +21,40 @@ from lib.compute_credits import check_compute_credits, increment_compute_usage
 from routes.security import log_security_event
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
-# ── Supabase ──
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-_sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+# ── Supabase (lazy) ──
+_sb = None
+_sb_init_attempted = False
+
+
+def get_supabase():
+    global _sb, _sb_init_attempted
+    if _sb is not None:
+        return _sb
+    if _sb_init_attempted:
+        return None
+    _sb_init_attempted = True
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
+    if not url or not key:
+        logger.warning("[agent] Supabase not configured — agent execution endpoints disabled")
+        return None
+    try:
+        from supabase import create_client  # noqa: WPS433
+        _sb = create_client(url, key)
+        return _sb
+    except Exception as exc:
+        logger.warning(f"[agent] Supabase init failed: {exc}")
+        return None
+
+
+def _sb_or_503():
+    sb = get_supabase()
+    if sb is None:
+        raise HTTPException(status_code=503, detail="Agent execution service not configured.")
+    return sb
+
 
 # ── LLM ──
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
@@ -111,7 +143,7 @@ async def run_agent(
     # ── All gates passed → Execute ──
     now = datetime.now(timezone.utc).isoformat()
 
-    _sb.table("agent_logs").insert({
+    _sb_or_503().table("agent_logs").insert({
         "log_id": log_id,
         "agent_id": req.agent_id,
         "executor_id": executor_id,
@@ -146,7 +178,7 @@ async def run_agent(
 # ──────────────────────────────────────────────
 @router.get("/agent-logs/{log_id}")
 async def get_agent_log(log_id: str, user=Depends(get_current_user())):
-    result = _sb.table("agent_logs").select("*").eq("log_id", log_id).execute()
+    result = _sb_or_503().table("agent_logs").select("*").eq("log_id", log_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Execution log not found.")
     row = result.data[0]
@@ -158,13 +190,16 @@ async def get_agent_log(log_id: str, user=Depends(get_current_user())):
 # WORKER: Agent Brain
 # ──────────────────────────────────────────────
 def _update_log(log_id: str, **fields):
+    sb = get_supabase()
+    if sb is None:
+        return  # Worker-side no-op when Supabase isn't configured.
     now = datetime.now(timezone.utc).isoformat()
-    current = _sb.table("agent_logs").select("terminal_history").eq("log_id", log_id).execute()
+    current = sb.table("agent_logs").select("terminal_history").eq("log_id", log_id).execute()
     history = current.data[0]["terminal_history"] if current.data else []
     if "message" in fields:
         ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
         history.append(f"[{ts}] {fields['message']}")
-    _sb.table("agent_logs").update({
+    sb.table("agent_logs").update({
         **fields,
         "terminal_history": history,
         "updated_at": now,

@@ -1,21 +1,53 @@
 """
 Published Agents — Save Node Coding manifests to Supabase with version control.
 Provides CRUD for published agents + creator analytics.
+
+Supabase is LAZY-initialised — the module imports cleanly even when env vars
+aren't set. Endpoints return 503 when called without configuration.
 """
 import os
 import uuid
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel, Field
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from dotenv import load_dotenv
-from supabase import create_client
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-_sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+_sb = None
+_sb_init_attempted = False
+
+
+def get_supabase():
+    global _sb, _sb_init_attempted
+    if _sb is not None:
+        return _sb
+    if _sb_init_attempted:
+        return None
+    _sb_init_attempted = True
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
+    if not url or not key:
+        logger.warning("[published] Supabase not configured — published-agents endpoints disabled")
+        return None
+    try:
+        from supabase import create_client  # noqa: WPS433
+        _sb = create_client(url, key)
+        return _sb
+    except Exception as exc:
+        logger.warning(f"[published] Supabase init failed: {exc}")
+        return None
+
+
+def _sb_or_503():
+    sb = get_supabase()
+    if sb is None:
+        raise HTTPException(status_code=503, detail="Published-agents service not configured.")
+    return sb
+
 
 router = APIRouter()
 
@@ -74,7 +106,7 @@ async def publish_agent(req: PublishAgentRequest, user=Depends(get_current_user(
         "updated_at": now,
     }
 
-    result = _sb.table("published_agents").insert(doc).execute()
+    result = _sb_or_503().table("published_agents").insert(doc).execute()
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to publish agent.")
 
@@ -88,7 +120,8 @@ async def publish_agent(req: PublishAgentRequest, user=Depends(get_current_user(
 async def update_published_agent(agent_id: str, req: UpdateAgentRequest, user=Depends(get_current_user())):
     user_id = str(user.get("id", user.get("email", "unknown")))
 
-    existing = _sb.table("published_agents").select("*").eq("agent_id", agent_id).eq("user_id", user_id).execute()
+    sb = _sb_or_503()
+    existing = sb.table("published_agents").select("*").eq("agent_id", agent_id).eq("user_id", user_id).execute()
     if not existing.data:
         raise HTTPException(status_code=404, detail="Agent not found or not owned by you.")
 
@@ -122,7 +155,7 @@ async def update_published_agent(agent_id: str, req: UpdateAgentRequest, user=De
         })
         updates["version_history"] = history
 
-    _sb.table("published_agents").update(updates).eq("agent_id", agent_id).execute()
+    sb.table("published_agents").update(updates).eq("agent_id", agent_id).execute()
 
     return {"success": True, "agent_id": agent_id, "version": new_version}
 
@@ -133,7 +166,7 @@ async def update_published_agent(agent_id: str, req: UpdateAgentRequest, user=De
 @router.get("/published-agents")
 async def list_published_agents(user=Depends(get_current_user())):
     user_id = str(user.get("id", user.get("email", "unknown")))
-    result = _sb.table("published_agents").select("*").eq("user_id", user_id).order("updated_at", desc=True).execute()
+    result = _sb_or_503().table("published_agents").select("*").eq("user_id", user_id).order("updated_at", desc=True).execute()
     return {"agents": result.data or []}
 
 
@@ -143,7 +176,7 @@ async def list_published_agents(user=Depends(get_current_user())):
 @router.get("/published-agents/{agent_id}")
 async def get_published_agent(agent_id: str, user=Depends(get_current_user())):
     user_id = str(user.get("id", user.get("email", "unknown")))
-    result = _sb.table("published_agents").select("*").eq("agent_id", agent_id).eq("user_id", user_id).execute()
+    result = _sb_or_503().table("published_agents").select("*").eq("agent_id", agent_id).eq("user_id", user_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Agent not found.")
     return result.data[0]
@@ -155,10 +188,11 @@ async def get_published_agent(agent_id: str, user=Depends(get_current_user())):
 @router.delete("/published-agents/{agent_id}")
 async def delete_published_agent(agent_id: str, user=Depends(get_current_user())):
     user_id = str(user.get("id", user.get("email", "unknown")))
-    existing = _sb.table("published_agents").select("agent_id").eq("agent_id", agent_id).eq("user_id", user_id).execute()
+    sb = _sb_or_503()
+    existing = sb.table("published_agents").select("agent_id").eq("agent_id", agent_id).eq("user_id", user_id).execute()
     if not existing.data:
         raise HTTPException(status_code=404, detail="Agent not found.")
-    _sb.table("published_agents").delete().eq("agent_id", agent_id).execute()
+    sb.table("published_agents").delete().eq("agent_id", agent_id).execute()
     return {"success": True, "message": "Agent deleted."}
 
 
@@ -169,7 +203,7 @@ async def delete_published_agent(agent_id: str, user=Depends(get_current_user())
 async def get_creator_analytics(user=Depends(get_current_user())):
     user_id = str(user.get("id", user.get("email", "unknown")))
 
-    agents = _sb.table("published_agents").select("*").eq("user_id", user_id).execute()
+    agents = _sb_or_503().table("published_agents").select("*").eq("user_id", user_id).execute()
     agent_list = agents.data or []
 
     total_agents = len(agent_list)
