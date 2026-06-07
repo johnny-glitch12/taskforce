@@ -8,11 +8,21 @@
  */
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, Loader2, Code2, RefreshCw, Wand2, Activity, ExternalLink, Send, Share2, Copy, Globe, Lock } from "lucide-react";
+import { ChevronLeft, Loader2, Code2, RefreshCw, Wand2, Activity, ExternalLink, Send, Share2, Copy, Globe, Lock, History, Undo2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/App";
 
 const API = process.env.REACT_APP_BACKEND_URL || "";
+
+// Quick-prompt suggestions for the Redesign panel — clicking pre-fills the textarea.
+const REDESIGN_SUGGESTIONS = [
+  "Make it darker with a moody black & cyan palette",
+  "Add a sidebar with quick navigation links",
+  "Switch the layout to a card grid with 3 columns",
+  "Bigger headings and more breathing room between sections",
+  "Add a stats row showing total runs at the top",
+  "Use a softer pastel color scheme with rounded corners",
+];
 
 export default function AppViewer() {
   const { slug } = useParams();
@@ -25,6 +35,8 @@ export default function AppViewer() {
   const [showRedesign, setShowRedesign] = useState(false);
   const [redesignPrompt, setRedesignPrompt] = useState("");
   const [redesigning, setRedesigning] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [reverting, setReverting] = useState(null); // version_id while in-flight
   const [runs, setRuns] = useState([]);
   const [tab, setTab] = useState("preview"); // preview | runs
   const [showShare, setShowShare] = useState(false);
@@ -51,6 +63,15 @@ export default function AppViewer() {
       .catch(() => {});
   }, [token, slug, tab, iframeBust]);
 
+  // Fetch redesign history whenever the panel opens OR after a successful redesign/revert.
+  useEffect(() => {
+    if (!token || !slug || !showRedesign) return;
+    fetch(`${API}/api/apps/${slug}/redesign-history`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.ok ? r.json() : { history: [] })
+      .then((d) => setHistory(d.history || []))
+      .catch(() => setHistory([]));
+  }, [token, slug, showRedesign, iframeBust]);
+
   const handleRedesign = async () => {
     if (redesignPrompt.trim().length < 5) {
       toast.error("Describe the change you want first.");
@@ -65,17 +86,41 @@ export default function AppViewer() {
       });
       const j = await r.json();
       if (!r.ok) {
-        toast.error(j.detail || `Redesign failed (${r.status})`);
+        toast.error(j.detail || j.error || `Redesign failed (${r.status})`);
         return;
       }
-      toast.success(`UI updated`);
-      setShowRedesign(false);
+      const credits = j.credits_charged ?? 0;
+      toast.success(credits > 0 ? `UI updated · ${credits} cr` : "UI updated");
       setRedesignPrompt("");
       setIframeBust((n) => n + 1);
     } catch {
       toast.error("Network error.");
     } finally {
       setRedesigning(false);
+    }
+  };
+
+  const handleRevert = async (versionId, promptPreview) => {
+    if (!versionId) return;
+    if (!window.confirm(`Revert UI to the version before:\n\n"${(promptPreview || "").slice(0, 120)}"`)) return;
+    setReverting(versionId);
+    try {
+      const r = await fetch(`${API}/api/apps/${slug}/revert`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ version_id: versionId }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        toast.error(j.detail || `Revert failed (${r.status})`);
+        return;
+      }
+      toast.success("UI reverted — refresh preview to see changes");
+      setIframeBust((n) => n + 1);
+    } catch {
+      toast.error("Network error.");
+    } finally {
+      setReverting(null);
     }
   };
 
@@ -183,27 +228,123 @@ export default function AppViewer() {
         </div>
 
         {showRedesign && (
-          <div className="border-t" style={{ borderColor: "var(--border)" }}>
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-2 flex-wrap">
-              <input
-                data-testid="app-viewer-redesign-input"
-                type="text"
-                value={redesignPrompt}
-                onChange={(e) => setRedesignPrompt(e.target.value)}
-                placeholder="e.g. Make the header purple and add a stats row above the input"
-                className="flex-1 min-w-[260px] px-3 py-1.5 rounded-sm text-[12px] font-mono"
-                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-                disabled={redesigning}
-              />
-              <button
-                data-testid="app-viewer-redesign-submit"
-                onClick={handleRedesign}
-                disabled={redesigning}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-sm bg-purple-400 text-black text-[10px] font-bold uppercase tracking-widest font-mono disabled:opacity-50"
-              >
-                {redesigning ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
-                Apply
-              </button>
+          <div data-testid="app-viewer-redesign-panel" className="border-t" style={{ borderColor: "var(--border)" }}>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 space-y-4">
+              {/* Header row */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <Wand2 size={14} className="text-purple-300" />
+                <span className="text-[11px] font-mono uppercase tracking-[0.18em] text-purple-300">
+                  Redesign with AI
+                </span>
+                <span className="text-[10px] font-mono t-text-mute">
+                  Re-runs the UI Builder. Costs a few credits per call.
+                </span>
+              </div>
+
+              {/* Quick suggestion chips */}
+              <div data-testid="redesign-suggestions" className="flex items-center gap-2 flex-wrap">
+                <Sparkles size={11} className="t-text-mute" />
+                <span className="text-[10px] font-mono uppercase tracking-wider t-text-mute">Try:</span>
+                {REDESIGN_SUGGESTIONS.map((s, i) => (
+                  <button
+                    key={i}
+                    data-testid={`redesign-suggestion-${i}`}
+                    onClick={() => setRedesignPrompt(s)}
+                    disabled={redesigning}
+                    className="px-2.5 py-1 rounded-sm text-[11px] font-mono hover:bg-purple-400/10 hover:text-purple-200 disabled:opacity-40 transition-colors"
+                    style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-sub)" }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+
+              {/* Multi-line textarea + submit */}
+              <div className="flex items-start gap-2 flex-wrap">
+                <textarea
+                  data-testid="app-viewer-redesign-input"
+                  value={redesignPrompt}
+                  onChange={(e) => setRedesignPrompt(e.target.value)}
+                  placeholder="Describe the change you want — e.g. 'Add a dark header with a logo, make the run button purple, and show a stats row with total runs.'"
+                  rows={3}
+                  className="flex-1 min-w-[260px] px-3 py-2 rounded-sm text-[12px] font-mono"
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)", resize: "vertical" }}
+                  disabled={redesigning}
+                  onKeyDown={(e) => {
+                    // Cmd/Ctrl+Enter submits
+                    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                      e.preventDefault();
+                      handleRedesign();
+                    }
+                  }}
+                />
+                <button
+                  data-testid="app-viewer-redesign-submit"
+                  onClick={handleRedesign}
+                  disabled={redesigning || redesignPrompt.trim().length < 5}
+                  className="inline-flex items-center gap-1 px-4 py-2 rounded-sm bg-purple-400 text-black text-[10px] font-bold uppercase tracking-widest font-mono disabled:opacity-50 self-stretch"
+                >
+                  {redesigning ? (
+                    <>
+                      <Loader2 size={11} className="animate-spin" /> Redesigning…
+                    </>
+                  ) : (
+                    <>
+                      <Send size={11} /> Apply
+                    </>
+                  )}
+                </button>
+              </div>
+              {redesigning && (
+                <div data-testid="redesign-progress" className="text-[11px] font-mono t-text-sub flex items-center gap-2">
+                  <Loader2 size={11} className="animate-spin text-purple-300" />
+                  Building new UI with Gemini Flash — usually 5-15s. Hang tight…
+                </div>
+              )}
+
+              {/* History strip */}
+              {history.length > 0 && (
+                <div data-testid="redesign-history" className="pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <History size={12} className="t-text-mute" />
+                    <span className="text-[10px] font-mono uppercase tracking-[0.18em] t-text-mute">
+                      Recent versions · {history.length}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-2">
+                    {history.map((h) => (
+                      <div
+                        key={h.version_id}
+                        data-testid={`history-row-${h.version_id}`}
+                        className="flex items-center gap-3 px-2 py-1.5 rounded-sm"
+                        style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+                      >
+                        <span className="text-[10px] font-mono t-text-mute whitespace-nowrap">
+                          {(h.created_at || "").slice(5, 16).replace("T", " ")}
+                        </span>
+                        <span className="text-[11px] t-text-sub flex-1 min-w-0 truncate" title={h.prompt}>
+                          {h.prompt || "(no prompt)"}
+                        </span>
+                        <button
+                          data-testid={`history-revert-${h.version_id}`}
+                          onClick={() => handleRevert(h.version_id, h.prompt)}
+                          disabled={!!reverting}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-mono uppercase tracking-wider hover:bg-purple-400/10 hover:text-purple-200 disabled:opacity-40"
+                          style={{ color: "var(--text-sub)", border: "1px solid var(--border)" }}
+                          title="Restore the UI as it was before this prompt"
+                        >
+                          {reverting === h.version_id ? (
+                            <Loader2 size={10} className="animate-spin" />
+                          ) : (
+                            <Undo2 size={10} />
+                          )}
+                          Revert
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

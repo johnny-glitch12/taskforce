@@ -70,6 +70,14 @@ class AppRedesignRequest(BaseModel):
     prompt: str = Field(min_length=5, max_length=2000)
 
 
+class AppRevertRequest(BaseModel):
+    version_id: str = Field(min_length=1, max_length=64)
+
+
+# Max number of redesign snapshots to retain per app (FIFO eviction).
+REDESIGN_HISTORY_CAP = 10
+
+
 # ─── Listing endpoints ─────────────────────────────────
 @router.get("/my-apps")
 async def list_my_apps(user=Depends(get_current_user())):
@@ -493,9 +501,23 @@ async def redesign_app(app_id: str, body: AppRedesignRequest, user=Depends(get_c
     new_jsx = parsed.get("app_jsx") or current_jsx
     new_manifest = parsed.get("manifest") or frontend.get("manifest", {})
 
+    # Push the OLD version into history (FIFO cap) BEFORE overwriting.
+    # Lets the user revert if the AI's new design is worse.
+    history = list(frontend.get("history") or [])
+    if current_jsx:
+        history.append({
+            "version_id": uuid.uuid4().hex[:12],
+            "prompt": body.prompt,
+            "app_jsx": current_jsx,
+            "manifest": frontend.get("manifest", {}),
+            "created_at": _now_iso(),
+        })
+        # Keep only the most-recent N entries to bound document size.
+        history = history[-REDESIGN_HISTORY_CAP:]
+
     await db.bot_projects.update_one(
         {"id": proj["id"]},
-        {"$set": {"frontend": {"app_jsx": new_jsx, "manifest": new_manifest},
+        {"$set": {"frontend": {"app_jsx": new_jsx, "manifest": new_manifest, "history": history},
                   "updated_at": _now_iso()}},
     )
 
@@ -512,5 +534,79 @@ async def redesign_app(app_id: str, body: AppRedesignRequest, user=Depends(get_c
         "ok": True,
         "frontend": {"app_jsx": new_jsx, "manifest": new_manifest},
         "balance_remaining": debit.get("balance"),
+        "credits_charged": debit.get("credits_charged", 0),
         "duration_ms": duration_ms,
+        "history_count": len(history),
     }
+
+
+# ─── Redesign history + revert ─────────────────────────
+@router.get("/apps/{app_id}/redesign-history")
+async def app_redesign_history(app_id: str, user=Depends(get_current_user())):
+    """Return the most recent redesign snapshots (newest-first) so the user can
+    preview prompts + revert to a prior UI version."""
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    proj = await db.bot_projects.find_one(
+        {"$or": [{"id": app_id}, {"app_slug": app_id}], "user_id": user_id, "has_ui": True},
+        {"_id": 0, "frontend.history": 1},
+    )
+    if not proj:
+        raise HTTPException(status_code=404, detail="App not found.")
+    history = list(((proj.get("frontend") or {}).get("history")) or [])
+    # Strip the full JSX from the listing payload — too heavy to ship 10× on every fetch.
+    # The /revert call will use it server-side.
+    summary = []
+    for entry in reversed(history):  # newest first
+        summary.append({
+            "version_id": entry.get("version_id"),
+            "prompt": entry.get("prompt") or "",
+            "created_at": entry.get("created_at"),
+            "jsx_size": len(entry.get("app_jsx") or ""),
+        })
+    return {"history": summary, "count": len(summary), "cap": REDESIGN_HISTORY_CAP}
+
+
+@router.post("/apps/{app_id}/revert")
+async def app_revert(app_id: str, body: AppRevertRequest, user=Depends(get_current_user())):
+    """Restore a previous redesign version. Pushes the CURRENT design into history
+    too, so revert is itself reversible. No credit charge — pure DB swap."""
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    proj = await db.bot_projects.find_one(
+        {"$or": [{"id": app_id}, {"app_slug": app_id}], "user_id": user_id, "has_ui": True},
+        {"_id": 0},
+    )
+    if not proj:
+        raise HTTPException(status_code=404, detail="App not found.")
+    frontend = proj.get("frontend") or {}
+    history = list(frontend.get("history") or [])
+    target = next((h for h in history if h.get("version_id") == body.version_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Version not found in history.")
+
+    current_jsx = frontend.get("app_jsx") or ""
+    # Replace the targeted history slot with the CURRENT design so revert is reversible.
+    new_history = []
+    for h in history:
+        if h.get("version_id") == body.version_id:
+            new_history.append({
+                "version_id": uuid.uuid4().hex[:12],
+                "prompt": f"Revert ↔ {target.get('prompt', '')[:120]}",
+                "app_jsx": current_jsx,
+                "manifest": frontend.get("manifest", {}),
+                "created_at": _now_iso(),
+            })
+        else:
+            new_history.append(h)
+    new_history = new_history[-REDESIGN_HISTORY_CAP:]
+
+    await db.bot_projects.update_one(
+        {"id": proj["id"]},
+        {"$set": {"frontend": {
+            "app_jsx": target.get("app_jsx") or current_jsx,
+            "manifest": target.get("manifest") or frontend.get("manifest", {}),
+            "history": new_history,
+        }, "updated_at": _now_iso()}},
+    )
+    return {"ok": True, "reverted_to": body.version_id}

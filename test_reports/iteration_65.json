@@ -1,0 +1,76 @@
+{
+  "summary": "Iter65 — Redesign-with-AI: history + revert. Backend pytest 7/7 PASS, frontend UI fully verified end-to-end (suggestion chips, multi-line textarea, submit disabled <5 chars, history strip with per-row Revert, real revert POST returns 200 with {ok:true, reverted_to:<vid>}, and the revert pushed the current jsx back into history as a new row — confirming reversibility). Share + tabs regression intact. Public-URL smoke checks (credits/balance, exchange/listings, waitlist) all 200.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter65_redesign_history.py",
+    "/app/test_reports/pytest/iter65.xml",
+    "/app/test_reports/iter65_redesign_panel.png"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AppViewer.jsx is ~548 lines — approaching the 700-line split threshold but still reasonable. Consider extracting the Redesign panel (lines 230-350) into a sub-component if it grows further.",
+    "lead-responder-official mini-app preview surfaces a Tailwind CDN + Babel-standalone in-browser-transform warning. Expected for the sandbox iframe runtime, but worth noting — those are dev-only warnings.",
+    "Cloudflare beacon script blocked by the page's CSP (third-party analytics; non-blocking). Not introduced by this PR.",
+    "redesign-history endpoint correctly strips full app_jsx from the listing payload and returns only jsx_size + metadata — good payload hygiene."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "100% (7/7 + 4/4 smoke)", "frontend": "100%" },
+  "test_credentials": "admin@nova.ai / admin123 — works.",
+  "seed_data_creation": "Temporarily pushed 2 history entries into bot_projects.frontend.history for lead-responder-official, exercised the revert (which appended a 3rd 'Revert -- Add a sidebar nav' entry containing the prior jsx), then re-ran /app/backend/scripts/seed_official_agents.py to restore Lead Responder's seeded state. DB is clean.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Redesign panel renders below the AppViewer header when [data-testid=app-viewer-redesign-toggle] is clicked. To exercise the history strip without a real LLM call, push entries directly: db.bot_projects.update_one({'app_slug': SLUG}, {'$push': {'frontend.history': {version_id, prompt, app_jsx, manifest, created_at}}}). The revert flow uses window.confirm — Playwright must register a 'dialog' handler BEFORE clicking [data-testid=history-revert-{vid}]. After running, re-seed via /app/backend/scripts/seed_official_agents.py to leave Lead Responder pristine.",
+  "verification_details": {
+    "backend_pytest": {
+      "command": "pytest /app/backend/tests/test_iter65_redesign_history.py -v",
+      "result": "7 passed in 0.70s",
+      "tests": [
+        "test_history_empty_by_default",
+        "test_history_returns_newest_first_no_jsx",
+        "test_revert_404_when_unknown_version",
+        "test_revert_restores_old_jsx_and_pushes_current_into_history",
+        "test_revert_requires_auth",
+        "test_history_requires_auth",
+        "test_history_cap_enforced"
+      ]
+    },
+    "public_url_smoke": {
+      "GET /api/credits/balance": "200",
+      "GET /api/exchange/listings": "200",
+      "POST /api/waitlist {source:academy}": "200",
+      "GET /api/apps/lead-responder-official/redesign-history (empty)": "200 -> {history:[], count:0, cap:10}",
+      "POST /api/apps/lead-responder-official/revert {version_id:doesnotexist}": "404",
+      "GET /api/apps/lead-responder-official/redesign-history (unauth)": "401",
+      "POST /api/apps/lead-responder-official/revert (unauth)": "401"
+    },
+    "frontend_redesign_panel": {
+      "panel_opens_on_toggle": true,
+      "suggestion_chips_0_to_5_render_with_correct_text": true,
+      "textarea_is_TEXTAREA_with_rows_3": true,
+      "submit_disabled_when_empty": true,
+      "submit_disabled_when_3_chars": true,
+      "submit_enabled_when_>=5_chars": true,
+      "suggestion_chip_click_populates_textarea": "Add a sidebar with quick navigation links",
+      "history_strip_renders_when_history_exists": true,
+      "history_row_testid_pattern": "history-row-{version_id}",
+      "history_revert_testid_pattern": "history-revert-{version_id}",
+      "confirm_dialog_appears_on_revert_click": true,
+      "revert_POST_status": 200,
+      "revert_response_body": "{\"ok\":true,\"reverted_to\":\"iter65-ad349040\"}",
+      "after_revert_history_grew_by_one_entry_containing_prior_jsx": true,
+      "iframe_content_updated_to_reverted_jsx": "iter65-h2 marker visible"
+    },
+    "regression_share_tabs": {
+      "app-viewer-share-toggle opens panel": true,
+      "app-share-public present": true,
+      "app-share-private present": true,
+      "app-viewer-tab-preview, app-viewer-tab-runs present": true,
+      "app-viewer-iframe rendered": true
+    }
+  }
+}
