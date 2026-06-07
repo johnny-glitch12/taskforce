@@ -7,7 +7,7 @@ import NotificationBell from "@/components/NotificationBell";
 import CreditCounter from "@/components/CreditCounter";
 
 const CENTER_LINKS_PUBLIC = [
-  { to: "/armory", label: "The Armory", accent: true },
+  { to: "/armory", label: "The Armory", accent: true, beta: true },
   { to: "/exchange", label: "The Exchange" },
   { to: "/bounties", label: "Bounty Board" },
   { to: "/leaderboard", label: "Leaderboard", soon: true },
@@ -16,7 +16,7 @@ const CENTER_LINKS_PUBLIC = [
 ];
 
 const CENTER_LINKS_ADMIN = [
-  { to: "/armory", label: "The Armory", accent: true },
+  { to: "/armory", label: "The Armory", accent: true, beta: true },
   { to: "/exchange", label: "The Exchange" },
   { to: "/bounties", label: "Bounty Board" },
   { to: "/leaderboard", label: "Leaderboard", soon: true },
@@ -140,24 +140,18 @@ export default function Navbar() {
       className="sticky top-0 z-50 backdrop-blur-xl"
       style={{ backgroundColor: "var(--bg-nav)", borderBottom: "1px solid var(--border)" }}
     >
-      <div className={`${isArmory ? "px-5" : "max-w-7xl mx-auto px-6 lg:px-8"} flex items-center justify-between h-[52px]`}>
-        {/* ── Logo ── */}
+      <div className={`${isArmory ? "px-4 lg:px-5" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"} flex items-center gap-4 lg:gap-6 h-[52px]`}>
+        {/* ── Logo (Left) ── */}
         <Link to="/" data-testid="navbar-logo" className="flex items-center gap-2 group shrink-0">
           <div className="w-[7px] h-[7px] bg-cyan-400" />
-          <span className="text-[13px] font-bold tracking-[0.1em] uppercase font-mono t-text">
+          <span className="text-[13px] font-bold tracking-[0.1em] uppercase font-mono t-text whitespace-nowrap">
             Task<span className="text-cyan-400">Force</span>
-          </span>
-          <span
-            data-testid="beta-badge"
-            className="ml-1 px-1.5 py-0.5 text-[8px] font-bold tracking-[0.15em] uppercase font-mono rounded-sm text-cyan-300"
-            style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.35)' }}
-          >
-            Beta
           </span>
         </Link>
 
-        {/* ── Center Links (Desktop) ── */}
-        <div className="hidden md:flex items-center gap-1 lg:gap-2 absolute left-1/2 -translate-x-1/2">
+        {/* ── Center Links (Desktop) ── flex-1 distributes remaining width evenly,
+            no absolute positioning so the right-side controls never overlap. */}
+        <div className="hidden md:flex flex-1 items-center justify-center gap-0.5 lg:gap-1 xl:gap-2 min-w-0">
           {(user?.role === "admin" ? CENTER_LINKS_ADMIN : CENTER_LINKS_PUBLIC).map((link) => {
             const isActive = location.pathname === link.to;
             return (
@@ -166,14 +160,23 @@ export default function Navbar() {
                 to={link.to}
                 data-testid={`nav-link-${link.label.toLowerCase().replace(/\s/g, "-")}`}
                 data-active={isActive || undefined}
-                className={`relative px-3 lg:px-4 py-1.5 text-[11px] tracking-[0.1em] uppercase font-medium font-mono transition-colors duration-200 flex items-center gap-1.5 ${
+                className={`relative px-2 lg:px-3 xl:px-4 py-1.5 text-[10px] lg:text-[11px] tracking-[0.08em] lg:tracking-[0.1em] uppercase font-medium font-mono transition-colors duration-200 flex items-center gap-1 lg:gap-1.5 whitespace-nowrap ${
                   isActive
                     ? "text-cyan-400"
                     : "text-zinc-500 hover:text-cyan-400"
                 }`}
               >
                 {link.accent && <Sparkles size={9} className={isActive ? "text-cyan-400" : "text-cyan-500/60"} />}
-                {link.label}
+                <span>{link.label}</span>
+                {link.beta && (
+                  <span
+                    data-testid={`nav-beta-${link.label.toLowerCase().replace(/\s/g, "-")}`}
+                    className="px-1 py-0.5 text-[7px] tracking-[0.1em] font-bold rounded-sm text-cyan-300"
+                    style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.35)' }}
+                  >
+                    BETA
+                  </span>
+                )}
                 {link.soon && (
                   <span
                     className="px-1 py-0.5 text-[7px] tracking-[0.1em] font-bold rounded-sm text-amber-300"
@@ -182,18 +185,10 @@ export default function Navbar() {
                     SOON
                   </span>
                 )}
-                {link.accent && (
-                  <span
-                    className="px-1 py-0.5 text-[7px] tracking-[0.1em] font-bold rounded-sm text-cyan-300"
-                    style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.35)' }}
-                  >
-                    NEW
-                  </span>
-                )}
                 {isActive && (
                   <span
                     aria-hidden="true"
-                    className="absolute left-3 right-3 -bottom-0.5 h-px bg-cyan-400"
+                    className="absolute left-2 right-2 lg:left-3 lg:right-3 -bottom-0.5 h-px bg-cyan-400"
                     style={{ boxShadow: "0 0 6px rgba(34,211,238,0.5)" }}
                   />
                 )}
@@ -203,7 +198,7 @@ export default function Navbar() {
         </div>
 
         {/* ── Right Side (Desktop) ── */}
-        <div className="hidden md:flex items-center gap-3 shrink-0">
+        <div className="hidden md:flex items-center gap-2 lg:gap-3 shrink-0">
           <button
             data-testid="theme-toggle-btn"
             onClick={toggle}

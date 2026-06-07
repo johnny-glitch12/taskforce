@@ -23,6 +23,31 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 66 (Feb 2026) — Navbar Polish & Branded Browser Tab (Prompt 26)
+
+**🟢 Browser tab finally says "Task Force"**
+- `/app/frontend/public/index.html` — `<title>` changed from `"Nova AI"` → `"Task Force"`.
+- Added inline `<link rel="icon" type="image/svg+xml" href="/favicon.svg" />` referencing a new minimalist SVG favicon (`/app/frontend/public/favicon.svg`) that matches the navbar's mono aesthetic — dark rounded square + cyan accent block + white "TF" monogram.
+- Added `/app/frontend/public/manifest.json` for PWA support so iOS/Android home-screen installs pick up the right name + icon + theme color (`#0a0a0a`).
+- Updated meta description from generic Nova AI copy to "Task Force AI — Build, deploy and monetize autonomous AI agents on a credit-powered marketplace."
+
+**🟢 Navbar layout no longer collides with the credit counter**
+- Removed the legacy `absolute left-1/2 -translate-x-1/2` positioning on the center nav links. That layout caused the credit counter (right side) to overlap with the rightmost nav links ("Pricing") when the credit value grew enough characters or the viewport narrowed.
+- Replaced with a true **3-column flex** layout: logo (`shrink-0`) — center links (`flex-1 justify-center`) — right controls (`shrink-0`). The center column flexes to use whatever space remains, with `min-w-0` so it can shrink, and `gap-0.5 lg:gap-1 xl:gap-2` so packing is denser on tablet sizes.
+- All nav labels now `whitespace-nowrap` so they never wrap vertically. Bounding-box-verified at 1440px: 369.5px gap between the last nav link and the credit counter — zero overlap regression possible.
+- Per-link padding scaled responsively (`px-2 lg:px-3 xl:px-4`) and font-size scales (`text-[10px] lg:text-[11px]`) so 6 nav items + theme + credits + bell + user avatar all fit on a single line down to ~1100px wide.
+
+**🟢 BETA badge moved from brand → Armory tab**
+- The brand text used to carry a "BETA" badge, which was confusing (the platform is in beta, but the brand isn't temporary). Moved the badge to the **Armory** nav link where it actually applies — the visual-node builder is the in-beta surface.
+- Added a `beta: true` flag on the Armory entries in `CENTER_LINKS_PUBLIC` + `CENTER_LINKS_ADMIN`. Rendering uses the same cyan-on-dark badge style for consistency. Old `data-testid="beta-badge"` retired; new `data-testid="nav-beta-the-armory"` added for testability.
+
+**Verified — self-test (screenshot + DOM probe)**
+- Bounding-box gap measured at 1440px viewport: 369.5px between `nav-link-pricing` and `navbar-credit-counter` (positive = no overlap).
+- `page.title()` returns `"Task Force"`.
+- `[data-testid="nav-beta-the-armory"]` count = 1; `[data-testid="beta-badge"]` count = 0.
+- Visual: single-line nav with `THE ARMORY [BETA] · THE EXCHANGE · BOUNTY BOARD · LEADERBOARD [SOON] · ACADEMY · PRICING` evenly distributed with the credit-counter + bell + user-menu cluster fitting cleanly on the right.
+
+
 ### Phase 65 (Feb 2026) — Smart Allowance Indicator + Cashback Celebration Toast (Prompt 25)
 
 **🟢 `GET /api/credits/balance` extended with two new keys**

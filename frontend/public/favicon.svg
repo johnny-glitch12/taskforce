@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Task Force monogram favicon — matches the navbar's cyan-on-dark mono aesthetic. -->
+  <rect width="32" height="32" fill="#0a0a0a" rx="4"/>
+  <rect x="3" y="3" width="5" height="5" fill="#22d3ee"/>
+  <text x="16" y="23" font-family="ui-monospace, 'JetBrains Mono', Menlo, monospace" font-weight="900" font-size="13" fill="#fafafa" text-anchor="middle" letter-spacing="0.5">TF</text>
+</svg>
