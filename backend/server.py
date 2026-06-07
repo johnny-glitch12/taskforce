@@ -631,27 +631,33 @@ async def scan_workflow(data: LinterScanRequest):
 
 async def evaluate_supernovas():
     logger.info("Running Supernova Evaluation Engine...")
-    creators = await db.creators.find({}, {"_id": 0}).to_list(100)
-    for creator in creators:
-        creator_agents = await db.agents.find({"creator_id": creator["id"]}, {"_id": 0}).to_list(100)
-        if not creator_agents:
-            continue
-        total_deploys = sum(a.get("deployCount", 0) for a in creator_agents)
-        avg_rating = sum(a.get("rating", 0) for a in creator_agents) / len(creator_agents)
-        avg_trust = sum(a.get("trustScore", 0) for a in creator_agents) / len(creator_agents)
-        total_reviews = sum(a.get("reviews", 0) for a in creator_agents)
+    try:
+        creators = await db.creators.find({}, {"_id": 0}).to_list(100)
+        for creator in creators:
+            try:
+                creator_agents = await db.agents.find({"creator_id": creator["id"]}, {"_id": 0}).to_list(100)
+                if not creator_agents:
+                    continue
+                total_deploys = sum(a.get("deployCount", 0) for a in creator_agents)
+                avg_rating = sum(a.get("rating", 0) for a in creator_agents) / len(creator_agents)
+                avg_trust = sum(a.get("trustScore", 0) for a in creator_agents) / len(creator_agents)
+                total_reviews = sum(a.get("reviews", 0) for a in creator_agents)
 
-        is_supernova = (
-            total_deploys >= 500
-            and avg_rating >= 4.7
-            and avg_trust >= 90
-            and total_reviews >= 50
-        )
-        await db.creators.update_one(
-            {"id": creator["id"]},
-            {"$set": {"is_supernova": is_supernova}}
-        )
-    logger.info("Supernova evaluation complete.")
+                is_supernova = (
+                    total_deploys >= 500
+                    and avg_rating >= 4.7
+                    and avg_trust >= 90
+                    and total_reviews >= 50
+                )
+                await db.creators.update_one(
+                    {"id": creator["id"]},
+                    {"$set": {"is_supernova": is_supernova}}
+                )
+            except Exception as e:
+                logger.exception(f"[supernova] Error evaluating creator '{creator.get('id')}': {e}")
+        logger.info("Supernova evaluation complete.")
+    except Exception as e:
+        logger.exception(f"[supernova] evaluate_supernovas failed: {e}")
 
 # ─── Seed Endpoint ───
 
@@ -2160,6 +2166,14 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
+    try:
+        await _startup_inner()
+    except Exception:
+        logger.exception("[startup] FATAL: unhandled exception during startup — app will be unstable")
+        raise
+
+
+async def _startup_inner():
     # Auto-seed on startup
     # Marketplace intentionally starts EMPTY (user adds real agents)
     # — Disabled auto-seed of mock agents.
@@ -2192,7 +2206,10 @@ async def startup():
         logger.info("CSDROP client user created")
 
     # Ensure csdrop_executions collection index
-    await db.csdrop_executions.create_index("user_id")
+    try:
+        await db.csdrop_executions.create_index("user_id")
+    except Exception as e:
+        logger.warning(f"[startup] csdrop_executions index creation failed: {e}")
 
     # Unconditional index creation — picks up new indexes on already-seeded DBs.
     try:
@@ -2261,7 +2278,10 @@ async def startup():
         logger.info("APScheduler started (jobs: %d)" % len(scheduler.get_jobs()))
 
     # Run initial evaluation
-    await evaluate_supernovas()
+    try:
+        await evaluate_supernovas()
+    except Exception as e:
+        logger.exception(f"[startup] Initial evaluate_supernovas() failed: {e}")
 
     # ─── Startup Health Check + Auto-Repair ───
     logger.info("Running environment health check...")
