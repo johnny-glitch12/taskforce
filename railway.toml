@@ -17,12 +17,12 @@ dockerfilePath = "./Dockerfile"
 # Web service entry point.
 # scripts/start.sh runs Uvicorn (FG) + optional inline Celery worker (BG).
 # Override via Railway dashboard if running worker as a separate service.
-startCommand = "bash scripts/start.sh"
+startCommand = "bash /app/scripts/start.sh"
 
 # Health probe — Railway considers the service unhealthy when /api/health
 # returns non-2xx for healthcheckTimeout seconds and triggers a redeploy.
 healthcheckPath = "/api/health"
-healthcheckTimeout = 300
+healthcheckTimeout = 30
 
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
