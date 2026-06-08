@@ -23,6 +23,41 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 68 (Feb 2026) — Auth Validation Hardening + Landing-Page Cleanup (Prompts 24 + 25)
+
+**🟢 Launch-blocker fixes (Prompt 24)**
+- Removed the fake stats array on `Home.jsx` (was "2,400 Agents Deployed · 18,000 Executions/Day · 96% Avg Trust Score · 99.9% Uptime"). The STATS section now renders conditionally on `STATS.length > 0` so we can re-populate when we have real numbers. Wrapped a clarifying comment so the next dev knows where to put them.
+- Removed the Pricing-page "Trust bar" with "SOC 2 COMPLIANT" and "99.9% UPTIME SLA" (both unverified claims).
+- Replaced "Join thousands of operators already building on Task Force AI" → "Join early builders shipping autonomous agents on Task Force AI". The waitlist counter ("17 operatives enlisted") remains because it pulls a real Mongo count via `/api/waitlist/count`.
+- Added `Early Access · Beta` inline badge inside the hero label so visitors know this is pre-launch software.
+- Page title in `index.html` already says "Task Force" + favicon set (from Phase 66).
+
+**🟢 Auth validation hardening (Prompt 25)**
+- New `lib/auth_validators.py` exposing `check_password()`, `check_username()`, `validate_signup()`. Rules:
+  - **Password**: 8-128 chars, ≥1 upper, ≥1 lower, ≥1 digit, ≥1 special, no leading/trailing whitespace, ≠ username/email/email-local-part.
+  - **Username**: 3-20 chars, alphanumeric + underscore, must start with a letter, not in reserved blocklist (`admin · root · system · taskforce · support · help · api · null · undefined · moderator · mod · staff · official · administrator · superuser · test · anonymous · guest · me`).
+  - **Score** 0..4 maps to Weak / Fair / Good / Strong (Strong = all 4 char types + 12+ chars).
+- `POST /api/auth/register` now requires a `username` field (auto-derived from name/email-prefix for legacy callers), applies `validate_signup()`, returns `422 {detail:{error:'validation_failed', details:[…], rules:{username:{…}, password:{…}}}}` on failure. Case-insensitive uniqueness enforced via a new `username_lower` field with a `unique, sparse` index. Legacy users without the field still log in via email (sparse index = exempt from uniqueness check).
+- `POST /api/auth/login` now accepts BOTH email AND username in the same field. Error message standardized to `"Invalid username or password"` — verified identical for unknown-user vs wrong-password (no enumeration leak).
+- `POST /api/auth/reset-password` applies the same password rules to the new password (validator pulls the user's email + username from the reset entry to block `new_password == my_email`).
+- New `GET /api/auth/check-username?username=…` — live availability probe for the signup form. Rate-limited 10/min/IP via existing `rate_limit_dependency`. Returns `{available: bool, reason: too_short | reserved | invalid | taken | ok}`.
+
+**🟢 Frontend signup overhaul (Prompt 25)**
+- `Login.jsx` signup form rewritten with all the new fields + UX:
+  - `UsernameField` (new component) — debounced (500ms) live availability check with `AbortController` cancellation on rapid keystrokes. Shows green ✓/red ✗ icon + status line.
+  - `PasswordStrengthMeter` (new component) — bar (4 width tiers, color = rose/orange/yellow/emerald) + label (WEAK/FAIR/GOOD/STRONG) + GitHub-style checklist with green ✓ / gray ○ for each rule. Mirrors backend scoring exactly.
+  - Confirm Password field with live match check (green "Passwords match" / red "Passwords don't match").
+  - Password visibility toggle (Eye / EyeOff icons) on both password fields AND on the login page password field.
+  - Submit button gated by `canSubmitSignup = !!email && !!username && usernameStatus.available && pwd.ok && passwordsMatch`. Disabled with reduced opacity until all rules pass.
+- Login form label updated to "Email or Username". `App.js` `register()` signature changed to `(email, password, {username, name})` — surfaces 422 details array as a single human-readable error.
+
+**Verified — 22/22 backend tests + frontend e2e PASS (iter68 report)**
+- `test_iter68_auth_validators.py` (16) — pure validator coverage + endpoint contract (`check-username` reasons, register 422 shapes, register success, case-insensitive collision, login generic error, login-by-username).
+- `test_iter68_extra.py` (6 added by testing agent) — rate-limit 429 at 11+ rapid `check-username` calls, username with space rejected, username too short rejected, DB `username_lower` persistence check, login by username flow, legacy admin login still works.
+- **Frontend agent verified**: all data-testids render correctly, debounce timing measured at ~500ms, strength meter scores match backend, full state machine (submit disabled → enabled with all rules green) observed in DOM. Browser e2e signup was blocked only by the per-IP 3/24h registration cap (anti-abuse working as designed — pytest filled it from same egress IP).
+- **Self-tested screenshot**: meter score=3 GOOD for "MyP@ssw0rd" + 5/5 checklist + "Passwords match" + submit enabled, all visible in one frame.
+
+
 ### Phase 67 (Feb 2026) — Mini-App Customization Panel (Prompt 27)
 
 **🟢 Per-app branding + sharing surface for hosted Mini-Apps**

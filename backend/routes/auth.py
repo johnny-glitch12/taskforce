@@ -187,10 +187,12 @@ async def login(req: LoginRequest, request: Request, _=Depends(rate_limit_depend
     db = srv.db
 
     # Identifier can be email OR username. Match on either field but keep the
-    # error message generic to prevent username enumeration attacks.
+    # error message generic to prevent username enumeration attacks. Email is
+    # matched case-insensitively (the user stored a normalized form on signup);
+    # username via the dedicated lowercased lookup field.
     ident = (req.email or "").strip()
     if "@" in ident:
-        query = {"email": ident.lower()} if False else {"email": ident}
+        query = {"email": ident}
     else:
         query = {"username_lower": ident.lower()}
     user = await db.users.find_one(query, {"_id": 0})
