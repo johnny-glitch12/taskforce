@@ -775,6 +775,10 @@ async def ensure_indexes():
     await db.users.create_index("id", unique=True)
     await db.users.create_index("registration_ip")
     await db.users.create_index("last_login_ip")
+    # username_lower: unique + sparse so legacy users without a username (yet to
+    # be backfilled) don't all collide on null. The sparse flag means docs
+    # missing the field are excluded from the index entirely.
+    await db.users.create_index("username_lower", unique=True, sparse=True)
     await db.waitlist.create_index("email", unique=True)
     await db.agents.create_index("id", unique=True)
     await db.agents.create_index("category")

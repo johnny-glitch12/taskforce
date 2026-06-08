@@ -1,19 +1,33 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/App";
-import { Lock, UserPlus, ArrowLeft } from "lucide-react";
+import { Lock, UserPlus, ArrowLeft, Eye, EyeOff, CheckCircle2, XCircle } from "lucide-react";
+import PasswordStrengthMeter, { scorePassword } from "@/components/PasswordStrengthMeter";
+import UsernameField from "@/components/UsernameField";
 
 export default function Login() {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [username, setUsername] = useState("");
+  const [usernameStatus, setUsernameStatus] = useState({ available: false, reason: "idle" });
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [resetToken, setResetToken] = useState(null);
   const { login, register, user } = useAuth();
   const navigate = useNavigate();
   const API = process.env.REACT_APP_BACKEND_URL || "";
+
+  const handleUsernameStatus = useCallback((s) => setUsernameStatus(s), []);
+
+  // Derived signup validity — gates the submit button.
+  const pwd = scorePassword(password, username, email);
+  const passwordsMatch = password.length > 0 && password === confirmPassword;
+  const canSubmitSignup = !!email && !!username && usernameStatus.available && pwd.ok && passwordsMatch;
 
   useEffect(() => {
     if (user) {
@@ -38,10 +52,17 @@ export default function Login() {
 
   const handleSignup = async (e) => {
     e.preventDefault();
-    if (password.length < 6) { toast.error("Password must be at least 6 characters."); return; }
+    if (!canSubmitSignup) {
+      // Surface the first concrete reason.
+      if (!username) return toast.error("Pick a username.");
+      if (!usernameStatus.available) return toast.error("Choose an available username.");
+      if (!pwd.ok) return toast.error(pwd.rules.length ? "Password doesn't meet all requirements." : "Password must be at least 8 characters.");
+      if (!passwordsMatch) return toast.error("Passwords don't match.");
+      return;
+    }
     setSubmitting(true);
     try {
-      const u = await register(email, password, name);
+      const u = await register(email, password, { username, name });
       toast.success(`Welcome, ${u.name}! Account created.`);
       navigate("/armory");
     } catch (err) {
@@ -100,12 +121,34 @@ export default function Login() {
         {mode === "login" && (
           <form onSubmit={handleLogin} data-testid="login-form" className="flex flex-col gap-5">
             <div>
-              <label htmlFor="email" className="block text-[13px] t-text-sub mb-2">Email</label>
-              <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="login-email-input" placeholder="your@email.com" className={inputCls} style={{ border: '1px solid var(--input-border)' }} required />
+              <label htmlFor="email" className="block text-[13px] t-text-sub mb-2">Email or Username</label>
+              <input id="email" type="text" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="login-email-input" placeholder="you@example.com or your_username" className={inputCls} style={{ border: '1px solid var(--input-border)' }} required autoComplete="username" />
             </div>
             <div>
               <label htmlFor="password" className="block text-[13px] t-text-sub mb-2">Password</label>
-              <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} data-testid="login-password-input" placeholder="Enter password" className={inputCls} style={{ border: '1px solid var(--input-border)' }} required />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  data-testid="login-password-input"
+                  placeholder="Enter password"
+                  className={inputCls}
+                  style={{ border: '1px solid var(--input-border)', paddingRight: 40 }}
+                  required
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  data-testid="login-password-toggle"
+                  onClick={() => setShowPassword((s) => !s)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-cyan-400 transition-colors"
+                >
+                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
             </div>
             <button type="submit" data-testid="login-submit-btn" className="mt-2 w-full py-3.5 bg-cyan-400 text-black text-[14px] font-bold rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.25)] hover:shadow-[0_0_35px_rgba(34,211,238,0.4)] disabled:opacity-50" disabled={submitting}>
               {submitting ? "Signing in..." : "Sign in"}
@@ -119,23 +162,108 @@ export default function Login() {
 
         {/* Signup */}
         {mode === "signup" && (
-          <form onSubmit={handleSignup} data-testid="signup-form" className="flex flex-col gap-5">
+          <form onSubmit={handleSignup} data-testid="signup-form" className="flex flex-col gap-4">
+            {/* Username (with live availability check) */}
             <div>
-              <label htmlFor="name" className="block text-[13px] t-text-sub mb-2">Name</label>
-              <input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} data-testid="signup-name-input" placeholder="Your name" className={inputCls} style={{ border: '1px solid var(--input-border)' }} />
+              <label htmlFor="s-username" className="block text-[13px] t-text-sub mb-2">Username</label>
+              <UsernameField value={username} onChange={setUsername} onStatus={handleUsernameStatus} />
             </div>
+
+            {/* Display name (optional, free-form) */}
+            <div>
+              <label htmlFor="name" className="block text-[13px] t-text-sub mb-2">Display Name <span className="text-zinc-600">(optional)</span></label>
+              <input id="name" type="text" value={name} onChange={(e) => setName(e.target.value.slice(0, 80))} data-testid="signup-name-input" placeholder="What we call you in the UI" className={inputCls} style={{ border: '1px solid var(--input-border)' }} />
+            </div>
+
+            {/* Email */}
             <div>
               <label htmlFor="s-email" className="block text-[13px] t-text-sub mb-2">Email</label>
               <input id="s-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="signup-email-input" placeholder="your@email.com" className={inputCls} style={{ border: '1px solid var(--input-border)' }} required />
             </div>
+
+            {/* Password + strength meter + visibility toggle */}
             <div>
               <label htmlFor="s-password" className="block text-[13px] t-text-sub mb-2">Password</label>
-              <input id="s-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} data-testid="signup-password-input" placeholder="Min 6 characters" className={inputCls} style={{ border: '1px solid var(--input-border)' }} required minLength={6} />
+              <div className="relative">
+                <input
+                  id="s-password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  data-testid="signup-password-input"
+                  placeholder="At least 8 characters, mix of types"
+                  className={inputCls}
+                  style={{ border: '1px solid var(--input-border)', paddingRight: 40 }}
+                  required
+                  minLength={8}
+                  maxLength={128}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  data-testid="signup-password-toggle"
+                  onClick={() => setShowPassword((s) => !s)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-cyan-400 transition-colors"
+                >
+                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+              <PasswordStrengthMeter value={password} username={username} email={email} testidPrefix="signup-pwd" />
             </div>
-            <button type="submit" data-testid="signup-submit-btn" className="mt-2 w-full py-3.5 bg-cyan-400 text-black text-[14px] font-bold rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.25)] hover:shadow-[0_0_35px_rgba(34,211,238,0.4)] disabled:opacity-50" disabled={submitting}>
+
+            {/* Confirm password + match indicator */}
+            <div>
+              <label htmlFor="s-confirm" className="block text-[13px] t-text-sub mb-2">Confirm Password</label>
+              <div className="relative">
+                <input
+                  id="s-confirm"
+                  type={showConfirm ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  data-testid="signup-confirm-input"
+                  placeholder="Re-enter password"
+                  className={inputCls}
+                  style={{ border: `1px solid ${confirmPassword && (passwordsMatch ? 'rgba(52,211,153,0.5)' : 'rgba(244,63,94,0.5)')}` || '1px solid var(--input-border)', paddingRight: 40 }}
+                  required
+                  maxLength={128}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  data-testid="signup-confirm-toggle"
+                  onClick={() => setShowConfirm((s) => !s)}
+                  aria-label={showConfirm ? "Hide password" : "Show password"}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-cyan-400 transition-colors"
+                >
+                  {showConfirm ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+              {confirmPassword && (
+                <p
+                  data-testid="signup-confirm-status"
+                  className={`text-[10px] font-mono mt-1.5 tracking-wide flex items-center gap-1 ${passwordsMatch ? 'text-emerald-400' : 'text-rose-400'}`}
+                >
+                  {passwordsMatch ? <CheckCircle2 size={11} /> : <XCircle size={11} />}
+                  {passwordsMatch ? "Passwords match" : "Passwords don't match"}
+                </p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              data-testid="signup-submit-btn"
+              disabled={submitting || !canSubmitSignup}
+              className="mt-2 w-full py-3.5 bg-cyan-400 text-black text-[14px] font-bold rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.25)] hover:shadow-[0_0_35px_rgba(34,211,238,0.4)] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               {submitting ? "Creating account..." : "Create account"}
             </button>
-            <button type="button" data-testid="switch-to-login-btn" onClick={() => setMode("login")} className="flex items-center justify-center gap-1.5 text-[12px] t-text-sub hover:t-text transition-colors mt-1">
+            <button
+              type="button"
+              data-testid="switch-to-login-btn"
+              onClick={() => setMode("login")}
+              className="flex items-center justify-center gap-1.5 text-[12px] t-text-sub hover:t-text transition-colors mt-1"
+            >
               <ArrowLeft size={12} /> Back to sign in
             </button>
           </form>

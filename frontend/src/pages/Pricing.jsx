@@ -333,20 +333,9 @@ export default function Pricing() {
           </div>
         </div>
 
-        {/* Trust bar */}
-        <div className="text-center">
-          <div className="inline-flex flex-wrap items-center justify-center gap-6 px-6 py-3 rounded-sm" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-            {[
-              { icon: Lock, text: "256-BIT ENCRYPTION" },
-              { icon: Shield, text: "SOC 2 COMPLIANT" },
-              { icon: BadgeCheck, text: "99.9% UPTIME SLA" },
-            ].map((item) => (
-              <div key={item.text} className="flex items-center gap-2 text-[10px] font-mono tracking-wide t-text-dim">
-                <item.icon size={12} className="text-cyan-400" /> {item.text}
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Trust bar — removed at launch.
+            Re-enable once we have real, verifiable certifications (SOC 2 audit,
+            published uptime metrics). Until then ship nothing > ship lies. */}
       </div>
     </div>
   );

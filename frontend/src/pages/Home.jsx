@@ -160,13 +160,11 @@ const FEATURES = [
   { icon: Lock, title: "Sandboxed Execution", desc: "RestrictedPython runtime. No filesystem, no network escape.", color: "#ef4444" },
 ];
 
-/* ─── Stats bar ─── */
-const STATS = [
-  { label: "Agents Deployed", value: 2400 },
-  { label: "Executions / Day", value: 18000 },
-  { label: "Avg Trust Score", value: 96, suffix: "%" },
-  { label: "Uptime", value: 99, suffix: ".9%" },
-];
+/* ─── Stats bar ───
+   Removed at launch to avoid fake metrics.
+   When real numbers are available, re-export a populated array and re-mount the
+   <section> block below. Until then we ship honest copy + a Beta tag instead. */
+const STATS = [];
 
 export default function Home() {
   const [email, setEmail] = useState("");
@@ -213,8 +211,15 @@ export default function Home() {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="inline-block mb-8"
           >
-            <span data-testid="hero-label" className="text-[10px] tracking-[0.2em] uppercase font-mono text-cyan-400 px-3 py-1.5 rounded-sm" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+            <span data-testid="hero-label" className="inline-flex items-center gap-2 text-[10px] tracking-[0.2em] uppercase font-mono text-cyan-400 px-3 py-1.5 rounded-sm" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
               Autonomous Agent Infrastructure
+              <span
+                data-testid="hero-beta-badge"
+                className="px-1.5 py-0.5 text-[8px] font-bold tracking-[0.15em] rounded-sm text-cyan-200"
+                style={{ background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.4)' }}
+              >
+                Early Access · Beta
+              </span>
             </span>
           </motion.div>
 
@@ -305,19 +310,23 @@ export default function Home() {
         </div>
       </motion.section>
 
-      {/* ═══ STATS BAR ═══ */}
-      <section className="py-10 px-6 lg:px-8 relative" style={{ borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
-        <div className="max-w-5xl mx-auto grid grid-cols-2 lg:grid-cols-4 gap-6">
-          {STATS.map((stat, i) => (
-            <Reveal key={stat.label} delay={i * 0.1} className="text-center">
-              <p className="text-3xl lg:text-4xl font-bold t-text mb-1">
-                <Counter value={stat.value} suffix={stat.suffix || ""} />
-              </p>
-              <p className="text-[11px] font-mono tracking-widest uppercase t-text-mute">{stat.label}</p>
-            </Reveal>
-          ))}
-        </div>
-      </section>
+      {/* ═══ STATS BAR ═══
+          Hidden at launch — STATS=[] makes the section render empty. Restore by
+          populating STATS once we have real, verifiable numbers. */}
+      {STATS.length > 0 && (
+        <section className="py-10 px-6 lg:px-8 relative" style={{ borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+          <div className="max-w-5xl mx-auto grid grid-cols-2 lg:grid-cols-4 gap-6">
+            {STATS.map((stat, i) => (
+              <Reveal key={stat.label} delay={i * 0.1} className="text-center">
+                <p className="text-3xl lg:text-4xl font-bold t-text mb-1">
+                  <Counter value={stat.value} suffix={stat.suffix || ""} />
+                </p>
+                <p className="text-[11px] font-mono tracking-widest uppercase t-text-mute">{stat.label}</p>
+              </Reveal>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ═══ FEATURES GRID ═══ */}
       <section className="py-14 px-6 lg:px-8 relative">
@@ -396,7 +405,7 @@ export default function Home() {
             Ready to <span className="text-gradient-cyan">Deploy</span>?
           </h2>
           <p className="text-[15px] t-text-sub mb-7 max-w-md mx-auto">
-            Join thousands of operators already building on Task Force AI.
+            Join early builders shipping autonomous agents on Task Force AI.
           </p>
           <motion.a
             href="#waitlist"

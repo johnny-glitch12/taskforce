@@ -124,15 +124,23 @@ function App() {
     return data.user;
   };
 
-  const register = async (email, password, name) => {
+  const register = async (email, password, { username = "", name = "" } = {}) => {
     const res = await fetch(`${API}/api/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, name }),
+      body: JSON.stringify({ email, password, username, name }),
     });
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || "Registration failed");
+      const err = await res.json().catch(() => ({}));
+      // The new backend returns {detail: {error, details: [...]}} on 422.
+      // Fall back to FastAPI's default {detail: [...]} or plain {detail: "..."}.
+      const d = err?.detail;
+      let msg = "Registration failed";
+      if (typeof d === "string") msg = d;
+      else if (d && Array.isArray(d.details)) msg = d.details.join(" ");
+      else if (Array.isArray(d)) msg = d.map((e) => e?.msg || "").filter(Boolean).join(" ") || msg;
+      else if (d && typeof d.msg === "string") msg = d.msg;
+      throw new Error(msg);
     }
     const data = await res.json();
     localStorage.setItem("taskforce_token", data.token);
