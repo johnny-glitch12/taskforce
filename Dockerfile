@@ -21,7 +21,7 @@ COPY frontend/package.json frontend/package-lock.json* frontend/yarn.lock* ./
 RUN npm install --no-audit --no-fund --legacy-peer-deps
 
 # Copy source and build
-COPY frontend/ ./
+COPY ./frontend/ ./
 
 # Disable source maps + lint failures to keep the image small and fast.
 ENV GENERATE_SOURCEMAP=false
@@ -82,8 +82,8 @@ RUN pip install --upgrade pip \
         -r /app/backend/requirements.txt
 
 # Copy backend + scripts
-COPY backend/ /app/backend/
-COPY scripts/ /app/scripts/
+COPY ./backend/ /app/backend/
+COPY ./scripts/ /app/scripts/
 
 # Make all entrypoint scripts executable (defends against repos pushed from
 # Windows or with git config core.fileMode=false where the +x bit was dropped).
