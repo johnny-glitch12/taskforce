@@ -324,7 +324,7 @@ class TestStripePayments:
             json={
                 "agent_id": 1,
                 "plan": "rent",
-                "origin_url": "https://dark-mode-nova.preview.emergentagent.com"
+                "origin_url": "https://agent-memory-hub-5.preview.emergentagent.com"
             }
         )
         assert response.status_code == 200
@@ -342,7 +342,7 @@ class TestStripePayments:
             json={
                 "agent_id": 1,
                 "plan": "buy",
-                "origin_url": "https://dark-mode-nova.preview.emergentagent.com"
+                "origin_url": "https://agent-memory-hub-5.preview.emergentagent.com"
             }
         )
         assert response.status_code == 200
@@ -383,7 +383,7 @@ class TestStripePayments:
             json={
                 "agent_id": 1,
                 "plan": "rent",
-                "origin_url": "https://dark-mode-nova.preview.emergentagent.com"
+                "origin_url": "https://agent-memory-hub-5.preview.emergentagent.com"
             }
         )
         session_id = checkout_res.json()["session_id"]

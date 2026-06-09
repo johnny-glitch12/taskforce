@@ -12,7 +12,7 @@ import sys
 # Add backend to path for direct imports
 sys.path.insert(0, '/app/backend')
 
-BASE_URL = "https://dark-mode-nova.preview.emergentagent.com"
+BASE_URL = "https://agent-memory-hub-5.preview.emergentagent.com"
 
 # Test credentials
 ADMIN_EMAIL = "admin@nova.ai"
