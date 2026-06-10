@@ -807,6 +807,23 @@ async def ensure_indexes():
     await db.n8n_credentials.create_index([("user_id", 1), ("name", 1)], unique=True)
     await db.n8n_executions.create_index("user_id")
 
+    # ── Builder Memory System (Phase 1) ────────────────────────────────────
+    # All keyed by string user_id (UUID) — never ObjectId.
+    await db.builder_memories.create_index("id", unique=True)
+    await db.builder_memories.create_index([("user_id", 1), ("type", 1), ("created_at", -1)])
+    await db.builder_memories.create_index([("user_id", 1), ("active", 1), ("created_at", -1)])
+    await db.builder_profiles.create_index("user_id", unique=True)
+    await db.agent_build_history.create_index("user_id", unique=True)
+    await db.conversation_summaries.create_index(
+        [("user_id", 1), ("session_id", 1)], unique=True,
+    )
+    await db.agent_changelogs.create_index(
+        [("user_id", 1), ("session_id", 1)], unique=True,
+    )
+    await db.file_versions.create_index(
+        [("user_id", 1), ("session_id", 1), ("filename", 1), ("version", -1)],
+    )
+
 # ─── Dashboard & Custom Agent Models ───
 
 AGENT_TIER_LIMITS = {"free": 3, "pro": 999999}
@@ -2114,6 +2131,10 @@ app.include_router(apps_router, prefix="/api")
 
 from routes.settings import router as settings_router
 app.include_router(settings_router, prefix="/api")
+
+# Builder Memory System (Phase 1) — encrypted per-user memory store
+from routes.builder_memory import router as builder_memory_router
+app.include_router(builder_memory_router, prefix="/api")
 
 
 # ─── Runtime / Infra Status (owner-only) ──────────────────

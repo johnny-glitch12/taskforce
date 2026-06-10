@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/App";
 import { useTheme } from "@/lib/theme";
-import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, LogOut, Coins, Rocket, Sparkles, Package, Server, Banknote, TrendingUp, Key, Layers } from "lucide-react";
+import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, LogOut, Coins, Rocket, Sparkles, Package, Server, Banknote, TrendingUp, Key, Layers, Brain } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import NotificationBell from "@/components/NotificationBell";
 import CreditCounter from "@/components/CreditCounter";
@@ -46,6 +46,8 @@ function UserMenu({ user, logout, navigate }) {
     { to: "/payouts", label: "Payouts", icon: Banknote },
     { to: "/earnings", label: "Earnings", icon: TrendingUp },
     { to: "/keys", label: "API Keys", icon: Key },
+    { to: "/credentials", label: "Credentials Vault", icon: Shield },
+    { to: "/settings/memory", label: "Builder Memory", icon: Brain },
     ...(isAdmin ? [
       { to: "/overwatch", label: "Overwatch", icon: BarChart3, accent: true },
       { to: "/security", label: "Security", icon: Shield },

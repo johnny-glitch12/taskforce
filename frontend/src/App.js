@@ -39,7 +39,9 @@ import Armory from "@/pages/Armory";
 import EconomicsDashboard from "@/pages/EconomicsDashboard";
 import MyApps from "@/pages/MyApps";
 import AppViewer from "@/pages/AppViewer";
+import BuilderMemory from "@/pages/BuilderMemory";
 import OnboardingModal from "@/components/OnboardingModal";
+import MemoryFirstTimeNotice from "@/components/MemoryFirstTimeNotice";
 import { CreditProvider } from "@/lib/credits";
 
 // API base URL: in preview/dev we hit a separate backend origin via REACT_APP_BACKEND_URL.
@@ -276,7 +278,10 @@ function AppShell() {
             path="/armory"
             element={
               <ProtectedRoute>
-                <Armory />
+                <>
+                  <Armory />
+                  <MemoryFirstTimeNotice />
+                </>
               </ProtectedRoute>
             }
           />
@@ -319,6 +324,7 @@ function AppShell() {
           <Route path="/admin/economics" element={<OwnerGate feature="Platform Economics"><EconomicsDashboard /></OwnerGate>} />
           <Route path="/my-apps" element={<ProtectedRoute><MyApps /></ProtectedRoute>} />
           <Route path="/apps/:slug" element={<ProtectedRoute><AppViewer /></ProtectedRoute>} />
+          <Route path="/settings/memory" element={<ProtectedRoute><BuilderMemory /></ProtectedRoute>} />
         </Routes>
       </main>
       {hideFooter ? null : <Footer />}

@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/App";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 import {
-  Key, Trash2, Plus, Shield, X, Zap, CheckCircle2, AlertCircle, Loader2,
+  Key, Trash2, Plus, Shield, X, Zap, CheckCircle2, AlertCircle, Loader2, Brain,
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL || "";
@@ -206,6 +207,23 @@ export default function CredentialsVault() {
             </div>
           ))}
         </div>
+
+        {/* Footer: link to Builder Memory settings */}
+        <Link
+          to="/settings/memory"
+          data-testid="link-to-builder-memory"
+          className="mt-6 flex items-center gap-3 p-3 rounded-sm transition-all hover:bg-cyan-400/5"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+        >
+          <div className="w-9 h-9 rounded-sm flex items-center justify-center" style={{ background: "rgba(34,211,238,0.08)" }}>
+            <Brain size={14} className="text-cyan-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[12px] t-text font-medium uppercase tracking-wider">Manage what the AI remembers</div>
+            <div className="text-[10px] t-text-dim font-mono">Builder Memory — view, edit, or clear what the AI has learned about you</div>
+          </div>
+          <div className="text-[11px] text-cyan-400 tracking-widest uppercase">→</div>
+        </Link>
 
         {/* Add modal */}
         {open === "new" && (
