@@ -29,6 +29,8 @@ from lib.memory_crypto import encrypt_text, decrypt_text, encrypt_dict, decrypt_
 from lib.ownership import ensure_ownership
 from lib.memory_audit import log_memory_event
 from lib.per_user_rate_limit import user_rate_limit
+from lib.memory_extractor import extract_and_persist
+from lib.memory_injector import build_memory_context
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -77,6 +79,20 @@ class SeedMemoryItem(BaseModel):
 class SeedRequest(BaseModel):
     memories: List[SeedMemoryItem] = Field(default_factory=list, max_length=50)
     profile: Optional[dict] = None  # arbitrary nested object (business / preferences / integrations)
+
+
+class TestExtractRequest(BaseModel):
+    """Body for the dev-only /_test_extract endpoint.
+
+    `messages` is a chat-slice the extractor would normally see (last 6 turns).
+    `mock_llm_response` is what the LLM caller would have returned — we inject
+    it directly so tests don't need a real LLM key. `force` bypasses the
+    triviality skip so the tester can exercise tiny conversations.
+    """
+    session_id: str
+    messages: List[dict] = Field(default_factory=list, max_length=20)
+    mock_llm_response: Optional[dict] = None
+    force: bool = False
 
 
 # ── Internal helpers ──
@@ -252,6 +268,88 @@ async def test_seed_memory(
         "inserted_count": len(inserted_ids),
         "inserted_ids": inserted_ids,
         "profile_upserted": profile_upserted,
+    }
+
+
+@router.post("/builder/memory/_test_extract")
+async def test_extract_memory(
+    req: TestExtractRequest,
+    request: Request,
+    user=Depends(get_current_user()),
+):
+    """Dev/test-only: run the extraction pipeline with an injected mock LLM
+    response. Skips the real LLM call entirely so tests don't need a key.
+
+    Returns the same shape as `extract_and_persist`. The stored memories are
+    written to THIS user's `builder_memories` regardless of what session_id
+    is passed — session_id only affects the `source` tag on inserted rows.
+    """
+    if not _is_dev_env():
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    db = get_db()
+    uid = _user_id(user)
+
+    # Build the deterministic mock LLM caller. The extractor's signature is
+    # `llm_caller(system_prompt: str, user_message: str) -> str`.
+    mock_json = req.mock_llm_response or {"memories": [], "profile_updates": {}}
+
+    async def _mock_caller(*, system_prompt: str, user_message: str) -> str:
+        return json.dumps(mock_json)
+
+    result = await extract_and_persist(
+        db, uid, req.session_id, req.messages or [],
+        llm_caller=_mock_caller,
+        force=req.force,
+    )
+    return result
+
+
+@router.post("/builder/memory/_test_inject")
+async def test_inject_memory(
+    request: Request,
+    user=Depends(get_current_user()),
+):
+    """Dev/test-only: build the system-prompt block that WOULD be injected
+    into the next vibe chat for this user. No vibe call is made; this is
+    purely a preview of the injector's output for the caller's current state.
+    """
+    if not _is_dev_env():
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    db = get_db()
+    uid = _user_id(user)
+
+    profile_doc = await db.builder_profiles.find_one({"user_id": uid}, {"_id": 0})
+    if profile_doc:
+        profile = {
+            "business": decrypt_dict(profile_doc.get("business") or {}),
+            "preferences": decrypt_dict(profile_doc.get("preferences") or {}),
+            "integrations": profile_doc.get("integrations") or {"byok_keys": []},
+        }
+    else:
+        profile = None
+
+    # Same query shape as the public GET / list_memory — corrections first.
+    correction_rows = await db.builder_memories.find(
+        {"user_id": uid, "active": True, "type": "correction"}, {"_id": 0},
+    ).sort("created_at", -1).limit(MAX_MEMORIES_RETURNED).to_list(length=MAX_MEMORIES_RETURNED)
+    other_rows = await db.builder_memories.find(
+        {"user_id": uid, "active": True, "type": {"$ne": "correction"}}, {"_id": 0},
+    ).sort("created_at", -1).limit(MAX_MEMORIES_RETURNED).to_list(length=MAX_MEMORIES_RETURNED)
+
+    decrypted: List[dict] = []
+    for r in (correction_rows + other_rows):
+        decrypted.append({**r, "content": decrypt_text(r.get("content", ""))})
+
+    block = build_memory_context(profile, decrypted)
+    return {
+        "system_prompt_block": block,
+        "memory_count": len(decrypted),
+        "profile_present": profile is not None and any([
+            profile.get("business"), profile.get("preferences"),
+            (profile.get("integrations") or {}).get("byok_keys"),
+        ]),
     }
 
 

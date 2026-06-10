@@ -16,23 +16,23 @@ from typing import List
 # Each pattern matches a full secret-shaped token (case-sensitive on prefix).
 # Patterns are tuned conservatively — they target the obvious leak shapes
 # without breaking ordinary prose.
-_SECRET_PATTERNS: List[re.Pattern] = [
+_SECRET_PATTERNS: List[tuple[re.Pattern, str]] = [
     # OpenAI: sk-... (legacy), sk-proj-... (project keys), sk-svcacct-... etc.
-    re.compile(r"\bsk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_\-]{20,}\b"),
+    (re.compile(r"\bsk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_\-]{20,}\b"), "[REDACTED_API_KEY]"),
     # Anthropic: sk-ant-...
-    re.compile(r"\bsk-ant-[A-Za-z0-9_\-]{20,}\b"),
+    (re.compile(r"\bsk-ant-[A-Za-z0-9_\-]{20,}\b"), "[REDACTED_API_KEY]"),
     # Google API keys: AIza...
-    re.compile(r"\bAIza[0-9A-Za-z_\-]{35}\b"),
+    (re.compile(r"\bAIza[0-9A-Za-z_\-]{35}\b"), "[REDACTED_API_KEY]"),
     # GitHub: ghp_ / gho_ / ghu_ / ghs_ / ghr_
-    re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,255}\b"),
+    (re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,255}\b"), "[REDACTED_API_KEY]"),
     # Slack: xoxb-, xoxp-, xoxa-, xoxr-
-    re.compile(r"\bxox[bparso]-[A-Za-z0-9\-]{10,}\b"),
+    (re.compile(r"\bxox[bparso]-[A-Za-z0-9\-]{10,}\b"), "[REDACTED_API_KEY]"),
     # Stripe live + test secret keys (separate from sk- so we catch sk_live_/sk_test_)
-    re.compile(r"\bsk_(?:live|test)_[A-Za-z0-9]{20,}\b"),
+    (re.compile(r"\bsk_(?:live|test)_[A-Za-z0-9]{20,}\b"), "[REDACTED_API_KEY]"),
     # AWS access key ids (AKIA / ASIA prefix)
-    re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
+    (re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"), "[REDACTED_API_KEY]"),
     # Generic JWTs (header.payload.signature — base64url segments)
-    re.compile(r"\beyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\b"),
+    (re.compile(r"\beyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\b"), "[REDACTED_JWT]"),
 ]
 
 # Generic "password=..." / "api_key: ..." / "secret = ..." form.
@@ -61,13 +61,25 @@ def redact_secrets(text: str) -> str:
     if not text:
         return text
     out = text
-    for pat in _SECRET_PATTERNS:
-        out = pat.sub(_REDACTED, out)
+    for pat, token in _SECRET_PATTERNS:
+        out = pat.sub(token, out)
     out = _ASSIGNMENT_PATTERN.sub(
         lambda m: f"{m.group('key')}={_REDACTED}",
         out,
     )
     return out
+
+
+def is_fully_redacted(text: str) -> bool:
+    """Return True if `text` consists ONLY of redaction tokens and whitespace/punctuation.
+    Used by the memory extractor to drop entries that would carry no useful signal
+    after sanitization (e.g. someone pasted only an API key)."""
+    if not text:
+        return True
+    # Strip all known redaction tokens and remaining alnum/word content
+    scrubbed = re.sub(r"\[REDACTED(?:_[A-Z_]+)?\]", "", text)
+    # If nothing left but whitespace and punctuation, it's fully redacted
+    return not re.search(r"[A-Za-z0-9]", scrubbed)
 
 
 def redact_messages(messages: List[dict]) -> List[dict]:
@@ -90,4 +102,4 @@ def redact_messages(messages: List[dict]) -> List[dict]:
     return out
 
 
-__all__ = ["redact_secrets", "redact_messages"]
+__all__ = ["redact_secrets", "redact_messages", "is_fully_redacted"]

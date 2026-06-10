@@ -33,6 +33,7 @@ ACTIONS = {
     "memory_exported",
     "memory_access_denied",
     "memory_seeded",  # dev/test seed endpoint
+    "memory_extracted",  # Phase 2 — async extraction from a chat turn
 }
 
 

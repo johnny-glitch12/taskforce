@@ -519,11 +519,40 @@ async def vibe_chat(req: VibeChatRequest, user=Depends(get_current_user()),
          "$inc": {"total_credits_used": credits_used},
          "$set": {"updated_at": now, "model": req.model}},
     )
+
+    # ── Phase 2: Async memory extraction ─────────────────────────────────
+    # Fire-and-forget — runs after the response is sent. Never blocks the
+    # vibe chat response time. The extractor is itself self-guarding: it
+    # no-ops on no_llm_key, trivial turns, parse failures, etc. We pass the
+    # last 6 messages of the persisted history (plus the brand-new pair) so
+    # the LLM has full context.
+    try:
+        import asyncio as _asyncio
+        from lib.memory_extractor import extract_and_persist
+        recent_tail = (history + [user_msg, ai_msg])[-6:]
+        _asyncio.create_task(
+            _safe_extract(db, user_id, session["id"], recent_tail)
+        )
+    except Exception as _ex_err:  # noqa: BLE001
+        logger.debug(f"[vibe_chat] extraction dispatch failed (non-fatal): {_ex_err}")
+
     return {
         "session_id": session["id"], "type": "chat",
         "response": ai_text,
         "balance_remaining": debit.get("balance"), "model": req.model,
     }
+
+
+async def _safe_extract(db, user_id: str, session_id: str, recent_messages: list) -> None:
+    """Background-task wrapper around extract_and_persist that swallows all
+    errors. The extractor itself already swallows internally; this is a
+    belt-and-braces guard so asyncio never surfaces an unhandled exception
+    on the event loop."""
+    try:
+        from lib.memory_extractor import extract_and_persist
+        await extract_and_persist(db, user_id, session_id, recent_messages)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[vibe_chat:extractor] swallowed: {type(e).__name__}: {str(e)[:120]}")
 
 
 @router.post("/vibe/generate")
