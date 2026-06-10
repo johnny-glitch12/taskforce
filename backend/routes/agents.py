@@ -274,7 +274,8 @@ async def get_agent(
         "agent": {**normalized, "files": sanitized.get("files", []),
                   "nodes": sanitized.get("nodes", []),
                   "edges": sanitized.get("edges", []),
-                  "commit_history": sanitized.get("commit_history", [])},
+                  "commit_history": sanitized.get("commit_history", []),
+                  "schedule": sanitized.get("schedule")},
         "stats_24h": stats_24h,
         "recent_runs": recent_runs,
     }
