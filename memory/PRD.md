@@ -23,6 +23,78 @@ Build "Task Force AI" — a tactical, enterprise-grade AI agent execution econom
 
 ## All Implemented Features
 
+### Phase 69 (Feb 2026) — Builder Memory System (Prompt 32)
+
+**🟢 Persistent, encrypted memory layer for the Armory builder — sessions survive across logins, long chats stay coherent past 1000+ messages, and drafts get changelogs + per-file undo/revert. BYOK-aware: gracefully degrades to a pass-through when no LLM key is configured.**
+
+**Capability summary**
+- The agent remembers user-level preferences, frequent stacks, tone, repeat patterns, and pinned facts — surfaced as a compact memory block injected into the system prompt of every `/api/vibe/chat` call.
+- Long sessions (>20 messages) get a rolling LLM summary that replaces stale message history in the context window — context cost stays flat regardless of session length.
+- Every code-gen run writes a changelog entry + per-file version snapshot. Users can revert the last change (undo) or jump to any prior version of a single file.
+- All sensitive payloads (memory content, summaries, file bodies) are Fernet-encrypted at rest under `MEMORY_MASTER_KEY` (generated and stored in `backend/.env` on first boot). Plaintext never lands in Mongo.
+
+**🟢 7 new/extended collections**
+| Collection | Purpose |
+|---|---|
+| `builder_memories` | Per-user extracted facts (`type`, `content` encrypted, `active`, `source`, `confidence`). User-editable via CRUD UI. |
+| `builder_profiles` | Computed per-user aggregate (preferred stack, tone, model preference, build cadence). |
+| `agent_build_history` | One doc per user — append-only list of builds (`session_id`, `prompt`, `outcome`, `created_at`). |
+| `conversation_summaries` | Per-session rolling summary doc (`summary` encrypted, `message_count`, `updated_at`). |
+| `agent_changelogs` | Per-session list of changelog entries (`stage`, `description`, `files_touched`, `timestamp`). |
+| `file_versions` | Per-(session, filename) version chain (`content` encrypted, `version`, `parent_version`). |
+| `security_events` (extended) | New event types: `memory_read`, `memory_write`, `memory_delete`, `file_revert`, `account_deleted` — for audit trail. |
+
+**🟢 Endpoint surface — by phase**
+| Phase | Endpoint | Purpose |
+|---|---|---|
+| 1 | `GET /api/builder/memory` | List user's active memories (paginated). |
+| 1 | `PATCH /api/builder/memory/{id}` | Toggle active / edit content. |
+| 1 | `DELETE /api/builder/memory/{id}` | Hard-delete a memory row. |
+| 1 | `GET /api/builder/memory/profile` | Read computed profile snapshot. |
+| 2 | (hooks) `POST /api/vibe/chat` & `/generate` | Extraction runs post-response; injection prepends to system prompt. |
+| 3 | `GET /api/builder/drafts/{session_id}/changelog` | Full changelog for a session. |
+| 3 | `GET /api/builder/drafts/{session_id}/files/{filename}/versions` | Version list for one file. |
+| 3 | `POST /api/builder/drafts/{session_id}/revert` | Jump-to-version (body: `{filename, version}`). |
+| 3 | `POST /api/builder/drafts/{session_id}/undo` | Pop the latest change off the changelog. |
+| 4 | `DELETE /api/auth/me` | GDPR-style hard-delete with synchronous cascade across all 7 memory collections + bot_projects + exchange_listings + per-user runtime tables. Body `{"confirm":"DELETE_MY_ACCOUNT"}`. Rate-limited 1/hour. |
+
+**🟢 Encryption (Fernet at rest)**
+- `lib/memory_crypto.py` — `encrypt_text(s)` / `decrypt_text(s)` using `MEMORY_MASTER_KEY` (32-byte urlsafe base64).
+- Applied to: `builder_memories.content`, `conversation_summaries.summary`, `file_versions.content`. Decryption is transparent on read.
+- Rotation-safe by design — every encrypted blob is self-describing (`gAAAAA…` Fernet prefix) so a future multi-key rotation can dispatch on prefix.
+
+**🟢 APScheduler housekeeping jobs (3 daily, registered in `server.py` startup)**
+1. **`memory_pruner`** (`lib/memory_pruner.py`) — runs daily 03:00 UTC. Soft-archives memories where `active=false` AND `updated_at > 90d ago`. Also caps per-user active memory count at 200 (keeps newest, demotes oldest to `active=false`).
+2. **`stale_session_cleanup`** (`lib/cleanup_jobs.py::cleanup_stale_sessions`) — runs daily 03:30 UTC. Deletes `vibe_sessions` rows with no messages in the last 60d AND no associated `agent_build_history` entry. Cascades to `conversation_summaries`, `agent_changelogs`, `file_versions` for those sessions.
+3. **`orphan_file_versions`** (`lib/cleanup_jobs.py::cleanup_orphan_file_versions`) — runs daily 04:00 UTC. Deletes `file_versions` rows whose `session_id` no longer exists in `vibe_sessions` (covers manual session deletions that escaped the cascade).
+
+All jobs delegated to Celery when `CELERY_BROKER_URL` is set (see `lib/celery_app.py`), else APScheduler runs them in-process.
+
+**🟢 BYOK graceful degradation**
+- When `EMERGENT_LLM_KEY` is unset AND user has no BYOK key configured, the memory extraction LLM call short-circuits to a no-op (logs `extraction_skipped: no_key`). Chat still completes — just without enriched memories.
+- Same pattern for the rolling summarizer — if no key, the summary doc isn't created/updated, and the context injector falls back to "last 20 messages verbatim" mode.
+- Net effect: users WITHOUT a key still get a working chat experience; users WITH a key unlock the full long-context memory system. No hard failures.
+
+**🟢 Settings UI — `/settings/memory`**
+- New page `frontend/src/pages/BuilderMemory.jsx` — three tabs:
+  1. **Memories** — table of all `builder_memories` with toggle (active/inactive) + inline-edit + delete. Filter by `type` (preference / fact / pinned / pattern / stack).
+  2. **Profile** — read-only view of computed `builder_profiles` (preferred stack, tone, model preference, build cadence).
+  3. **Danger zone** — "Delete my account" button → confirmation modal requires typing `DELETE_MY_ACCOUNT` → fires `DELETE /api/auth/me`.
+
+**🟢 Security guarantees**
+- Every memory CRUD endpoint is auth-gated and user-scoped (filter by `user_id == current_user.id`) — zero IDOR surface.
+- Audit trail: every read/write/delete fires a `security_events` row via `lib/memory_audit.log_memory_event` (best-effort, never blocks the request).
+- Encryption key (`MEMORY_MASTER_KEY`) is `.gitignore`'d and lives only in `backend/.env`. Lost key = unrecoverable memories (by design — no escape hatch).
+- The cascade on `DELETE /api/auth/me` is synchronous + idempotent + verified by `test_iter69_memory_cascade.py`.
+
+**🟢 What the user must do to enable LLM-powered features**
+Add a BYOK LLM key (OpenAI / Anthropic / Gemini) via `/credentials` — the chat, code-gen, memory extraction, and rolling-summary pipelines auto-detect and start using it. No platform-key fallback (BYOK-only by design for this phase).
+
+**Future enhancements (tracked, deferred)**
+- Enrich `agent_build_history` with LLM-derived `key_decisions[]` and `issues_encountered[]` extracted from each build's transcript (P1).
+- Suppress benign `passlib`/`bcrypt` version-mismatch warning in backend boot logs (cosmetic, P2).
+
+
 ### Phase 68 (Feb 2026) — Auth Validation Hardening + Landing-Page Cleanup (Prompts 24 + 25)
 
 **🟢 Launch-blocker fixes (Prompt 24)**
