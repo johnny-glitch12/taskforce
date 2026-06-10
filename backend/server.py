@@ -2,7 +2,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 import os
 import logging
 import re
@@ -37,6 +37,11 @@ if not mongo_url:
     )
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ.get('DB_NAME') or 'taskforce']
+
+# ── Prompt 31 Phase 3: GridFS bucket for agent_data_files ───────────────
+# Module-level reference so routers can `from server import fs_bucket`.
+# Stores bytes for uploaded CSVs / JSON / text the user attaches to an agent.
+fs_bucket = AsyncIOMotorGridFSBucket(db, bucket_name="agent_data_files")
 
 # JWT config — REQUIRED.
 JWT_SECRET = os.environ.get('JWT_SECRET')
@@ -838,6 +843,16 @@ async def ensure_indexes():
     await db.agent_run_logs.create_index(
         "timestamp", expireAfterSeconds=30 * 24 * 3600,
     )
+
+    # ── Agent Operations Hub (Prompt 31, Phase 3) ──────────────────────────
+    # agent_data_files — metadata sidecar to the GridFS bucket
+    await db.agent_data_files.create_index([("agent_id", 1), ("uploaded_at", -1)])
+    await db.agent_data_files.create_index([("user_id", 1), ("agent_id", 1)])
+    # agent_env_vars — encrypted per-agent secrets (unique by agent_id+key)
+    await db.agent_env_vars.create_index(
+        [("agent_id", 1), ("key", 1)], unique=True,
+    )
+    await db.agent_env_vars.create_index([("user_id", 1), ("agent_id", 1)])
 
 # ─── Dashboard & Custom Agent Models ───
 

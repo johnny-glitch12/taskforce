@@ -514,6 +514,51 @@ async def run_app(app_id: str, body: AppRunRequest, request: Request,
     captured_stdout = ""
     captured_stderr = ""
 
+    # ── Phase-31 Phase-3: decrypt per-agent env vars + load data files ───
+    # Loaded into local scope, passed to run() only if the function declares
+    # the matching parameters, then explicitly deleted post-call to limit
+    # plaintext lifetime in memory.
+    agent_env: dict = {}
+    agent_data: dict = {}
+    try:
+        from lib import memory_crypto as _mem_crypto
+        async for ev in db.agent_env_vars.find(
+            {"agent_id": proj["id"], "user_id": owner_id},
+            {"_id": 0, "key": 1, "value_encrypted": 1},
+        ):
+            try:
+                agent_env[ev["key"]] = _mem_crypto.decrypt_text(ev["value_encrypted"])
+            except Exception:  # noqa: BLE001
+                pass
+    except Exception as _env_err:  # noqa: BLE001
+        import logging as _lg
+        _lg.getLogger(__name__).warning(
+            f"[apps.run] agent_env load failed: {type(_env_err).__name__}"
+        )
+
+    total_loaded = 0
+    DATA_CAP_BYTES = 30 * 1024 * 1024
+    try:
+        from server import fs_bucket as _fs
+        async for df in db.agent_data_files.find(
+            {"agent_id": proj["id"], "user_id": owner_id},
+            {"_id": 0, "filename": 1, "gridfs_file_id": 1, "size_bytes": 1},
+        ):
+            sz = int(df.get("size_bytes") or 0)
+            if total_loaded + sz > DATA_CAP_BYTES:
+                agent_data[df["filename"]] = None  # signals "too large to inject"
+                continue
+            import io as _data_io
+            buf = _data_io.BytesIO()
+            await _fs.download_to_stream(df["gridfs_file_id"], buf)
+            agent_data[df["filename"]] = buf.getvalue()
+            total_loaded += sz
+    except Exception as _data_err:  # noqa: BLE001
+        import logging as _lg
+        _lg.getLogger(__name__).warning(
+            f"[apps.run] data files load failed: {type(_data_err).__name__}"
+        )
+
     try:
         # Sandboxed exec — only safe builtins, captured run() function.
         # NOTE: This is intentionally lighter-weight than external_agent_runtime
@@ -552,14 +597,18 @@ async def run_app(app_id: str, body: AppRunRequest, request: Request,
             run_fn = ns.get("run")
             if not callable(run_fn):
                 raise RuntimeError("main.py did not define a callable run() function.")
-            # Invoke with whatever subset of kwargs the agent accepts
+            # Invoke with whatever subset of kwargs the agent accepts.
+            # Phase-3: merges legacy bot_projects.env with decrypted agent_env_vars;
+            # only passes data_files if the function declares it.
             import inspect as _inspect
             sig = _inspect.signature(run_fn)
             kwargs: dict = {"input": body.input}
             if "env" in sig.parameters:
-                kwargs["env"] = {}
+                kwargs["env"] = {**(proj.get("env") or {}), **agent_env}
             if "keys" in sig.parameters:
                 kwargs["keys"] = {}
+            if "data_files" in sig.parameters:
+                kwargs["data_files"] = agent_data
             result = run_fn(**kwargs)
             if _inspect.iscoroutine(result):
                 import asyncio as _asyncio
@@ -586,6 +635,18 @@ async def run_app(app_id: str, body: AppRunRequest, request: Request,
             captured_stderr = (captured_stderr + ("\n" if captured_stderr else "") + tb_short)[:32_000]
         except Exception:  # noqa: BLE001
             pass
+    finally:
+        # ── Phase-3 SECURITY: scrub decrypted plaintext from local scope
+        # immediately after the run completes (success OR failure). Mirrors
+        # the memory phase's "no plaintext at rest" guarantee for inflight
+        # secrets too. The GC will reclaim quickly; we don't wipe bytes.
+        try:
+            agent_env.clear()
+            agent_data.clear()
+        except Exception:  # noqa: BLE001
+            pass
+        del agent_env
+        del agent_data
     duration_ms = int((time.time() - t0) * 1000)
 
     # Debit (1 cr min for app run) — billed to the OWNER for public apps, caller for private.

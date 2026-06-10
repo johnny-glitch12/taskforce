@@ -479,13 +479,37 @@ async def delete_agent(
     deleted["app_runs"] = res.deleted_count
 
     # Future Phase-2/3 collections — best-effort, no-op if missing
-    for coll in ("agent_run_logs", "agent_data_files", "agent_env_vars"):
+    for coll in ("agent_run_logs",):
         try:
             res = await db[coll].delete_many({"agent_id": pid})
             if res.deleted_count:
                 deleted[coll] = res.deleted_count
         except Exception:  # noqa: BLE001
             pass
+
+    # ── Phase 3: data files — delete GridFS bytes + metadata rows ─────────
+    try:
+        from server import fs_bucket as _fs
+        async for df in db.agent_data_files.find(
+            {"agent_id": pid}, {"_id": 0, "gridfs_file_id": 1},
+        ):
+            try:
+                await _fs.delete(df["gridfs_file_id"])
+            except Exception:  # noqa: BLE001
+                pass  # already gone or never persisted
+        res = await db.agent_data_files.delete_many({"agent_id": pid})
+        if res.deleted_count:
+            deleted["agent_data_files"] = res.deleted_count
+    except Exception:  # noqa: BLE001
+        pass
+
+    # ── Phase 3: env vars (encrypted) ─────────────────────────────────────
+    try:
+        res = await db.agent_env_vars.delete_many({"agent_id": pid})
+        if res.deleted_count:
+            deleted["agent_env_vars"] = res.deleted_count
+    except Exception:  # noqa: BLE001
+        pass
 
     # exchange_listings (link field is `source_project_id` per exchange.py publish flow)
     res = await db.exchange_listings.delete_many({"source_project_id": pid})
@@ -1069,3 +1093,454 @@ async def test_seed_runs(
         "logs_inserted": logs_inserted,
         "success_ratio": body.success_ratio,
     }
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# PHASE 3 — Data files (GridFS) + encrypted env vars + input template
+# ═════════════════════════════════════════════════════════════════════════
+from fastapi import File, UploadFile  # noqa: E402
+
+MAX_DATA_FILE_BYTES = 10 * 1024 * 1024  # 10MB per file
+MAX_DATA_FILES_PER_AGENT = 10
+PREVIEW_CHAR_CAP = 500
+ENV_KEY_PATTERN = re.compile(r"^[A-Z_][A-Z0-9_]*$")
+
+
+def _mask_env_value(value: str) -> str:
+    """●●●…last4 — preserves the last 4 chars so the user can recognise the
+    key in the UI. Mask length floors at 4 bullets even for short values."""
+    if not value:
+        return ""
+    if len(value) <= 4:
+        return "●" * len(value)
+    visible = value[-4:]
+    mask_len = max(len(value) - 4, 4)
+    return ("●" * mask_len) + visible
+
+
+def _get_fs_bucket():
+    """Lazy-import so route file can be imported even if server.py isn't
+    fully initialised. Returns the AsyncIOMotorGridFSBucket."""
+    from server import fs_bucket
+    return fs_bucket
+
+
+# ─── Data files ──────────────────────────────────────────────────────────
+@router.get("/agents/{agent_id}/data")
+async def list_agent_data_files(
+    agent_id: str,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("agent_read", 30, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    proj = await _load_owned_project(db, agent_id, uid)
+
+    rows = []
+    async for df in db.agent_data_files.find(
+        {"agent_id": proj["id"], "user_id": uid},
+        {"_id": 0, "preview_chars": 0},
+    ).sort("uploaded_at", -1):
+        if df.get("gridfs_file_id") is not None:
+            df["gridfs_file_id"] = str(df["gridfs_file_id"])
+        rows.append(df)
+    return {"files": rows, "count": len(rows)}
+
+
+@router.post("/agents/{agent_id}/data")
+async def upload_agent_data_file(
+    agent_id: str,
+    request: Request,
+    file: UploadFile = File(...),
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("agent_upload", 5, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    proj = await _load_owned_project(db, agent_id, uid)
+
+    existing = await db.agent_data_files.count_documents({"agent_id": proj["id"]})
+    if existing >= MAX_DATA_FILES_PER_AGENT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Limit reached — max {MAX_DATA_FILES_PER_AGENT} data files per agent.",
+        )
+
+    chunks = []
+    total = 0
+    while True:
+        chunk = await file.read(64 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_DATA_FILE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large — limit is {MAX_DATA_FILE_BYTES // (1024 * 1024)}MB.",
+            )
+        chunks.append(chunk)
+    body_bytes = b"".join(chunks)
+
+    filename = (file.filename or "untitled.dat").split("/")[-1][:200]
+    content_type = file.content_type or "application/octet-stream"
+
+    row_count = None
+    preview_chars = ""
+    try:
+        sample = body_bytes[:PREVIEW_CHAR_CAP * 2].decode("utf-8", errors="replace")
+        preview_chars = sample[:PREVIEW_CHAR_CAP]
+        if filename.lower().endswith(".csv"):
+            try:
+                full_text = body_bytes.decode("utf-8", errors="replace")
+                row_count = max(0, full_text.count("\n") - 1)
+            except Exception:  # noqa: BLE001
+                pass
+        elif filename.lower().endswith(".json"):
+            try:
+                parsed = json.loads(body_bytes.decode("utf-8", errors="replace"))
+                row_count = len(parsed) if isinstance(parsed, list) else None
+            except Exception:  # noqa: BLE001
+                pass
+    except Exception:  # noqa: BLE001
+        pass
+
+    fs = _get_fs_bucket()
+    gridfs_id = await fs.upload_from_stream(
+        filename,
+        body_bytes,
+        metadata={"agent_id": proj["id"], "user_id": uid, "content_type": content_type},
+    )
+
+    file_id = uuid.uuid4().hex
+    doc = {
+        "id": file_id,
+        "agent_id": proj["id"],
+        "user_id": uid,
+        "filename": filename,
+        "content_type": content_type,
+        "size_bytes": total,
+        "gridfs_file_id": gridfs_id,
+        "row_count": row_count,
+        "preview_chars": preview_chars,
+        "uploaded_at": _now_iso(),
+    }
+    await db.agent_data_files.insert_one(doc)
+    await log_memory_event(uid, "data_file_uploaded", {
+        "agent_id": proj["id"], "filename": filename, "size_bytes": total,
+    }, request=request)
+
+    return {
+        "id": file_id,
+        "agent_id": proj["id"],
+        "filename": filename,
+        "content_type": content_type,
+        "size_bytes": total,
+        "row_count": row_count,
+        "gridfs_file_id": str(gridfs_id),
+        "uploaded_at": doc["uploaded_at"],
+    }
+
+
+@router.get("/agents/{agent_id}/data/{file_id}")
+async def download_agent_data_file(
+    agent_id: str,
+    file_id: str,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("agent_read", 30, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    proj = await _load_owned_project(db, agent_id, uid)
+
+    df = await db.agent_data_files.find_one(
+        {"id": file_id, "agent_id": proj["id"], "user_id": uid},
+    )
+    if not df:
+        raise HTTPException(status_code=404, detail="Data file not found")
+
+    fs = _get_fs_bucket()
+    import io as _io
+    buf = _io.BytesIO()
+    await fs.download_to_stream(df["gridfs_file_id"], buf)
+
+    return Response(
+        content=buf.getvalue(),
+        media_type=df.get("content_type") or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{df.get("filename", "data.bin")}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.get("/agents/{agent_id}/data/{file_id}/preview")
+async def preview_agent_data_file(
+    agent_id: str,
+    file_id: str,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("agent_read", 30, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    proj = await _load_owned_project(db, agent_id, uid)
+
+    df = await db.agent_data_files.find_one(
+        {"id": file_id, "agent_id": proj["id"], "user_id": uid},
+        {"_id": 0},
+    )
+    if not df:
+        raise HTTPException(status_code=404, detail="Data file not found")
+
+    preview = df.get("preview_chars") or ""
+    parsed_rows = None
+    filename = (df.get("filename") or "").lower()
+    if filename.endswith(".csv"):
+        try:
+            import csv as _csv
+            import io as _io2
+            reader = _csv.reader(_io2.StringIO(preview))
+            rows = []
+            for i, row in enumerate(reader):
+                if i >= 10:
+                    break
+                rows.append(row)
+            parsed_rows = rows
+        except Exception:  # noqa: BLE001
+            pass
+    elif filename.endswith(".json"):
+        try:
+            data = json.loads(preview)
+            if isinstance(data, list):
+                parsed_rows = data[:10]
+            else:
+                parsed_rows = [data]
+        except Exception:  # noqa: BLE001
+            pass
+
+    return {
+        "filename": df.get("filename"),
+        "content_type": df.get("content_type"),
+        "size_bytes": df.get("size_bytes"),
+        "row_count": df.get("row_count"),
+        "preview_chars": preview,
+        "parsed_rows": parsed_rows,
+    }
+
+
+@router.delete("/agents/{agent_id}/data/{file_id}")
+async def delete_agent_data_file(
+    agent_id: str,
+    file_id: str,
+    request: Request,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("agent_write", 10, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    proj = await _load_owned_project(db, agent_id, uid)
+
+    df = await db.agent_data_files.find_one(
+        {"id": file_id, "agent_id": proj["id"], "user_id": uid},
+        {"_id": 0, "gridfs_file_id": 1, "filename": 1},
+    )
+    if not df:
+        raise HTTPException(status_code=404, detail="Data file not found")
+
+    fs = _get_fs_bucket()
+    try:
+        await fs.delete(df["gridfs_file_id"])
+    except Exception:  # noqa: BLE001
+        pass
+    await db.agent_data_files.delete_one({"id": file_id})
+    await log_memory_event(uid, "data_file_deleted", {
+        "agent_id": proj["id"], "filename": df.get("filename"),
+    }, request=request)
+    return {"ok": True, "deleted_id": file_id}
+
+
+@router.patch("/agents/{agent_id}/input-template")
+async def patch_agent_input_template(
+    agent_id: str,
+    body: dict,
+    request: Request,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("agent_write", 20, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    proj = await _load_owned_project(db, agent_id, uid)
+
+    template = body.get("template") if isinstance(body, dict) else None
+    if template is not None and not isinstance(template, (dict, list)):
+        raise HTTPException(status_code=400, detail="`template` must be a JSON object or array.")
+    try:
+        size = len(json.dumps(template or {}, default=str))
+        if size > 16 * 1024:
+            raise HTTPException(status_code=400, detail="Input template exceeds 16KB serialised size.")
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Input template is not JSON-serializable.")
+
+    await db.bot_projects.update_one(
+        {"id": proj["id"]},
+        {"$set": {"input_template": template, "updated_at": _now_iso()}},
+    )
+    await log_memory_event(uid, "input_template_updated", {
+        "agent_id": proj["id"], "size_bytes": size,
+    }, request=request)
+    return {"ok": True, "input_template": template}
+
+
+# ─── Env vars ────────────────────────────────────────────────────────────
+class EnvVarCreate(BaseModel):
+    key: str = Field(min_length=1, max_length=128)
+    value: str = Field(min_length=1, max_length=8192)
+
+
+class EnvVarUpdate(BaseModel):
+    value: str = Field(min_length=1, max_length=8192)
+
+
+@router.get("/agents/{agent_id}/env")
+async def list_agent_env_vars(
+    agent_id: str,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("agent_read", 30, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    proj = await _load_owned_project(db, agent_id, uid)
+
+    rows = []
+    async for ev in db.agent_env_vars.find(
+        {"agent_id": proj["id"], "user_id": uid},
+        {"_id": 0, "value_encrypted": 0},
+    ).sort("created_at", -1):
+        rows.append(ev)
+    return {"env": rows, "count": len(rows)}
+
+
+@router.post("/agents/{agent_id}/env")
+async def create_agent_env_var(
+    agent_id: str,
+    body: EnvVarCreate,
+    request: Request,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("agent_write", 10, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    proj = await _load_owned_project(db, agent_id, uid)
+
+    key = body.key.strip()
+    if not ENV_KEY_PATTERN.match(key):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid env key format. Must be UPPERCASE letters, digits, underscores; must start with letter or underscore.",
+        )
+
+    from lib import memory_crypto as _mem_crypto
+    enc = _mem_crypto.encrypt_text(body.value)
+    masked = _mask_env_value(body.value)
+    now = _now_iso()
+
+    existing = await db.agent_env_vars.find_one(
+        {"agent_id": proj["id"], "key": key}, {"_id": 0, "id": 1, "created_at": 1},
+    )
+    if existing:
+        env_id = existing["id"]
+        await db.agent_env_vars.update_one(
+            {"id": env_id},
+            {"$set": {
+                "value_encrypted": enc,
+                "value_masked": masked,
+                "updated_at": now,
+            }},
+        )
+        await log_memory_event(uid, "env_var_updated", {
+            "agent_id": proj["id"], "key": key,
+        }, request=request)
+    else:
+        env_id = uuid.uuid4().hex
+        await db.agent_env_vars.insert_one({
+            "id": env_id,
+            "agent_id": proj["id"],
+            "user_id": uid,
+            "key": key,
+            "value_encrypted": enc,
+            "value_masked": masked,
+            "created_at": now,
+            "updated_at": now,
+        })
+        await log_memory_event(uid, "env_var_created", {
+            "agent_id": proj["id"], "key": key,
+        }, request=request)
+
+    return {
+        "id": env_id,
+        "agent_id": proj["id"],
+        "key": key,
+        "value_masked": masked,
+        "created_at": existing.get("created_at") if existing else now,
+        "updated_at": now,
+    }
+
+
+@router.patch("/agents/{agent_id}/env/{env_id}")
+async def update_agent_env_var(
+    agent_id: str,
+    env_id: str,
+    body: EnvVarUpdate,
+    request: Request,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("agent_write", 10, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    proj = await _load_owned_project(db, agent_id, uid)
+
+    ev = await db.agent_env_vars.find_one(
+        {"id": env_id, "agent_id": proj["id"], "user_id": uid},
+        {"_id": 0, "key": 1},
+    )
+    if not ev:
+        raise HTTPException(status_code=404, detail="Env var not found")
+
+    from lib import memory_crypto as _mem_crypto
+    enc = _mem_crypto.encrypt_text(body.value)
+    masked = _mask_env_value(body.value)
+    now = _now_iso()
+    await db.agent_env_vars.update_one(
+        {"id": env_id},
+        {"$set": {"value_encrypted": enc, "value_masked": masked, "updated_at": now}},
+    )
+    await log_memory_event(uid, "env_var_updated", {
+        "agent_id": proj["id"], "key": ev["key"],
+    }, request=request)
+    return {"id": env_id, "key": ev["key"], "value_masked": masked, "updated_at": now}
+
+
+@router.delete("/agents/{agent_id}/env/{env_id}")
+async def delete_agent_env_var(
+    agent_id: str,
+    env_id: str,
+    request: Request,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("agent_write", 10, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    proj = await _load_owned_project(db, agent_id, uid)
+
+    ev = await db.agent_env_vars.find_one(
+        {"id": env_id, "agent_id": proj["id"], "user_id": uid},
+        {"_id": 0, "key": 1},
+    )
+    if not ev:
+        raise HTTPException(status_code=404, detail="Env var not found")
+
+    await db.agent_env_vars.delete_one({"id": env_id})
+    await log_memory_event(uid, "env_var_deleted", {
+        "agent_id": proj["id"], "key": ev["key"],
+    }, request=request)
+    return {"ok": True, "deleted_id": env_id}
+

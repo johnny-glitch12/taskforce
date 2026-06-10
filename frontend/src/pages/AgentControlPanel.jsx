@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft, Pause, Play, Edit3, ExternalLink, Activity, BarChart3,
   Loader2, Download, ChevronDown, ChevronRight, Copy as CopyIcon, RefreshCw,
+  Upload, FileText, Trash2, Eye, Key, Plus, Save, AlertTriangle,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -30,8 +31,8 @@ const TABS = [
   { id: "overview", label: "Overview", live: true, testid: "tab-overview" },
   { id: "run-history", label: "Run History", live: true, testid: "tab-run-history" },
   { id: "logs", label: "Logs", live: true, testid: "tab-logs" },
-  { id: "data", label: "Data & Inputs", live: false, testid: "tab-data" },
-  { id: "settings", label: "Settings", live: false, testid: "tab-settings" },
+  { id: "data", label: "Data & Inputs", live: true, testid: "tab-data" },
+  { id: "settings", label: "Settings", live: true, testid: "tab-settings" },
   { id: "mini-app", label: "Mini-App", live: false, testid: "tab-mini-app" },
 ];
 
@@ -457,6 +458,812 @@ function PlaceholderTab({ phase, label }) {
   );
 }
 
+/* ═══ Phase 3: Data & Inputs tab ════════════════════════════════════ */
+
+function fmtBytes(n) {
+  if (!n && n !== 0) return "—";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function ConfirmModal({ title, body, onConfirm, onCancel, danger }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onCancel} />
+      <div className="relative w-full max-w-sm rounded-sm p-5"
+           style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)" }}>
+        <h3 className="t-text font-bold mb-2">{title}</h3>
+        <p className="text-[12px] t-text-sub mb-4">{body}</p>
+        <div className="flex items-center justify-end gap-2">
+          <button onClick={onCancel}
+            className="px-3 py-1.5 rounded-sm text-[10px] uppercase tracking-wider font-mono t-text-sub">
+            Cancel
+          </button>
+          <button onClick={onConfirm}
+            className={`px-3 py-1.5 rounded-sm text-[10px] uppercase tracking-wider font-mono border ${
+              danger
+                ? "bg-rose-500/10 text-rose-400 border-rose-500/30 hover:bg-rose-500/15"
+                : "bg-cyan-500/10 text-cyan-400 border-cyan-500/30 hover:bg-cyan-500/15"
+            }`}>
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InputTemplateSection({ agentId, token, agent }) {
+  const initial = agent?.input_template ? JSON.stringify(agent.input_template, null, 2) : "";
+  const [text, setText] = useState(initial);
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const validate = (s) => {
+    if (!s.trim()) { setError(null); return null; }
+    try { return JSON.parse(s); }
+    catch (e) { setError(e.message); return undefined; }
+  };
+
+  const save = async () => {
+    const parsed = validate(text);
+    if (parsed === undefined) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/api/agents/${agentId}/input-template`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ template: parsed }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast.success("Default input saved");
+    } catch (e) {
+      toast.error(`Save failed: ${e.message || e}`);
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="rounded-sm p-5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="t-text font-semibold text-[13px]">Default Input Template</h3>
+        <button
+          data-testid="save-input-template-btn"
+          onClick={save}
+          disabled={saving || error !== null}
+          className="px-3 py-1 rounded-sm text-[10px] uppercase tracking-wider font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/15 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {saving ? <Loader2 size={10} className="inline animate-spin" /> : <><Save size={10} className="inline" /> Save</>}
+        </button>
+      </div>
+      <p className="text-[11px] t-text-mute mb-3">JSON shape pre-populated when this agent runs. Leave blank to require explicit input each time.</p>
+      <textarea
+        data-testid="input-template-editor"
+        value={text}
+        onChange={(e) => { setText(e.target.value); setError(null); }}
+        onBlur={(e) => validate(e.target.value)}
+        rows={8}
+        placeholder={`{\n  "gmail_query": "is:unread"\n}`}
+        spellCheck={false}
+        className="w-full px-3 py-2 rounded-sm font-mono text-[11px]"
+        style={{
+          background: "var(--bg-elevated)",
+          border: `1px solid ${error ? "rgb(244 63 94 / 0.5)" : "var(--border)"}`,
+          color: "var(--text)",
+          resize: "vertical",
+        }}
+      />
+      {error && (
+        <div className="mt-2 text-[10px] text-rose-400 font-mono">⚠ Invalid JSON: {error}</div>
+      )}
+    </div>
+  );
+}
+
+function DataFilesSection({ agentId, token }) {
+  const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [preview, setPreview] = useState(null);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/api/agents/${agentId}/data`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const d = await res.json();
+      setFiles(d.files || []);
+    } catch (e) {
+      toast.error(`Failed to load files: ${e.message || e}`);
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, [agentId]); // eslint-disable-line
+
+  const onPick = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("File too large — max 10MB");
+      e.target.value = "";
+      return;
+    }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`${API}/api/agents/${agentId}/data`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      toast.success(`Uploaded ${file.name}`);
+      e.target.value = "";
+      load();
+    } catch (e2) {
+      toast.error(`Upload failed: ${e2.message || e2}`);
+    } finally { setUploading(false); }
+  };
+
+  const previewFile = async (f) => {
+    try {
+      const res = await fetch(`${API}/api/agents/${agentId}/data/${f.id}/preview`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setPreview(await res.json());
+    } catch (e) {
+      toast.error(`Preview failed: ${e.message || e}`);
+    }
+  };
+
+  const download = (f) => {
+    fetch(`${API}/api/agents/${agentId}/data/${f.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(async (r) => {
+      if (!r.ok) throw new Error(`${r.status}`);
+      const blob = await r.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = f.filename;
+      a.click();
+    }).catch((e) => toast.error(`Download failed: ${e.message || e}`));
+  };
+
+  const doDelete = async () => {
+    if (!confirmDelete) return;
+    try {
+      const res = await fetch(`${API}/api/agents/${agentId}/data/${confirmDelete.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast.success("File deleted");
+      setConfirmDelete(null);
+      load();
+    } catch (e) {
+      toast.error(`Delete failed: ${e.message || e}`);
+    }
+  };
+
+  return (
+    <div className="rounded-sm p-5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="t-text font-semibold text-[13px]">Uploaded Data Files</h3>
+        <label
+          data-testid="upload-data-btn"
+          className="inline-flex items-center gap-1 px-3 py-1 rounded-sm cursor-pointer text-[10px] uppercase tracking-wider font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/15"
+        >
+          {uploading ? <Loader2 size={10} className="animate-spin" /> : <Upload size={10} />}
+          {uploading ? "Uploading…" : "Upload data file"}
+          <input
+            type="file"
+            accept=".csv,.json,.txt,.xlsx,text/csv,application/json,text/plain"
+            onChange={onPick}
+            disabled={uploading}
+            className="hidden"
+          />
+        </label>
+      </div>
+      <p className="text-[11px] t-text-mute mb-3">CSV, JSON, or text files (≤10MB, up to 10 per agent). Files are streamed to GridFS and re-attached to every agent run.</p>
+
+      <div data-testid="data-files-table" className="overflow-x-auto">
+        {loading && <div className="text-center py-6 text-[11px] t-text-mute"><Loader2 size={12} className="inline animate-spin" /></div>}
+        {!loading && files.length === 0 && (
+          <div className="text-center py-6 text-[11px] t-text-mute">
+            No data files yet. Upload CSVs, JSON, or text files your agent can reference during runs.
+          </div>
+        )}
+        {!loading && files.length > 0 && (
+          <table className="w-full">
+            <thead>
+              <tr className="text-left text-[9px] uppercase tracking-wider t-text-mute font-mono border-b" style={{ borderColor: "var(--border)" }}>
+                <th className="px-3 py-2">Filename</th>
+                <th className="px-3 py-2">Rows</th>
+                <th className="px-3 py-2">Size</th>
+                <th className="px-3 py-2">Uploaded</th>
+                <th className="px-3 py-2 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {files.map((f) => (
+                <tr key={f.id} data-testid={`data-file-row-${f.id}`} className="border-b" style={{ borderColor: "var(--border)" }}>
+                  <td className="px-3 py-2 text-[11px] font-mono t-text">
+                    <FileText size={10} className="inline t-text-mute mr-1" /> {f.filename}
+                  </td>
+                  <td className="px-3 py-2 text-[11px] font-mono t-text-sub">{f.row_count ?? "—"}</td>
+                  <td className="px-3 py-2 text-[11px] font-mono t-text-sub">{fmtBytes(f.size_bytes)}</td>
+                  <td className="px-3 py-2 text-[10px] font-mono t-text-mute">{f.uploaded_at?.slice(0, 16).replace("T", " ")}</td>
+                  <td className="px-3 py-2 text-right">
+                    <button onClick={() => previewFile(f)} title="Preview" className="p-1 text-cyan-400 hover:text-cyan-300">
+                      <Eye size={11} />
+                    </button>
+                    <button onClick={() => download(f)} title="Download" className="p-1 t-text-sub hover:t-text">
+                      <Download size={11} />
+                    </button>
+                    <button onClick={() => setConfirmDelete(f)} title="Delete" className="p-1 text-rose-400 hover:text-rose-300">
+                      <Trash2 size={11} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {preview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setPreview(null)} />
+          <div className="relative w-full max-w-3xl rounded-sm p-5 max-h-[80vh] overflow-y-auto"
+               style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)" }}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="t-text font-semibold text-[13px] font-mono">{preview.filename}</h3>
+              <button onClick={() => setPreview(null)} className="t-text-mute hover:t-text">×</button>
+            </div>
+            {preview.parsed_rows && Array.isArray(preview.parsed_rows[0]) ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-[10px] font-mono">
+                  <tbody>
+                    {preview.parsed_rows.map((row, i) => (
+                      <tr key={i} className={`border-b ${i === 0 ? "t-text font-bold" : "t-text-sub"}`} style={{ borderColor: "var(--border)" }}>
+                        {row.map((cell, j) => <td key={j} className="px-2 py-1">{String(cell)}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : preview.parsed_rows ? (
+              <pre className="bg-black/40 p-2 rounded-sm text-[10px] font-mono t-text overflow-x-auto">
+                {JSON.stringify(preview.parsed_rows, null, 2)}
+              </pre>
+            ) : (
+              <pre className="bg-black/40 p-2 rounded-sm text-[10px] font-mono t-text overflow-x-auto whitespace-pre-wrap">
+                {preview.preview_chars}
+              </pre>
+            )}
+          </div>
+        </div>
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          title="Delete data file?"
+          body={`This will permanently remove "${confirmDelete.filename}". Your agent will no longer have access to this data.`}
+          danger
+          onConfirm={doDelete}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function EnvVarsSection({ agentId, token }) {
+  const [vars, setVars] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [newKey, setNewKey] = useState("");
+  const [newValue, setNewValue] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editValue, setEditValue] = useState("");
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/api/agents/${agentId}/env`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const d = await res.json();
+      setVars(d.env || []);
+    } catch (e) {
+      toast.error(`Failed to load env vars: ${e.message || e}`);
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, [agentId]); // eslint-disable-line
+
+  const create = async () => {
+    if (!newKey.trim() || !newValue) return;
+    if (!/^[A-Z_][A-Z0-9_]*$/.test(newKey.trim())) {
+      toast.error("Key must be UPPER_SNAKE_CASE (letters, digits, underscores)");
+      return;
+    }
+    try {
+      const res = await fetch(`${API}/api/agents/${agentId}/env`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ key: newKey.trim(), value: newValue }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      toast.success("Variable saved");
+      setNewKey(""); setNewValue(""); setAdding(false);
+      load();
+    } catch (e) {
+      toast.error(`Save failed: ${e.message || e}`);
+    }
+  };
+
+  const startEdit = (ev) => { setEditingId(ev.id); setEditValue(""); };
+  const saveEdit = async (ev) => {
+    if (!editValue) { setEditingId(null); return; }
+    try {
+      const res = await fetch(`${API}/api/agents/${agentId}/env/${ev.id}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ value: editValue }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast.success("Value updated");
+      setEditingId(null); setEditValue("");
+      load();
+    } catch (e) {
+      toast.error(`Update failed: ${e.message || e}`);
+    }
+  };
+
+  const doDelete = async () => {
+    if (!confirmDelete) return;
+    try {
+      const res = await fetch(`${API}/api/agents/${agentId}/env/${confirmDelete.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast.success("Variable removed");
+      setConfirmDelete(null);
+      load();
+    } catch (e) {
+      toast.error(`Delete failed: ${e.message || e}`);
+    }
+  };
+
+  return (
+    <div className="rounded-sm p-5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="t-text font-semibold text-[13px]">Environment Variables</h3>
+        <button
+          data-testid="add-env-var-btn"
+          onClick={() => setAdding(true)}
+          className="inline-flex items-center gap-1 px-3 py-1 rounded-sm text-[10px] uppercase tracking-wider font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/15"
+        >
+          <Plus size={10} /> Add Variable
+        </button>
+      </div>
+      <p className="text-[11px] t-text-mute mb-3">
+        API keys and secrets this agent needs at runtime. Values are Fernet-encrypted at rest and only decrypted inside the sandbox during a run.
+      </p>
+
+      <div data-testid="env-vars-table" className="overflow-x-auto">
+        {loading && <div className="text-center py-6 text-[11px] t-text-mute"><Loader2 size={12} className="inline animate-spin" /></div>}
+        {!loading && vars.length === 0 && !adding && (
+          <div className="text-center py-6 text-[11px] t-text-mute">
+            No environment variables configured. Add API keys your agent uses (Gmail, Slack, etc.).
+          </div>
+        )}
+        {!loading && (vars.length > 0 || adding) && (
+          <table className="w-full">
+            <thead>
+              <tr className="text-left text-[9px] uppercase tracking-wider t-text-mute font-mono border-b" style={{ borderColor: "var(--border)" }}>
+                <th className="px-3 py-2">Key</th>
+                <th className="px-3 py-2">Value</th>
+                <th className="px-3 py-2 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vars.map((ev) => (
+                <tr key={ev.id} data-testid={`env-var-row-${ev.id}`} className="border-b" style={{ borderColor: "var(--border)" }}>
+                  <td className="px-3 py-2 text-[11px] font-mono t-text">
+                    <Key size={10} className="inline t-text-mute mr-1" /> {ev.key}
+                  </td>
+                  <td className="px-3 py-2 text-[11px] font-mono t-text-sub">
+                    {editingId === ev.id ? (
+                      <input
+                        type="password"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        autoFocus
+                        placeholder="new value"
+                        className="px-2 py-0.5 rounded-sm font-mono text-[11px] w-48"
+                        style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text)" }}
+                      />
+                    ) : (
+                      ev.value_masked
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    {editingId === ev.id ? (
+                      <>
+                        <button onClick={() => saveEdit(ev)} className="text-[10px] uppercase font-mono text-cyan-400 mr-2">Save</button>
+                        <button onClick={() => { setEditingId(null); setEditValue(""); }} className="text-[10px] uppercase font-mono t-text-mute">Cancel</button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => startEdit(ev)} title="Edit" className="p-1 t-text-sub hover:text-cyan-400">
+                          <Edit3 size={11} />
+                        </button>
+                        <button onClick={() => setConfirmDelete(ev)} title="Remove" className="p-1 text-rose-400 hover:text-rose-300">
+                          <Trash2 size={11} />
+                        </button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {adding && (
+                <tr className="border-b" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
+                  <td className="px-3 py-2">
+                    <input
+                      value={newKey}
+                      onChange={(e) => setNewKey(e.target.value.toUpperCase())}
+                      placeholder="API_KEY_NAME"
+                      autoFocus
+                      className="px-2 py-1 rounded-sm font-mono text-[11px] w-full"
+                      style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      type="password"
+                      value={newValue}
+                      onChange={(e) => setNewValue(e.target.value)}
+                      placeholder="secret value"
+                      className="px-2 py-1 rounded-sm font-mono text-[11px] w-full"
+                      style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <button onClick={create} className="text-[10px] uppercase font-mono text-cyan-400 mr-2">Save</button>
+                    <button onClick={() => { setAdding(false); setNewKey(""); setNewValue(""); }} className="text-[10px] uppercase font-mono t-text-mute">Cancel</button>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {confirmDelete && (
+        <ConfirmModal
+          title="Remove variable?"
+          body={`"${confirmDelete.key}" will be deleted permanently. Any running agent will lose access to this value.`}
+          danger
+          onConfirm={doDelete}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function DataTab({ agentId, token, agent }) {
+  return (
+    <div data-testid="tab-data-content" className="space-y-4">
+      <InputTemplateSection agentId={agentId} token={token} agent={agent} />
+      <DataFilesSection agentId={agentId} token={token} />
+      <EnvVarsSection agentId={agentId} token={token} />
+    </div>
+  );
+}
+
+/* ═══ Phase 3: Settings tab ════════════════════════════════════════ */
+
+const CATEGORY_OPTIONS = [
+  "productivity", "sales", "marketing", "support", "ops",
+  "data", "research", "content", "engineering", "finance", "other",
+];
+
+function SettingsTab({ agentId, token, agent, onAgentUpdated, navigate }) {
+  // Section A — General
+  const [name, setName] = useState(agent?.name || "");
+  const [description, setDescription] = useState(agent?.description || "");
+  const [category, setCategory] = useState(agent?.category || "productivity");
+  const [tagsText, setTagsText] = useState((agent?.tags || []).join(", "));
+  const [savingGeneral, setSavingGeneral] = useState(false);
+
+  // Section C — Limits
+  const settings = agent?.agent_settings || {};
+  const [maxHour, setMaxHour] = useState(settings.max_runs_per_hour || 0);
+  const [maxDay, setMaxDay] = useState(settings.max_runs_per_day || 0);
+  const [autoPauseOn, setAutoPauseOn] = useState(!!settings.auto_pause_on_errors);
+  const [autoPauseThr, setAutoPauseThr] = useState(settings.auto_pause_threshold || 5);
+  const [savingLimits, setSavingLimits] = useState(false);
+
+  // Section D — Notifications
+  const nots = settings.notifications || {};
+  const [notError, setNotError] = useState(!!nots.on_error);
+  const [notPause, setNotPause] = useState(!!nots.on_pause);
+  const [milestone, setMilestone] = useState(nots.milestone_every || 0);
+  const [dailySummary, setDailySummary] = useState(!!nots.daily_summary);
+  const [savingNots, setSavingNots] = useState(false);
+
+  // Section F — Danger
+  const [confirmDeleteAgent, setConfirmDeleteAgent] = useState(false);
+  const [typed, setTyped] = useState("");
+
+  const patchAgent = async (payload) => {
+    const res = await fetch(`${API}/api/agents/${agentId}`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
+  };
+
+  const saveGeneral = async () => {
+    setSavingGeneral(true);
+    try {
+      const tags = tagsText.split(",").map((s) => s.trim()).filter(Boolean);
+      const updated = await patchAgent({ name, description, category, tags });
+      onAgentUpdated?.(updated.agent);
+      toast.success("General settings saved");
+    } catch (e) {
+      toast.error(`Save failed: ${e.message || e}`);
+    } finally { setSavingGeneral(false); }
+  };
+
+  const saveLimits = async () => {
+    setSavingLimits(true);
+    try {
+      const updated = await patchAgent({
+        agent_settings: {
+          max_runs_per_hour: Number(maxHour) || 0,
+          max_runs_per_day: Number(maxDay) || 0,
+          auto_pause_on_errors: !!autoPauseOn,
+          auto_pause_threshold: Number(autoPauseThr) || 5,
+        },
+      });
+      onAgentUpdated?.(updated.agent);
+      toast.success("Limits saved");
+    } catch (e) {
+      toast.error(`Save failed: ${e.message || e}`);
+    } finally { setSavingLimits(false); }
+  };
+
+  const saveNots = async () => {
+    setSavingNots(true);
+    try {
+      const updated = await patchAgent({
+        agent_settings: {
+          notifications: {
+            on_error: !!notError,
+            on_pause: !!notPause,
+            milestone_every: Number(milestone) || 0,
+            daily_summary: !!dailySummary,
+          },
+        },
+      });
+      onAgentUpdated?.(updated.agent);
+      toast.success("Notification preferences saved");
+    } catch (e) {
+      toast.error(`Save failed: ${e.message || e}`);
+    } finally { setSavingNots(false); }
+  };
+
+  const deleteAgent = async () => {
+    try {
+      const res = await fetch(`${API}/api/agents/${agentId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: "DELETE_AGENT" }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast.success("Agent deleted");
+      navigate("/my-agents");
+    } catch (e) {
+      toast.error(`Delete failed: ${e.message || e}`);
+    }
+  };
+
+  const cardCls = "rounded-sm p-5";
+  const cardStyle = { background: "var(--bg-card)", border: "1px solid var(--border)" };
+  const inputCls = "w-full px-3 py-2 rounded-sm text-[12px] font-mono";
+  const inputStyle = { background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text)" };
+  const saveBtnCls = "px-3 py-1 rounded-sm text-[10px] uppercase tracking-wider font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/15 disabled:opacity-40";
+
+  const credits = agent?.credits_per_run || 1;
+  const sellerCut = credits * 0.9;
+  const withBonus = sellerCut * 1.3;
+
+  return (
+    <div data-testid="tab-settings-content" className="space-y-4">
+      {/* A. General */}
+      <div data-testid="settings-general-form" className={cardCls} style={cardStyle}>
+        <h3 className="t-text font-semibold text-[13px] mb-3">General</h3>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider t-text-mute font-mono mb-1">Name</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} style={inputStyle} />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider t-text-mute font-mono mb-1">Description</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className={inputCls} style={{ ...inputStyle, resize: "vertical" }} />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider t-text-mute font-mono mb-1">Category</label>
+              <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputCls} style={inputStyle}>
+                {CATEGORY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider t-text-mute font-mono mb-1">Tags (comma separated)</label>
+              <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} className={inputCls} style={inputStyle} />
+            </div>
+          </div>
+          <div className="text-right">
+            <button onClick={saveGeneral} disabled={savingGeneral} className={saveBtnCls}>
+              {savingGeneral ? <Loader2 size={10} className="inline animate-spin" /> : <><Save size={10} className="inline mr-1" /> Save Changes</>}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* B. Pricing (read-only) */}
+      <div className={cardCls} style={cardStyle}>
+        <h3 className="t-text font-semibold text-[13px] mb-2">Pricing</h3>
+        <div className="text-[12px] t-text-sub font-mono space-y-1">
+          <div>Price per run: <span className="t-text">{credits} credits</span></div>
+          <div className="text-[11px] t-text-mute">{credits} × 90% = {sellerCut.toFixed(1)} + 30% bonus = {withBonus.toFixed(2)} credits per run earnings</div>
+          <div className="text-[10px] t-text-mute mt-2">Pricing is set on the Exchange listing — visit the Exchange to adjust.</div>
+        </div>
+      </div>
+
+      {/* C. Limits */}
+      <div data-testid="settings-limits-form" className={cardCls} style={cardStyle}>
+        <h3 className="t-text font-semibold text-[13px] mb-3">Run Limits</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider t-text-mute font-mono mb-1">Max runs/hour (0 = unlimited)</label>
+            <input type="number" min="0" value={maxHour} onChange={(e) => setMaxHour(e.target.value)} className={inputCls} style={inputStyle} />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider t-text-mute font-mono mb-1">Max runs/day (0 = unlimited)</label>
+            <input type="number" min="0" value={maxDay} onChange={(e) => setMaxDay(e.target.value)} className={inputCls} style={inputStyle} />
+          </div>
+        </div>
+        <div className="mt-3 space-y-2">
+          <label className="flex items-center gap-2 text-[11px] font-mono t-text-sub">
+            <input type="checkbox" checked={autoPauseOn} onChange={(e) => setAutoPauseOn(e.target.checked)} className="accent-cyan-400" />
+            Auto-pause after consecutive errors
+          </label>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider t-text-mute font-mono mb-1">Auto-pause threshold</label>
+            <input type="number" min="1" disabled={!autoPauseOn} value={autoPauseThr} onChange={(e) => setAutoPauseThr(e.target.value)} className={inputCls} style={inputStyle} />
+          </div>
+        </div>
+        <div className="text-right mt-3">
+          <button onClick={saveLimits} disabled={savingLimits} className={saveBtnCls}>
+            {savingLimits ? <Loader2 size={10} className="inline animate-spin" /> : <><Save size={10} className="inline mr-1" /> Save Limits</>}
+          </button>
+        </div>
+      </div>
+
+      {/* D. Notifications */}
+      <div data-testid="settings-notifications-form" className={cardCls} style={cardStyle}>
+        <h3 className="t-text font-semibold text-[13px] mb-3">Notifications</h3>
+        <div className="space-y-2 text-[11px] font-mono t-text-sub">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={notError} onChange={(e) => setNotError(e.target.checked)} className="accent-cyan-400" />
+            Email me on every error
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={notPause} onChange={(e) => setNotPause(e.target.checked)} className="accent-cyan-400" />
+            Email me when the agent is auto-paused
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={milestone > 0} onChange={(e) => setMilestone(e.target.checked ? 100 : 0)} className="accent-cyan-400" />
+            Email every
+            <input type="number" min="0" value={milestone} onChange={(e) => setMilestone(e.target.value)}
+                   className="w-20 px-1 py-0.5 rounded-sm font-mono text-[11px]" style={inputStyle} />
+            runs (milestone)
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={dailySummary} onChange={(e) => setDailySummary(e.target.checked)} className="accent-cyan-400" />
+            Daily summary email
+          </label>
+        </div>
+        <div className="mt-3 p-2 rounded-sm bg-cyan-500/5 border border-cyan-500/20 text-[10px] t-text-sub">
+          ℹ️ Email delivery wires up in a future phase — settings are saved now and will take effect once enabled.
+        </div>
+        <div className="text-right mt-3">
+          <button onClick={saveNots} disabled={savingNots} className={saveBtnCls}>
+            {savingNots ? <Loader2 size={10} className="inline animate-spin" /> : <><Save size={10} className="inline mr-1" /> Save Notifications</>}
+          </button>
+        </div>
+      </div>
+
+      {/* E. Scheduling placeholder */}
+      <div data-testid="settings-scheduling-placeholder" className={cardCls} style={cardStyle}>
+        <h3 className="t-text font-semibold text-[13px] mb-2">Scheduling</h3>
+        <div className="flex items-center gap-2 text-[12px] font-mono t-text-sub">
+          <span>Run automatically:</span>
+          <select disabled value="off" className={inputCls + " w-32 opacity-50 cursor-not-allowed"} style={inputStyle}>
+            <option value="off">Off</option>
+          </select>
+        </div>
+        <div className="text-[10px] t-text-mute mt-2">Scheduling extends in Phase 4.</div>
+      </div>
+
+      {/* F. Danger zone */}
+      <div data-testid="danger-zone" className={cardCls} style={{ ...cardStyle, borderColor: "rgba(244, 63, 94, 0.3)" }}>
+        <h3 className="text-rose-400 font-semibold text-[13px] mb-3 flex items-center gap-2">
+          <AlertTriangle size={13} /> Danger Zone
+        </h3>
+        {agent?.exchange_status === "published" && (
+          <button data-testid="unpublish-btn"
+            onClick={() => toast.info("Visit /exchange to delist the listing.")}
+            className="block w-full mb-2 px-3 py-2 rounded-sm text-[11px] uppercase tracking-wider font-mono bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/15 text-left">
+            Unpublish from Exchange
+          </button>
+        )}
+        <button data-testid="delete-agent-btn"
+          onClick={() => setConfirmDeleteAgent(true)}
+          className="block w-full px-3 py-2 rounded-sm text-[11px] uppercase tracking-wider font-mono bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/15 text-left">
+          <Trash2 size={11} className="inline mr-1" /> Delete this agent (cascade)
+        </button>
+        {confirmDeleteAgent && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setConfirmDeleteAgent(false)} />
+            <div className="relative w-full max-w-md rounded-sm p-6"
+                 style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)" }}>
+              <div className="flex items-center gap-2 mb-3"><AlertTriangle className="text-rose-400" size={16} /><h3 className="t-text font-bold">Delete agent?</h3></div>
+              <p className="text-[12px] t-text-sub mb-4">
+                This will permanently delete <span className="t-text">{agent?.name}</span> and ALL runs, logs, files, env vars, listings. This cannot be undone.
+              </p>
+              <p className="text-[11px] t-text-mute mb-2 font-mono uppercase tracking-wide">
+                Type <span className="text-rose-400">delete</span> to confirm:
+              </p>
+              <input value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus
+                     className="w-full px-3 py-2 rounded-sm text-[12px] font-mono mb-4"
+                     style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }} />
+              <div className="flex justify-end gap-2">
+                <button onClick={() => { setConfirmDeleteAgent(false); setTyped(""); }}
+                        className="px-3 py-1.5 rounded-sm text-[11px] uppercase tracking-wider font-mono t-text-sub">Cancel</button>
+                <button onClick={deleteAgent} disabled={typed.toLowerCase() !== "delete"}
+                        className="px-3 py-1.5 rounded-sm text-[11px] uppercase tracking-wider font-mono bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/15 disabled:opacity-40 disabled:cursor-not-allowed">
+                  Delete agent
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main ──────────────────────────────────────────────────────────── */
 export default function AgentControlPanel() {
   const { id } = useParams();
@@ -620,8 +1427,16 @@ export default function AgentControlPanel() {
         {tab === "overview" && <OverviewTab stats={stats} />}
         {tab === "run-history" && <RunHistoryTab agentId={id} token={token} />}
         {tab === "logs" && <LogsTab agentId={id} token={token} />}
-        {tab === "data" && <PlaceholderTab phase="Phase 3" label="Data & Inputs" />}
-        {tab === "settings" && <PlaceholderTab phase="Phase 3" label="Settings" />}
+        {tab === "data" && <DataTab agentId={id} token={token} agent={agent} />}
+        {tab === "settings" && (
+          <SettingsTab
+            agentId={id}
+            token={token}
+            agent={agent}
+            onAgentUpdated={(a) => setAgent(a)}
+            navigate={navigate}
+          />
+        )}
         {tab === "mini-app" && <PlaceholderTab phase="Phase 4" label="Mini-App" />}
       </div>
     </div>

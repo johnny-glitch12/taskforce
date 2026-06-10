@@ -48,6 +48,13 @@ ACTIONS = {
     "agent_duplicated",
     "agent_settings_updated",
     "agent_exported",
+    # ── Prompt 31, Phase 3 — Data Files + Env Vars ────────────────────
+    "data_file_uploaded",
+    "data_file_deleted",
+    "env_var_created",
+    "env_var_updated",
+    "env_var_deleted",
+    "input_template_updated",
 }
 
 
