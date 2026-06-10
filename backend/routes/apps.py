@@ -447,6 +447,21 @@ async def run_app(app_id: str, body: AppRunRequest, request: Request,
     if not proj:
         raise HTTPException(status_code=404, detail="App not found.")
 
+    # ── Phase 31 — pause/archive enforcement ─────────────────────────────
+    # Block runs on paused or archived agents BEFORE any credit pre-flight or
+    # row insertion. 409 surfaces the operational reason so the FE can offer a
+    # Resume action without confusing the user with payment errors.
+    if proj.get("agent_state") in ("paused", "archived"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "agent_paused",
+                "agent_state": proj.get("agent_state"),
+                "paused_at": proj.get("paused_at"),
+                "reason": proj.get("auto_pause_reason") or "manual",
+            },
+        )
+
     is_public = bool(proj.get("is_public"))
     owner_id = proj.get("user_id")
     caller_id = str(user.get("id", user.get("email"))) if user else None
@@ -574,6 +589,41 @@ async def run_app(app_id: str, body: AppRunRequest, request: Request,
         "credits_used": debit.get("credits_charged", 0),
         "created_at": _now_iso(),
     })
+
+    # ── Phase 31 — consecutive-error tracking + auto-pause trigger ────────
+    # On success: reset consecutive_errors when non-zero. On failure: bump and
+    # auto-pause if threshold reached AND the agent is currently active AND
+    # auto_pause_on_errors is enabled. Wrapped in try/except so a counter
+    # write failure NEVER bubbles up into the run response.
+    try:
+        if success:
+            if int(proj.get("consecutive_errors") or 0) > 0:
+                await db.bot_projects.update_one(
+                    {"id": proj["id"]},
+                    {"$set": {"consecutive_errors": 0}},
+                )
+        else:
+            settings = proj.get("agent_settings") or {}
+            threshold = int(settings.get("auto_pause_threshold") or 5)
+            auto_pause = bool(settings.get("auto_pause_on_errors", True))
+            new_count = int(proj.get("consecutive_errors") or 0) + 1
+            update_set: dict = {"consecutive_errors": new_count}
+            if (auto_pause and new_count >= threshold
+                    and proj.get("agent_state") == "active"):
+                update_set.update({
+                    "agent_state": "paused",
+                    "paused_at": _now_iso(),
+                    "auto_pause_reason": "auto_error",
+                })
+            await db.bot_projects.update_one(
+                {"id": proj["id"]}, {"$set": update_set},
+            )
+    except Exception as _err:  # noqa: BLE001
+        # Never propagate — the run itself was completed and billed.
+        import logging as _lg
+        _lg.getLogger(__name__).warning(
+            f"[apps.run] auto-pause hook failed for {proj.get('id')}: {_err}"
+        )
 
     return {
         "run_id": run_id,

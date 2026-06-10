@@ -41,6 +41,13 @@ ACTIONS = {
     "build_recorded",  # Phase 4 — agent_build_history upsert
     "build_history_read",  # Phase 4 — GET /api/builder/memory/build-history
     "account_deleted",  # Phase 4 — DELETE /api/auth/me cascade
+    # ── Prompt 31, Phase 1 — Agent Operations Hub ─────────────────────
+    "agent_paused",
+    "agent_resumed",
+    "agent_deleted",
+    "agent_duplicated",
+    "agent_settings_updated",
+    "agent_exported",
 }
 
 

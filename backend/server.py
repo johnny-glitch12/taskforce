@@ -824,6 +824,13 @@ async def ensure_indexes():
         [("user_id", 1), ("session_id", 1), ("filename", 1), ("version", -1)],
     )
 
+    # ── Agent Operations Hub (Prompt 31, Phase 1) ──────────────────────────
+    await db.bot_projects.create_index(
+        [("user_id", 1), ("agent_state", 1), ("updated_at", -1)],
+    )
+    await db.app_runs.create_index([("app_id", 1), ("created_at", -1)])
+    await db.agent_packages.create_index([("user_id", 1), ("updated_at", -1)])
+
 # ─── Dashboard & Custom Agent Models ───
 
 AGENT_TIER_LIMITS = {"free": 3, "pro": 999999}
@@ -1964,34 +1971,17 @@ AGENT_PACKAGES = {}  # populated dynamically from DB
 async def root():
     return {"message": "Nova AI API", "status": "ok"}
 
+# ── Prompt 31 Phase 1: Agent Operations Hub ─────────────────────────────
+# Mounted BEFORE api_router so my STR-typed `/agents/{agent_id}` wins over
+# the legacy INT-typed `/agents/{int}` (marketplace reader on empty
+# `db.agents`). Net regression: zero — Marketplace now uses
+# /api/exchange/listings; the legacy endpoint already returned [] / 404.
+from routes.agents import router as agents_router
+app.include_router(agents_router, prefix="/api")
+
 # Include router
 app.include_router(api_router)
 
-# Include agent execution router (nidoai architecture)
-from routes.agent import router as agent_router
-app.include_router(agent_router, prefix="/api")
-
-# Include security audit log router
-from routes.security import router as security_router
-app.include_router(security_router, prefix="/api")
-
-# Include published agents + creator analytics router
-from routes.published import router as published_router
-app.include_router(published_router, prefix="/api")
-
-# Include subscriptions + referrals router
-from routes.subscriptions import router as subscriptions_router
-app.include_router(subscriptions_router, prefix="/api")
-
-# Include native workflow executor router (replaces n8n proxy)
-from routes.workflow_executor import router as workflow_router
-app.include_router(workflow_router, prefix="/api")
-
-# Include extracted auth router
-from routes.auth import router as auth_router
-app.include_router(auth_router, prefix="/api")
-
-# Mount static files for live bot screenshots
 STATIC_DIR = Path(__file__).parent / "static"
 STATIC_DIR.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -2135,6 +2125,9 @@ app.include_router(settings_router, prefix="/api")
 # Builder Memory System (Phase 1) — encrypted per-user memory store
 from routes.builder_memory import router as builder_memory_router
 app.include_router(builder_memory_router, prefix="/api")
+
+# (agents_router is mounted earlier — before api_router — so the STR-typed
+# `/agents/{id}` route wins over the legacy INT-typed one. See above.)
 
 
 # ─── Runtime / Infra Status (owner-only) ──────────────────
