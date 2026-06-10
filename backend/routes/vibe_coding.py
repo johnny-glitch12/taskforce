@@ -460,7 +460,39 @@ async def vibe_chat(req: VibeChatRequest, user=Depends(get_current_user()),
             api_key=key_info["api_key"],
         )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"LLM call failed: {str(e)[:200]}")
+        # ─── Graceful degradation when no LLM key is configured ─────────────
+        # The platform may run with EMERGENT_LLM_KEY blank in early-stage tenants
+        # where the user is expected to BYO a key via /credentials. In that case
+        # the LLM call fails with an auth/empty-key exception. We still persist
+        # the user's message + a stub assistant reply so the conversation
+        # history is complete, and we return 200 so the FE renders the stub
+        # inline instead of a fatal-error toast. Real network/quota failures
+        # surface the same way — the user sees a clear "add a key" CTA.
+        err_short = str(e)[:160]
+        now = _now_iso()
+        stub_text = (
+            "⚠️  No LLM key configured. Add a Google / OpenAI / Anthropic key in "
+            "your BYOK Vault (/credentials) to enable chat — your message has been "
+            "saved and the model will reply once a key is in place."
+        )
+        user_msg = {"role": "user", "content": req.message, "timestamp": now}
+        stub_msg = {
+            "role": "assistant", "content": stub_text, "timestamp": now,
+            "type": "chat", "credits_used": 0, "model": req.model,
+            "key_source": key_info["source"], "input_tokens": 0, "output_tokens": 0,
+            "stub": True, "error": err_short,
+        }
+        await db.vibe_sessions.update_one(
+            {"id": session["id"]},
+            {"$push": {"messages": {"$each": [user_msg, stub_msg]}},
+             "$set": {"updated_at": now, "model": req.model}},
+        )
+        return {
+            "session_id": session["id"], "type": "chat",
+            "response": stub_text,
+            "balance_remaining": None, "model": req.model,
+            "stub": True, "key_source": key_info["source"], "error": err_short,
+        }
 
     ai_text = result["text"]
 
