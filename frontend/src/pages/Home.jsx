@@ -215,8 +215,8 @@ export default function Home() {
               Autonomous Agent Infrastructure
               <span
                 data-testid="hero-beta-badge"
-                className="px-1.5 py-0.5 text-[8px] font-bold tracking-[0.15em] rounded-sm text-cyan-200"
-                style={{ background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.4)' }}
+                className="px-1.5 py-0.5 text-[8px] font-bold tracking-[0.15em] rounded-sm"
+                style={{ background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', color: 'var(--accent)' }}
               >
                 Early Access · Beta
               </span>

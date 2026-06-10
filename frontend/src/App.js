@@ -1,52 +1,57 @@
-import { useState, useEffect, createContext, useContext, useCallback } from "react";
+import { useState, useEffect, createContext, useContext, useCallback, lazy, Suspense } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
+import { Loader2 } from "lucide-react";
 import { ThemeProvider } from "@/lib/theme";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+// Public surface stays eager — it's what first-time visitors hit and it keeps
+// the initial paint instant. Everything heavy or behind auth is lazy so the
+// main bundle doesn't ship Monaco, React Flow, and 20+ dashboards to someone
+// who only wants the homepage.
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
 import Academy from "@/pages/Academy";
 import Marketplace from "@/pages/Marketplace";
-import Studio from "@/pages/Studio";
-import CreatorProfile from "@/pages/CreatorProfile";
-import AgentDetail from "@/pages/AgentDetail";
-import PaymentSuccess from "@/pages/PaymentSuccess";
-import Dashboard from "@/pages/Dashboard";
-import CsdropDashboard from "@/pages/CsdropDashboard";
-import SecurityDashboard from "@/pages/SecurityDashboard";
-import OverwatchDashboard from "@/pages/OverwatchDashboard";
 import Pricing from "@/pages/Pricing";
-import CreatorDashboard from "@/pages/CreatorDashboard";
-import CredentialsVault from "@/pages/CredentialsVault";
 import Leaderboard from "@/pages/Leaderboard";
 import ComingSoon from "@/pages/ComingSoon";
 import ComingSoonLanding from "@/pages/ComingSoonLanding";
-import Credits from "@/pages/Credits";
-import MyDeployments from "@/pages/MyDeployments";
-import UsageMonitor from "@/pages/UsageMonitor";
-import VibeBuildPage from "@/pages/VibeBuildPage"; // legacy — kept for direct linking; /build route removed
-import ExternalAgents from "@/pages/ExternalAgents";
-import HostingPlans from "@/pages/HostingPlans";
 import BountyBoard from "@/pages/BountyBoard";
-import BountyDetail from "@/pages/BountyDetail";
-import Payouts from "@/pages/Payouts";
-import CreatorEarnings from "@/pages/CreatorEarnings";
-import ApiKeys from "@/pages/ApiKeys";
-import ListingDetail from "@/pages/ListingDetail";
-import Armory from "@/pages/Armory";
-import EconomicsDashboard from "@/pages/EconomicsDashboard";
-import MyApps from "@/pages/MyApps";
-import AppViewer from "@/pages/AppViewer";
-import BuilderMemory from "@/pages/BuilderMemory";
-import MyAgents from "@/pages/MyAgents";
-import AgentControlPanel from "@/pages/AgentControlPanel";
-import MiniApp from "@/pages/MiniApp";
 import NotFound from "@/pages/NotFound";
 import OnboardingModal from "@/components/OnboardingModal";
 import MemoryFirstTimeNotice from "@/components/MemoryFirstTimeNotice";
 import { CreditProvider } from "@/lib/credits";
+
+const Studio = lazy(() => import("@/pages/Studio"));
+const CreatorProfile = lazy(() => import("@/pages/CreatorProfile"));
+const AgentDetail = lazy(() => import("@/pages/AgentDetail"));
+const PaymentSuccess = lazy(() => import("@/pages/PaymentSuccess"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const CsdropDashboard = lazy(() => import("@/pages/CsdropDashboard"));
+const SecurityDashboard = lazy(() => import("@/pages/SecurityDashboard"));
+const OverwatchDashboard = lazy(() => import("@/pages/OverwatchDashboard"));
+const CreatorDashboard = lazy(() => import("@/pages/CreatorDashboard"));
+const CredentialsVault = lazy(() => import("@/pages/CredentialsVault"));
+const Credits = lazy(() => import("@/pages/Credits"));
+const MyDeployments = lazy(() => import("@/pages/MyDeployments"));
+const UsageMonitor = lazy(() => import("@/pages/UsageMonitor"));
+const ExternalAgents = lazy(() => import("@/pages/ExternalAgents"));
+const HostingPlans = lazy(() => import("@/pages/HostingPlans"));
+const BountyDetail = lazy(() => import("@/pages/BountyDetail"));
+const Payouts = lazy(() => import("@/pages/Payouts"));
+const CreatorEarnings = lazy(() => import("@/pages/CreatorEarnings"));
+const ApiKeys = lazy(() => import("@/pages/ApiKeys"));
+const ListingDetail = lazy(() => import("@/pages/ListingDetail"));
+const Armory = lazy(() => import("@/pages/Armory"));
+const EconomicsDashboard = lazy(() => import("@/pages/EconomicsDashboard"));
+const MyApps = lazy(() => import("@/pages/MyApps"));
+const AppViewer = lazy(() => import("@/pages/AppViewer"));
+const BuilderMemory = lazy(() => import("@/pages/BuilderMemory"));
+const MyAgents = lazy(() => import("@/pages/MyAgents"));
+const AgentControlPanel = lazy(() => import("@/pages/AgentControlPanel"));
+const MiniApp = lazy(() => import("@/pages/MiniApp"));
 
 // API base URL: in preview/dev we hit a separate backend origin via REACT_APP_BACKEND_URL.
 // In production single-container (Railway), the frontend is served by FastAPI on the
@@ -64,6 +69,15 @@ function ProtectedRoute({ children }) {
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
   return children;
+}
+
+/** Suspense fallback while a lazy route chunk loads — minimal, no layout jump. */
+function RouteFallback() {
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center" data-testid="route-loading">
+      <Loader2 size={20} className="animate-spin" style={{ color: "var(--accent)" }} />
+    </div>
+  );
 }
 
 /** Admin-only route — non-admins (including unauthenticated) see ComingSoon. */
@@ -263,6 +277,7 @@ function AppShell() {
         }}
       />
       <main className="flex-1">
+        <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
@@ -337,6 +352,7 @@ function AppShell() {
           {/* Prompt 31 Phase 5 — 404 catch-all. MUST stay last. */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </Suspense>
       </main>
       {hideFooter ? null : <Footer />}
     </div>

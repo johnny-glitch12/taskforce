@@ -111,7 +111,7 @@ function StatCard({ label, value, max, icon: Icon, color }) {
         <span className="text-[12px] t-text-sub tracking-wide">{label}</span>
         <Icon size={14} style={{ color }} />
       </div>
-      <p className="text-2xl font-semibold t-text" style={{ fontFamily: "'Outfit', sans-serif" }}>
+      <p className="text-2xl font-semibold t-text">
         {value}{max ? <span className="text-[14px] t-text-dim">/{max}</span> : ""}
       </p>
       {max && (
@@ -227,7 +227,7 @@ function AgentModal({ mode, agent, onClose, onSubmit, templates }) {
       >
         {/* Header */}
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
-          <h3 className="text-[15px] font-semibold t-text" style={{ fontFamily: "'Outfit', sans-serif" }}>
+          <h3 className="text-[15px] font-semibold t-text">
             {isRun ? `Run: ${agent?.name}` : agent ? "Edit Agent" : "Deploy New Agent"}
           </h3>
           <button onClick={onClose} className="t-text-sub hover:t-text transition-colors"><XCircle size={18} /></button>
@@ -505,7 +505,7 @@ export default function Dashboard() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold t-text tracking-tight" style={{ fontFamily: "'Outfit', sans-serif" }}>
+            <h1 className="text-2xl sm:text-3xl font-bold t-text tracking-tight">
               Command Center
             </h1>
             <p className="text-[13px] t-text-sub mt-1">Deploy, publish, and monitor your agents</p>

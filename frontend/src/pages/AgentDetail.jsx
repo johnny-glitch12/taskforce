@@ -50,7 +50,7 @@ function LiveDemoModal({ agent, onClose }) {
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-cyan-400/15 flex items-center justify-center"><Bot size={16} className="text-cyan-400" /></div>
             <div>
-              <p className="text-[14px] font-medium t-text" style={{ fontFamily: "'Outfit', sans-serif" }}>{agent.shortTitle}</p>
+              <p className="text-[14px] font-medium t-text">{agent.shortTitle}</p>
               <p className="text-[11px] text-emerald-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-sm bg-emerald-400" /> Live Demo</p>
             </div>
           </div>
@@ -166,7 +166,7 @@ function PurchasePanel({ agent, user, token, checkingOut, setCheckingOut }) {
             </div>
             <div className="pt-2 flex justify-between" style={{ borderTop: '1px solid var(--border)' }}>
               <span className="text-[13px] t-text font-semibold">Total</span>
-              <span className="text-xl font-bold t-text" style={{ fontFamily: "'Outfit', sans-serif" }}>${rentPrice}</span>
+              <span className="text-xl font-bold t-text">${rentPrice}</span>
             </div>
           </div>
 
@@ -200,7 +200,7 @@ function PurchasePanel({ agent, user, token, checkingOut, setCheckingOut }) {
           {/* Price Hero */}
           <div className="text-center py-3">
             <p className="text-[11px] t-text-dim tracking-widest uppercase mb-2">One-time acquisition</p>
-            <p className="text-4xl font-bold t-text" style={{ fontFamily: "'Outfit', sans-serif" }}>
+            <p className="text-4xl font-bold t-text">
               ${acquirePrice.toLocaleString()}
             </p>
             <p className="text-[12px] t-text-sub mt-1">Lifetime ownership. No recurring costs.</p>
@@ -335,7 +335,7 @@ export default function AgentDetail() {
                 {agent.creator_verified && <BadgeCheck size={13} className="text-cyan-400" />}
               </Link>
 
-              <h1 data-testid="agent-detail-title" className="text-xl font-bold t-text mb-3 leading-tight" style={{ fontFamily: "'Outfit', sans-serif" }}>
+              <h1 data-testid="agent-detail-title" className="text-xl font-bold t-text mb-3 leading-tight">
                 {agent.shortTitle}
               </h1>
 
@@ -386,11 +386,11 @@ export default function AgentDetail() {
         {activeTab === "overview" && (
           <div data-testid="overview-tab-content" className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-16">
             <div className="rounded-sm p-6" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-              <h3 className="text-[16px] font-semibold t-text mb-4" style={{ fontFamily: "'Outfit', sans-serif" }}>About this agent</h3>
+              <h3 className="text-[16px] font-semibold t-text mb-4">About this agent</h3>
               <p className="text-[14px] t-text-sub leading-relaxed">{agent.longDescription}</p>
             </div>
             <div className="rounded-sm p-6" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-              <h3 className="text-[16px] font-semibold t-text mb-4" style={{ fontFamily: "'Outfit', sans-serif" }}>Features</h3>
+              <h3 className="text-[16px] font-semibold t-text mb-4">Features</h3>
               <div className="space-y-3">
                 {agent.features.map((f, i) => (
                   <div key={i} className="flex items-start gap-3">
@@ -406,7 +406,7 @@ export default function AgentDetail() {
         {activeTab === "reviews" && (
           <div data-testid="reviews-tab-content" className="max-w-2xl mb-16">
             <div className="flex items-center gap-4 mb-6">
-              <span className="text-3xl font-bold t-text" style={{ fontFamily: "'Outfit', sans-serif" }}>{agent.rating}</span>
+              <span className="text-3xl font-bold t-text">{agent.rating}</span>
               <div>
                 <div className="flex items-center gap-0.5 mb-1">
                   {[1,2,3,4,5].map((s) => <Star key={s} size={16} className={s <= Math.round(agent.rating) ? "fill-amber-400 text-amber-400" : "t-text-dim"} />)}

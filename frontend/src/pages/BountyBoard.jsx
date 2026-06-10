@@ -98,7 +98,6 @@ export default function BountyBoard() {
           <h1
             data-testid="bounty-title"
             className="text-4xl sm:text-5xl lg:text-[3.5rem] font-bold tracking-[-0.02em] leading-[1.05] t-text mb-3"
-            style={{ fontFamily: "'Outfit', sans-serif" }}
           >
             The <span className="text-gradient-cyan">Bounty Board</span>
           </h1>
@@ -107,16 +106,18 @@ export default function BountyBoard() {
             and earn a permanent listing on The Exchange.
           </p>
 
-          {/* Stats bar */}
-          <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4 mb-6">
-            <BountyStat value={stats.active} label="Open" testid="stat-active" />
-            <BountyStat
-              value={`${(stats.credits_paid_out || 0).toLocaleString()} cr`}
-              label="Credits Awarded"
-              testid="stat-paid"
-            />
-            <BountyStat value={stats.awarded_count} label="Completed" testid="stat-awarded" />
-          </div>
+          {/* Stats bar — hidden until there's real activity to show */}
+          {(stats.active > 0 || stats.awarded_count > 0 || (stats.credits_paid_out || 0) > 0) && (
+            <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4 mb-6">
+              <BountyStat value={stats.active} label="Open" testid="stat-active" />
+              <BountyStat
+                value={`${(stats.credits_paid_out || 0).toLocaleString()} cr`}
+                label="Credits Awarded"
+                testid="stat-paid"
+              />
+              <BountyStat value={stats.awarded_count} label="Completed" testid="stat-awarded" />
+            </div>
+          )}
 
           <button
             data-testid="post-bounty-btn"
@@ -230,7 +231,7 @@ function BountyStat({ value, label, testid }) {
       <div className="text-2xl sm:text-[28px] font-bold font-mono tabular-nums text-cyan-400 leading-none">
         {value}
       </div>
-      <div className="mt-1 text-[10px] uppercase tracking-[0.2em] font-mono" style={{ color: "rgba(255,255,255,0.4)" }}>
+      <div className="mt-1 text-[10px] uppercase tracking-[0.2em] font-mono t-text-mute">
         {label}
       </div>
     </div>

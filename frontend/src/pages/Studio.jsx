@@ -1215,7 +1215,7 @@ export default function Studio() {
       <div data-testid="studio-toggle-bar" className="flex items-center justify-between px-3 sm:px-5 py-2.5 backdrop-blur-sm gap-2" style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'var(--bg-nav)' }}>
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <Sparkles size={14} className="text-cyan-400 shrink-0" />
-          <span className="text-[13px] font-medium t-text hidden sm:inline" style={{ fontFamily: "'Outfit', sans-serif" }}>The Armory</span>
+          <span className="text-[13px] font-medium t-text hidden sm:inline">The Armory</span>
           <WorkflowSelector workflows={workflows} activeId={activeWorkflowId} onSelect={selectWorkflow} onCreate={createWorkflow} onDelete={deleteWorkflow} />
           {saving && <span className="text-[10px] t-text-dim animate-pulse hidden sm:inline">Saving...</span>}
         </div>

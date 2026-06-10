@@ -37,7 +37,7 @@ function Stat({ label, value, icon: Icon, accent = false, warning = false }) {
         <span className="text-[11px] tracking-widest uppercase" style={{ color: T.textDim }}>{label}</span>
         <Icon size={14} style={{ color: warning ? "#fbbf24" : accent ? T.accent : T.indigo }} />
       </div>
-      <p className="text-2xl font-bold" style={{ color: warning ? "#fbbf24" : T.text, fontFamily: "'Outfit', sans-serif" }}>
+      <p className="text-2xl font-bold" style={{ color: warning ? "#fbbf24" : T.text }}>
         {value}
       </p>
     </div>
@@ -707,7 +707,7 @@ RESULT = {
               <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: T.accentGlow, border: `1px solid rgba(6,182,212,0.3)` }}>
                 <Layers size={16} style={{ color: T.accent }} />
               </div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight" style={{ color: T.text, fontFamily: "'Outfit', sans-serif" }}>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight" style={{ color: T.text }}>
                 CSDROP <span style={{ color: T.accent }}>Portal</span>
               </h1>
             </div>

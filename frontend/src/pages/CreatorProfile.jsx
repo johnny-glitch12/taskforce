@@ -53,7 +53,7 @@ export default function CreatorProfile() {
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
-                <h1 className="text-2xl font-bold text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                <h1 className="text-2xl font-bold text-white">
                   {creator.name}
                 </h1>
                 {creator.verified && <BadgeCheck size={18} className="text-cyan-400" />}
@@ -71,28 +71,28 @@ export default function CreatorProfile() {
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/[0.05]">
             <div>
-              <p className="text-[22px] font-bold text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>{totalDeploys.toLocaleString()}</p>
+              <p className="text-[22px] font-bold text-white">{totalDeploys.toLocaleString()}</p>
               <p className="text-[12px] text-zinc-500">Total Deploys</p>
             </div>
             <div>
-              <p className="text-[22px] font-bold text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>{creator.completionRate}</p>
+              <p className="text-[22px] font-bold text-white">{creator.completionRate}</p>
               <p className="text-[12px] text-zinc-500">Completion Rate</p>
             </div>
             <div>
-              <p className="text-[22px] font-bold text-white flex items-center gap-1" style={{ fontFamily: "'Outfit', sans-serif" }}>
+              <p className="text-[22px] font-bold text-white flex items-center gap-1">
                 <Clock size={16} className="text-zinc-500" /> {creator.responseTime}
               </p>
               <p className="text-[12px] text-zinc-500">Response Time</p>
             </div>
             <div>
-              <p className="text-[22px] font-bold text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>{agents.length}</p>
+              <p className="text-[22px] font-bold text-white">{agents.length}</p>
               <p className="text-[12px] text-zinc-500">Active Agents</p>
             </div>
           </div>
         </div>
 
         {/* Agent Portfolio */}
-        <h2 className="text-lg font-semibold text-white mb-5" style={{ fontFamily: "'Outfit', sans-serif" }}>
+        <h2 className="text-lg font-semibold text-white mb-5">
           Agent Portfolio
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -103,7 +103,7 @@ export default function CreatorProfile() {
               data-testid={`portfolio-agent-${agent.id}`}
               className="bg-white/[0.03] border border-white/[0.07] rounded-sm p-5 transition-all duration-300 hover:border-cyan-400/25 hover:shadow-[0_0_25px_rgba(139,92,246,0.06)]"
             >
-              <h3 className="text-[15px] font-medium text-white mb-2" style={{ fontFamily: "'Outfit', sans-serif" }}>
+              <h3 className="text-[15px] font-medium text-white mb-2">
                 {agent.shortTitle || agent.title}
               </h3>
               <div className="flex items-center gap-3 mb-3">

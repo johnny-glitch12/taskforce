@@ -132,7 +132,7 @@ export default function Login() {
           <div className="w-11 h-11 bg-cyan-400/10 rounded-xl flex items-center justify-center mx-auto mb-4">
             {mode === "signup" ? <UserPlus size={18} className="text-cyan-400" /> : <Lock size={18} className="text-cyan-400" />}
           </div>
-          <h2 data-testid="auth-title" className="text-xl font-semibold t-text tracking-tight" style={{ fontFamily: "'Outfit', sans-serif" }}>
+          <h2 data-testid="auth-title" className="text-xl font-semibold t-text tracking-tight">
             {mode === "login" ? "Sign in" : mode === "signup" ? "Create account" : "Reset password"}
           </h2>
           <p className="text-[13px] t-text-sub mt-1">

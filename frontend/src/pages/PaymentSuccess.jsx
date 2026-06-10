@@ -85,7 +85,7 @@ export default function PaymentSuccess() {
         {status === "loading" && (
           <>
             <Loader2 size={40} className="text-cyan-400 animate-spin mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-white mb-2" style={{ fontFamily: "'Outfit', sans-serif" }}>Processing Payment</h2>
+            <h2 className="text-xl font-semibold text-white mb-2">Processing Payment</h2>
             <p className="text-[13px] text-zinc-500">Verifying your transaction...</p>
           </>
         )}
@@ -94,7 +94,7 @@ export default function PaymentSuccess() {
             <div className="w-16 h-16 rounded-sm bg-emerald-500/10 flex items-center justify-center mx-auto mb-5">
               <SuccessIcon size={32} className="text-emerald-400" />
             </div>
-            <h2 data-testid="payment-success-title" className="text-xl font-semibold text-white mb-2" style={{ fontFamily: "'Outfit', sans-serif" }}>
+            <h2 data-testid="payment-success-title" className="text-xl font-semibold text-white mb-2">
               {successTitle}
             </h2>
 
@@ -168,7 +168,7 @@ export default function PaymentSuccess() {
             <div className="w-16 h-16 rounded-sm bg-red-500/10 flex items-center justify-center mx-auto mb-5">
               <XCircle size={32} className="text-red-400" />
             </div>
-            <h2 className="text-xl font-semibold text-white mb-2" style={{ fontFamily: "'Outfit', sans-serif" }}>
+            <h2 className="text-xl font-semibold text-white mb-2">
               {status === "expired" ? "Session Expired" : "Payment Issue"}
             </h2>
             <p className="text-[13px] text-zinc-500 mb-6">

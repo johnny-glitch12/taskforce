@@ -16,7 +16,7 @@ export default function Leaderboard() {
         {/* Header */}
         <div className="flex items-center gap-3 mb-2">
           <Trophy size={24} className="text-cyan-400" />
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight t-text" style={{ fontFamily: "'Outfit', sans-serif" }}>
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight t-text">
             Operator Leaderboard
           </h1>
           <span
