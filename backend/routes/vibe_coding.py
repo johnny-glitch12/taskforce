@@ -533,8 +533,14 @@ async def vibe_chat(req: VibeChatRequest, user=Depends(get_current_user()),
         _asyncio.create_task(
             _safe_extract(db, user_id, session["id"], recent_tail)
         )
+        # Phase 3: rolling summary fires alongside extraction. Itself checks
+        # the 20-message cadence and the LLM key, so it's a near-no-op on
+        # short conversations and degraded environments.
+        _asyncio.create_task(
+            _safe_summary(db, user_id, session["id"])
+        )
     except Exception as _ex_err:  # noqa: BLE001
-        logger.debug(f"[vibe_chat] extraction dispatch failed (non-fatal): {_ex_err}")
+        logger.debug(f"[vibe_chat] background tasks dispatch failed (non-fatal): {_ex_err}")
 
     return {
         "session_id": session["id"], "type": "chat",
@@ -553,6 +559,17 @@ async def _safe_extract(db, user_id: str, session_id: str, recent_messages: list
         await extract_and_persist(db, user_id, session_id, recent_messages)
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[vibe_chat:extractor] swallowed: {type(e).__name__}: {str(e)[:120]}")
+
+
+async def _safe_summary(db, user_id: str, session_id: str) -> None:
+    """Background-task wrapper around update_rolling_summary. Same belt-and-
+    braces guard as _safe_extract. The summarizer internally skips on
+    cadence-not-reached and no_llm_key, so it usually returns in <1 ms."""
+    try:
+        from lib.memory_summarizer import update_rolling_summary
+        await update_rolling_summary(db, user_id, session_id)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[vibe_chat:summarizer] swallowed: {type(e).__name__}: {str(e)[:120]}")
 
 
 @router.post("/vibe/generate")
@@ -783,6 +800,40 @@ async def vibe_generate_legacy(req: VibeGenerateRequest, user=Depends(get_curren
         "model": req.model, "created_at": now,
     }
     project_id = session.get("project_id")
+    # ── Phase 3: file_versions snapshot (BEFORE the write) ───────────────
+    # Snapshot the OLD content of each file we're about to overwrite so the
+    # user can undo this generate later. Failures here are NEVER fatal — the
+    # generate must succeed even if the snapshot store is unreachable.
+    _phase3_existing_files_by_path: dict = {}
+    try:
+        if project_id:
+            _existing_proj = await db.bot_projects.find_one(
+                {"id": project_id, "user_id": user_id},
+                {"_id": 0, "files": 1},
+            )
+            if _existing_proj:
+                _phase3_existing_files_by_path = {
+                    f.get("path"): (f.get("content") or "")
+                    for f in (_existing_proj.get("files") or [])
+                    if isinstance(f, dict) and f.get("path")
+                }
+        # message_num for this turn = current messages length + 1 (user_msg about to be pushed)
+        _phase3_message_num = len(session.get("messages") or []) + 1
+        if _phase3_existing_files_by_path:
+            from lib.file_versions import save_file_version as _save_ver
+            for f in files:
+                if not isinstance(f, dict):
+                    continue
+                path = f.get("path")
+                if path and path in _phase3_existing_files_by_path:
+                    # Modification — snapshot the OLD content before overwrite
+                    await _save_ver(
+                        db, user_id, session["id"], path,
+                        _phase3_existing_files_by_path[path], _phase3_message_num,
+                    )
+    except Exception as _ver_err:  # noqa: BLE001
+        logger.debug(f"[vibe_generate] file_version snapshot failed (non-fatal): {_ver_err}")
+
     if project_id:
         await db.bot_projects.update_one(
             {"id": project_id, "user_id": user_id},
@@ -813,6 +864,33 @@ async def vibe_generate_legacy(req: VibeGenerateRequest, user=Depends(get_curren
          "$inc": {"total_credits_used": credits_used},
          "$set": {"updated_at": now, "model": req.model, "project_id": project_id}},
     )
+
+    # ── Phase 3: changelog entry (AFTER write) ───────────────────────────
+    # One entry per generate turn. `action=created` if the path didn't exist
+    # in the old project, else `modified`. Best-effort — never fatal.
+    try:
+        from lib.agent_changelog import log_change as _log_change
+        _changes = []
+        for f in files:
+            if not isinstance(f, dict):
+                continue
+            path = f.get("path")
+            if not path:
+                continue
+            was_present = path in _phase3_existing_files_by_path
+            _changes.append({
+                "file": path,
+                "action": "modified" if was_present else "created",
+                "what": (req.message or "Updated by AI")[:200],
+            })
+        if _changes:
+            # The user_msg + ai_msg are now in the session; their position is
+            # `len(messages) - 1` for the ai_msg.
+            _changelog_msg_num = (len(session.get("messages") or []) + 2)
+            await _log_change(db, user_id, session["id"], _changelog_msg_num, _changes)
+    except Exception as _log_err:  # noqa: BLE001
+        logger.debug(f"[vibe_generate] changelog write failed (non-fatal): {_log_err}")
+
     return {
         "session_id": session["id"], "type": "build",
         "project_id": project_id, "name": name, "description": description,

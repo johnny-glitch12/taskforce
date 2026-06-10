@@ -31,6 +31,10 @@ from lib.memory_audit import log_memory_event
 from lib.per_user_rate_limit import user_rate_limit
 from lib.memory_extractor import extract_and_persist
 from lib.memory_injector import build_memory_context
+from lib.memory_summarizer import update_rolling_summary, get_summary
+from lib.agent_changelog import log_change, get_changelog, get_highest_message_num
+from lib.file_versions import save_file_version, list_versions, restore_files_to_message
+from lib.llm_context import build_chat_context
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -93,6 +97,41 @@ class TestExtractRequest(BaseModel):
     messages: List[dict] = Field(default_factory=list, max_length=20)
     mock_llm_response: Optional[dict] = None
     force: bool = False
+
+
+# ─── Phase 3 test/production request bodies ──────────────────────────────
+class TestSummaryRequest(BaseModel):
+    session_id: str
+    mock_llm_response: Optional[str] = None  # str, not dict — summarizer returns plain text
+    force: bool = False
+
+
+class ChangelogChange(BaseModel):
+    file: str
+    action: str  # created | modified | deleted | renamed | reverted
+    what: str = ""
+
+
+class TestLogChangeRequest(BaseModel):
+    session_id: str
+    message_num: int
+    changes: List[ChangelogChange]
+
+
+class TestSaveVersionRequest(BaseModel):
+    session_id: str
+    filename: str
+    old_content: str
+    message_num: int
+
+
+class TestBuildContextRequest(BaseModel):
+    session_id: str
+    new_message: str = ""
+
+
+class RevertRequest(BaseModel):
+    to_message_num: int
 
 
 # ── Internal helpers ──
@@ -517,6 +556,238 @@ async def delete_memory(
     )
     await log_memory_event(uid, "memory_deleted", {"memory_id": memory_id}, request=request)
     return {"ok": True, "deleted_id": memory_id}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Phase 3 — Rolling Summary / Changelog / File Versions / Undo+Revert
+# ═══════════════════════════════════════════════════════════════════════════
+# Helper: confirm the calling user owns the given vibe_session. 404 (not 403)
+# on cross-user attempt so we don't confirm existence to enumeration attempts.
+async def _own_session_or_404(db, user_id: str, session_id: str) -> dict:
+    sess = await db.vibe_sessions.find_one({"id": session_id}, {"_id": 0})
+    ensure_ownership(sess, user_id)
+    return sess
+
+
+# ─── Dev/test endpoints ──────────────────────────────────────────────────
+@router.post("/builder/memory/_test_summary")
+async def test_summary(
+    req: TestSummaryRequest,
+    request: Request,
+    user=Depends(get_current_user()),
+):
+    """Run the rolling-summary pipeline with either an injected mock LLM
+    response (string) or the real LLM (no-op when no key)."""
+    if not _is_dev_env():
+        raise HTTPException(status_code=404, detail="Not Found")
+    db = get_db()
+    uid = _user_id(user)
+
+    caller = None
+    if req.mock_llm_response is not None:
+        mock_text = req.mock_llm_response
+
+        async def _mock(*, system_prompt: str, user_message: str) -> str:
+            return mock_text
+        caller = _mock
+
+    result = await update_rolling_summary(
+        db, uid, req.session_id,
+        llm_caller=caller, force=req.force,
+    )
+    return result
+
+
+@router.post("/builder/memory/_test_log_change")
+async def test_log_change(
+    req: TestLogChangeRequest,
+    request: Request,
+    user=Depends(get_current_user()),
+):
+    """Directly append a changelog entry (bypasses the vibe_generate hook)."""
+    if not _is_dev_env():
+        raise HTTPException(status_code=404, detail="Not Found")
+    db = get_db()
+    uid = _user_id(user)
+    changes = [c.model_dump() for c in req.changes]
+    entry_id = await log_change(db, uid, req.session_id, req.message_num, changes)
+    return {"ok": True, "entry_id": entry_id, "count": len(changes)}
+
+
+@router.post("/builder/memory/_test_save_version")
+async def test_save_version(
+    req: TestSaveVersionRequest,
+    request: Request,
+    user=Depends(get_current_user()),
+):
+    """Directly snapshot a file_version row (bypasses the vibe_generate hook)."""
+    if not _is_dev_env():
+        raise HTTPException(status_code=404, detail="Not Found")
+    db = get_db()
+    uid = _user_id(user)
+    version_id = await save_file_version(
+        db, uid, req.session_id, req.filename, req.old_content, req.message_num,
+    )
+    return {"ok": True, "version_id": version_id}
+
+
+@router.post("/builder/memory/_test_build_context")
+async def test_build_context(
+    req: TestBuildContextRequest,
+    request: Request,
+    user=Depends(get_current_user()),
+):
+    """Return the full context assembler output for this user+session.
+    Useful for verifying memory + summary + changelog + recent messages all
+    flow into one object before any LLM wiring is done."""
+    if not _is_dev_env():
+        raise HTTPException(status_code=404, detail="Not Found")
+    db = get_db()
+    uid = _user_id(user)
+    ctx = await build_chat_context(db, uid, req.session_id, req.new_message)
+    return ctx
+
+
+# ─── Production endpoints under /api/builder/drafts/{session_id}/... ─────
+@router.get("/builder/drafts/{session_id}/changelog")
+async def get_draft_changelog(
+    session_id: str,
+    request: Request,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("draft_read", 30, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    await _own_session_or_404(db, uid, session_id)
+    entries = await get_changelog(db, uid, session_id)
+    return {"session_id": session_id, "entries": entries, "count": len(entries)}
+
+
+@router.get("/builder/drafts/{session_id}/summary")
+async def get_draft_summary(
+    session_id: str,
+    request: Request,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("draft_read", 30, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    await _own_session_or_404(db, uid, session_id)
+    doc = await get_summary(db, uid, session_id)
+    if not doc:
+        return {"summary": None, "message_count": 0, "updated_at": None}
+    return doc
+
+
+@router.get("/builder/drafts/{session_id}/versions")
+async def get_draft_versions(
+    session_id: str,
+    request: Request,
+    user=Depends(get_current_user()),
+    filename: Optional[str] = None,
+    _=Depends(user_rate_limit("draft_read", 30, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    await _own_session_or_404(db, uid, session_id)
+    versions = await list_versions(db, uid, session_id, filename)
+    return {"session_id": session_id, "filename": filename, "versions": versions, "count": len(versions)}
+
+
+@router.post("/builder/drafts/{session_id}/revert")
+async def revert_draft(
+    session_id: str,
+    body: RevertRequest,
+    request: Request,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("draft_revert", 5, 60)),
+):
+    """Rewind the bot_project's files[] to the state JUST BEFORE
+    `to_message_num`. Files with no history at or before that point are left
+    untouched and listed under `no_history`.
+
+    The session's vibe_sessions.messages[] is NOT trimmed — we keep the chat
+    transcript intact so the user can see what changed. Only the file state
+    is rolled back."""
+    db = get_db()
+    uid = _user_id(user)
+    sess = await _own_session_or_404(db, uid, session_id)
+
+    plan = await restore_files_to_message(db, uid, session_id, body.to_message_num)
+
+    # Apply the plan to bot_projects.files[]. The session may not yet have a
+    # project_id (e.g. revert called before any vibe_generate ran) — in that
+    # case the plan will be empty and we just record the revert in the log.
+    project_id = sess.get("project_id")
+    applied_count = 0
+    if project_id and plan["restored"]:
+        proj = await db.bot_projects.find_one(
+            {"id": project_id, "user_id": uid}, {"_id": 0, "files": 1},
+        )
+        if proj:
+            files_by_path = {f.get("path"): f for f in (proj.get("files") or []) if isinstance(f, dict)}
+            for entry in plan["restored"]:
+                fname = entry["filename"]
+                files_by_path[fname] = {"path": fname, "content": entry["content"]}
+                applied_count += 1
+            await db.bot_projects.update_one(
+                {"id": project_id, "user_id": uid},
+                {"$set": {"files": list(files_by_path.values()),
+                          "updated_at": _now_iso()}},
+            )
+
+    # Append a changelog entry so the rewind shows up in /changelog.
+    now_msg_num = len((sess.get("messages") or [])) + 1
+    await log_change(
+        db, uid, session_id, now_msg_num,
+        [{
+            "file": "<all>",
+            "action": "reverted",
+            "what": f"Reverted to state at message {body.to_message_num} "
+                    f"({applied_count} file(s) restored)",
+        }],
+    )
+
+    await log_memory_event(
+        uid, "revert_applied",
+        {"session_id": session_id, "to_message_num": body.to_message_num,
+         "applied_count": applied_count,
+         "no_history_count": len(plan["no_history"])},
+        request=request,
+    )
+
+    return {
+        "ok": True,
+        "to_message_num": body.to_message_num,
+        "applied_count": applied_count,
+        "restored": [{"filename": e["filename"], "from_version": e["from_version"]}
+                     for e in plan["restored"]],
+        "no_history": plan["no_history"],
+    }
+
+
+@router.post("/builder/drafts/{session_id}/undo")
+async def undo_draft(
+    session_id: str,
+    request: Request,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("draft_revert", 5, 60)),
+):
+    """Convenience shortcut: rewind the latest AI-edited turn. Finds the
+    highest `message_num` in the changelog and reverts to message_num - 1."""
+    db = get_db()
+    uid = _user_id(user)
+    sess = await _own_session_or_404(db, uid, session_id)
+
+    last_num = await get_highest_message_num(db, uid, session_id)
+    if last_num is None:
+        return {"ok": False, "reason": "no_changelog_entries"}
+
+    target = max(0, int(last_num) - 1)
+    # Delegate to the revert handler logic — duplicate the body construction
+    # so we get the same response shape + audit.
+    body = RevertRequest(to_message_num=target)
+    return await revert_draft(session_id, body, request, user)
 
 
 __all__ = ["router"]

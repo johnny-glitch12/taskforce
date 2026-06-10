@@ -34,6 +34,9 @@ ACTIONS = {
     "memory_access_denied",
     "memory_seeded",  # dev/test seed endpoint
     "memory_extracted",  # Phase 2 — async extraction from a chat turn
+    "summary_updated",  # Phase 3 — rolling conversation summary refreshed
+    "changelog_appended",  # Phase 3 — AI made a file edit, logged a turn
+    "revert_applied",  # Phase 3 — user rolled back to a prior message_num
 }
 
 
