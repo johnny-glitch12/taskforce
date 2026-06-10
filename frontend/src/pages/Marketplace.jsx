@@ -241,12 +241,12 @@ function AgentCard({ agent, index }) {
         </Link>
 
         <div className="flex items-center gap-3 mb-3">
-          {/* Only show a rating once real reviews exist — no fabricated stars */}
-          {agent.rating && agent.reviews > 0 && (
+          {/* Only show a rating when the backend provides one — no fabricated stars */}
+          {agent.rating != null && (
             <span className="flex items-center gap-1 text-[12px]">
               <Star size={12} className="fill-amber-400 text-amber-400" />
               <span className="t-text font-medium">{agent.rating}</span>
-              <span className="t-text-dim">({agent.reviews})</span>
+              {agent.reviews > 0 && <span className="t-text-dim">({agent.reviews})</span>}
             </span>
           )}
           <span className="flex items-center gap-1 text-[12px] t-text-sub">
@@ -458,7 +458,7 @@ export default function Marketplace() {
                 <Link
                   to="/bounties"
                   data-testid="exchange-empty-bounty-cta"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-sm text-[11px] font-bold font-mono uppercase tracking-[0.18em] transition-colors"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-sm text-[11px] font-bold font-mono uppercase tracking-[0.18em] transition-colors hover:bg-[var(--accent-bg)]"
                   style={{ border: "1px solid var(--accent-border)", color: "var(--accent)" }}
                 >
                   Browse Bounties <ChevronRight size={12} />

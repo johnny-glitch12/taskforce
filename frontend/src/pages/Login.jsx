@@ -18,6 +18,9 @@ function safeReturnPath(raw) {
   return raw;
 }
 
+// Shared by the auth forms AND ResetPasswordForm — keep one radius/border source.
+const INPUT_CLS = "w-full t-input focus:outline-none focus:border-cyan-400/50 transition-all py-3 px-4 text-[15px] rounded-sm";
+
 export default function Login() {
   usePageTitle("Sign In");
   const [mode, setMode] = useState("login");
@@ -37,12 +40,18 @@ export default function Login() {
   const API = process.env.REACT_APP_BACKEND_URL || "";
 
   // Emailed reset links land on /auth/reset-password?token=… — consume the
-  // token from the URL so the link actually opens the reset form.
+  // token from the URL so the link actually opens the reset form, then scrub
+  // it from the address bar so a live account-recovery token doesn't linger
+  // in browser history or bookmarks.
   useEffect(() => {
     if (!location.pathname.startsWith("/auth/reset-password")) return;
     try {
       const t = new URLSearchParams(location.search).get("token");
-      if (t) { setResetToken(t); setMode("forgot"); }
+      if (t) {
+        setResetToken(t);
+        setMode("forgot");
+        window.history.replaceState(null, "", "/auth/reset-password");
+      }
     } catch {}
   }, [location.pathname, location.search]);
 
@@ -130,7 +139,7 @@ export default function Login() {
 
   if (user) return null;
 
-  const inputCls = "w-full t-input focus:outline-none focus:border-cyan-400/50 transition-all py-3 px-4 text-[15px] rounded-sm";
+  const inputCls = INPUT_CLS;
 
   return (
     <div className="min-h-[calc(100vh-60px)] flex items-center justify-center px-6">
@@ -356,7 +365,7 @@ function ResetPasswordForm({ token, API, onSuccess }) {
     <form onSubmit={handleReset} data-testid="reset-form" className="flex flex-col gap-5">
       <div>
         <label htmlFor="new-password" className="block text-[13px] t-text-sub mb-2">New Password</label>
-        <input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} data-testid="reset-password-input" placeholder="Min 6 characters" className="w-full t-input focus:outline-none focus:border-cyan-400/50 transition-all py-3 px-4 text-[15px] rounded-xl" style={{ border: '1px solid var(--input-border)' }} required minLength={6} />
+        <input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} data-testid="reset-password-input" placeholder="Min 6 characters" className={INPUT_CLS} style={{ border: '1px solid var(--input-border)' }} required minLength={6} />
       </div>
       <button type="submit" data-testid="reset-submit-btn" className="mt-2 w-full py-3.5 bg-cyan-400 text-black text-[14px] font-bold rounded-sm hover:bg-cyan-300 transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.25)] hover:shadow-[0_0_35px_rgba(34,211,238,0.4)] disabled:opacity-50" disabled={submitting}>
         {submitting ? "Resetting..." : "Set new password"}

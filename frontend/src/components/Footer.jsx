@@ -32,7 +32,7 @@ function FooterLink({ to, href, label, badge }) {
 
   if (!href || href === "#") {
     return (
-      <span data-testid={`footer-link-${label.toLowerCase().replace(/\s/g, "-")}`} className="text-[12px] t-text-dim flex items-center gap-2 cursor-default">
+      <span data-testid={`footer-link-${label.toLowerCase().replace(/\s/g, "-")}`} className="text-[12px] t-text-mute flex items-center gap-2 cursor-default">
         {label}
         {badge && <Badge text={badge} />}
       </span>
@@ -49,7 +49,7 @@ function FooterLink({ to, href, label, badge }) {
 
 function Badge({ text }) {
   return (
-    <span className="text-[10px] t-bg-elev t-border border t-text-sub px-1.5 py-0.5 rounded-sm font-mono leading-none" style={{ color: '#22d3ee' }}>
+    <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-mono leading-none" style={{ background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', color: 'var(--accent)' }}>
       {text}
     </span>
   );
