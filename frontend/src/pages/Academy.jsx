@@ -6,6 +6,7 @@
  * /api/waitlist endpoint with source="academy" so we can segment leads.
  */
 import { useState } from "react";
+import usePageTitle from "@/hooks/usePageTitle";
 import {
   GraduationCap, Lock, Rocket, Coins, Plug, Loader2, Check, ArrowRight,
 } from "lucide-react";
@@ -112,6 +113,7 @@ function EmailSignup() {
 }
 
 export default function Academy() {
+  usePageTitle("The Academy");
   return (
     <div data-testid="academy-page" className="min-h-[calc(100vh-60px)] px-6 lg:px-8 py-12 md:py-20 relative overflow-hidden">
       {/* Background orb */}

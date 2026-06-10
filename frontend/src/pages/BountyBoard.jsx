@@ -1,5 +1,6 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useState } from "react";
+import usePageTitle from "@/hooks/usePageTitle";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/App";
 import { toast } from "sonner";
@@ -55,6 +56,7 @@ export function fmtReward(b) {
 }
 
 export default function BountyBoard() {
+  usePageTitle("Bounty Board");
   const { token, user } = useAuth() || {};
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
@@ -91,8 +93,8 @@ export default function BountyBoard() {
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 mb-5 px-3 py-1 rounded-sm" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
             <Target size={11} className="text-cyan-400" />
-            <span className="text-[10px] tracking-[0.25em] uppercase font-mono" style={{ color: "rgba(255,255,255,0.55)" }}>
-              Demand-Side · Open Contracts
+            <span className="text-[10px] tracking-[0.25em] uppercase font-mono t-text-mute">
+              Open Contracts · Name Your Price
             </span>
           </div>
           <h1

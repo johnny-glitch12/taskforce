@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import usePageTitle from "@/hooks/usePageTitle";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/App";
@@ -18,6 +19,7 @@ function safeReturnPath(raw) {
 }
 
 export default function Login() {
+  usePageTitle("Sign In");
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,6 +35,16 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const API = process.env.REACT_APP_BACKEND_URL || "";
+
+  // Emailed reset links land on /auth/reset-password?token=… — consume the
+  // token from the URL so the link actually opens the reset form.
+  useEffect(() => {
+    if (!location.pathname.startsWith("/auth/reset-password")) return;
+    try {
+      const t = new URLSearchParams(location.search).get("token");
+      if (t) { setResetToken(t); setMode("forgot"); }
+    } catch {}
+  }, [location.pathname, location.search]);
 
   // Prompt 31 Phase 5 — honor ?return=<path> AND react-router `state.from`.
   const returnPath = (() => {
@@ -105,8 +117,10 @@ export default function Login() {
       });
       const data = await res.json();
       if (data.reset_token) {
+        // No email service configured server-side: continue the reset inline,
+        // but never display the raw token.
         setResetToken(data.reset_token);
-        toast.success("Reset token generated. In production, this would be emailed.");
+        toast.info("Set your new password below.");
       } else {
         toast.info("If that email exists, a reset link has been sent.");
       }
@@ -116,7 +130,7 @@ export default function Login() {
 
   if (user) return null;
 
-  const inputCls = "w-full t-input focus:outline-none focus:border-cyan-400/50 transition-all py-3 px-4 text-[15px] rounded-xl";
+  const inputCls = "w-full t-input focus:outline-none focus:border-cyan-400/50 transition-all py-3 px-4 text-[15px] rounded-sm";
 
   return (
     <div className="min-h-[calc(100vh-60px)] flex items-center justify-center px-6">
@@ -129,14 +143,14 @@ export default function Login() {
       >
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-11 h-11 bg-cyan-400/10 rounded-xl flex items-center justify-center mx-auto mb-4">
+          <div className="w-11 h-11 bg-cyan-400/10 rounded-sm flex items-center justify-center mx-auto mb-4">
             {mode === "signup" ? <UserPlus size={18} className="text-cyan-400" /> : <Lock size={18} className="text-cyan-400" />}
           </div>
           <h2 data-testid="auth-title" className="text-xl font-semibold t-text tracking-tight">
             {mode === "login" ? "Sign in" : mode === "signup" ? "Create account" : "Reset password"}
           </h2>
           <p className="text-[13px] t-text-sub mt-1">
-            {mode === "login" ? "Welcome back, operative." : mode === "signup" ? "Join the AI execution economy." : "Enter your email to get a reset link."}
+            {mode === "login" ? "Welcome back, Operator." : mode === "signup" ? "Join the AI execution economy." : "Enter your email to get a reset link."}
           </p>
         </div>
 
@@ -340,10 +354,6 @@ function ResetPasswordForm({ token, API, onSuccess }) {
 
   return (
     <form onSubmit={handleReset} data-testid="reset-form" className="flex flex-col gap-5">
-      <div className="bg-cyan-400/5 border border-cyan-400/20 rounded-xl p-3">
-        <p className="text-[11px] text-cyan-300 mb-1">Reset Token (demo)</p>
-        <p className="text-[12px] t-text-mute font-mono break-all">{token}</p>
-      </div>
       <div>
         <label htmlFor="new-password" className="block text-[13px] t-text-sub mb-2">New Password</label>
         <input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} data-testid="reset-password-input" placeholder="Min 6 characters" className="w-full t-input focus:outline-none focus:border-cyan-400/50 transition-all py-3 px-4 text-[15px] rounded-xl" style={{ border: '1px solid var(--input-border)' }} required minLength={6} />

@@ -2,6 +2,7 @@ import { useState, useEffect, createContext, useContext, useCallback, lazy, Susp
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
+import { MotionConfig } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { ThemeProvider } from "@/lib/theme";
 import Navbar from "@/components/Navbar";
@@ -182,9 +183,13 @@ function App() {
     <AuthContext.Provider value={{ user, token, isAdmin, isOwner, loading, login, register, logout }}>
       <ThemeProvider>
         <CreditProvider>
-          <BrowserRouter>
-            <AppShell />
-          </BrowserRouter>
+          {/* Respect prefers-reduced-motion: framer drops transform animations,
+              keeps opacity, so scroll-revealed content stays reachable. */}
+          <MotionConfig reducedMotion="user">
+            <BrowserRouter>
+              <AppShell />
+            </BrowserRouter>
+          </MotionConfig>
         </CreditProvider>
       </ThemeProvider>
     </AuthContext.Provider>
@@ -289,7 +294,8 @@ function AppShell() {
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/exchange" element={<Marketplace />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
-          <Route path="/marketplace" element={<Marketplace />} />
+          {/* Canonical URL is /exchange — redirect the duplicate */}
+          <Route path="/marketplace" element={<Navigate to="/exchange" replace />} />
           <Route path="/agent/:id" element={<AgentDetail />} />
           <Route path="/creator/:id" element={<CreatorProfile />} />
           <Route path="/payment/success" element={<PaymentSuccess />} />

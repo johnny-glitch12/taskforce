@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import usePageTitle from "@/hooks/usePageTitle";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/App";
 import { useCredits } from "@/lib/credits";
@@ -32,7 +33,7 @@ function SearchHero({ searchQuery, setSearchQuery }) {
           style={{ boxShadow: "0 0 8px rgba(34,211,238,0.7)" }}
         />
         <span className="text-[10px] tracking-[0.25em] uppercase font-mono t-text-mute">
-          The Exchange · Live Marketplace
+          The Exchange · Agent Marketplace
         </span>
       </div>
       <h1
@@ -240,11 +241,14 @@ function AgentCard({ agent, index }) {
         </Link>
 
         <div className="flex items-center gap-3 mb-3">
-          <span className="flex items-center gap-1 text-[12px]">
-            <Star size={12} className="fill-amber-400 text-amber-400" />
-            <span className="t-text font-medium">{agent.rating}</span>
-            <span className="t-text-dim">({agent.reviews})</span>
-          </span>
+          {/* Only show a rating once real reviews exist — no fabricated stars */}
+          {agent.rating && agent.reviews > 0 && (
+            <span className="flex items-center gap-1 text-[12px]">
+              <Star size={12} className="fill-amber-400 text-amber-400" />
+              <span className="t-text font-medium">{agent.rating}</span>
+              <span className="t-text-dim">({agent.reviews})</span>
+            </span>
+          )}
           <span className="flex items-center gap-1 text-[12px] t-text-sub">
             <Shield size={11} className="text-emerald-500" /> {agent.trustScore}
           </span>
@@ -277,6 +281,7 @@ function AgentCard({ agent, index }) {
 }
 
 export default function Marketplace() {
+  usePageTitle("The Exchange");
   const { token } = useAuth();
   const { refreshCredits } = useCredits();
   const [searchQuery, setSearchQuery] = useState("");
@@ -341,10 +346,11 @@ export default function Marketplace() {
           buyPrice: l.buy_price,
           priceCredits: l.price_credits || 0,
           isOfficial: !!l.is_official,
-          image: l.video_url ? `${API}${l.video_url}` : (l.photo_urls?.[0] ? `${API}${l.photo_urls[0]}` : null),
+          // Card images must be images — a video URL inside <img> renders broken.
+          image: l.photo_urls?.[0] ? `${API}${l.photo_urls[0]}` : null,
           videoUrl: l.video_url ? `${API}${l.video_url}` : null,
           photoUrls: (l.photo_urls || []).map((u) => `${API}${u}`),
-          rating: l.rating || 4.5,
+          rating: l.rating || null,
           reviews: 0,
           trustScore: l.trust_score,
           deployCount: l.deploy_count || 0,

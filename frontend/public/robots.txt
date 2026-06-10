@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /my-agents
+Disallow: /my-apps
+Disallow: /my-deployments
+Disallow: /credits
+Disallow: /credentials
+Disallow: /admin/
+Disallow: /payment/

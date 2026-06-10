@@ -1,7 +1,9 @@
 import { Trophy, Zap, Crown, ArrowLeft } from "lucide-react";
+import usePageTitle from "@/hooks/usePageTitle";
 import { Link } from "react-router-dom";
 
 export default function Leaderboard() {
+  usePageTitle("Leaderboard");
   const placeholderRows = [
     { rank: 1, op: "operative_zero", builds: "—", deploys: "—", revenue: "—" },
     { rank: 2, op: "ghost.protocol", builds: "—", deploys: "—", revenue: "—" },

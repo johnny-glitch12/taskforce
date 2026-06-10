@@ -28,7 +28,16 @@
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
         <title>Task Force — Build, Deploy & Monetize AI Agents</title>
         <script>window.addEventListener("error",function(e){if(e.error instanceof DOMException&&e.error.name==="DataCloneError"&&e.message&&e.message.includes("PerformanceServerTiming")){e.stopImmediatePropagation();e.preventDefault()}},true);</script>
-        <script src="https://assets.emergent.sh/scripts/emergent-main.js"></script>
+        <script>
+            // Set theme before first paint to avoid a dark flash for light-theme users.
+            (function () {
+                try {
+                    var t = localStorage.getItem("nova_theme");
+                    if (!t) t = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+                    document.documentElement.setAttribute("data-theme", t);
+                } catch (e) {}
+            })();
+        </script>
     </head>
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>

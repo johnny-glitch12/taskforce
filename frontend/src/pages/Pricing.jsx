@@ -12,6 +12,7 @@
  * a plan or top-up; the platform handles the rest behind the scenes.
  */
 import { useState } from "react";
+import usePageTitle from "@/hooks/usePageTitle";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/App";
 import { toast } from "sonner";
@@ -67,7 +68,7 @@ function BillingToggle({ annual, setAnnual }) {
   );
 }
 
-function PricingCard({ tier, annual, onSubscribe, subscribing }) {
+function PricingCard({ tier, annual, onCta, subscribing }) {
   const isPopular = tier.popular;
   const price = tier.monthlyPrice === null ? null : annual ? Math.round(tier.monthlyPrice * 0.8) : tier.monthlyPrice;
   const isLoading = subscribing === tier.id;
@@ -120,7 +121,7 @@ function PricingCard({ tier, annual, onSubscribe, subscribing }) {
 
         {tier.ctaStyle === "primary" ? (
           <button
-            onClick={() => tier.backendTier && onSubscribe(tier.id, tier.backendTier)}
+            onClick={() => onCta(tier)}
             data-testid={`cta-${tier.id}`}
             disabled={isLoading}
             className="w-full py-3 text-[13px] font-bold tracking-wide uppercase rounded-sm transition-all flex items-center justify-center gap-2 mb-6 text-black bg-cyan-400 hover:bg-cyan-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50"
@@ -130,7 +131,7 @@ function PricingCard({ tier, annual, onSubscribe, subscribing }) {
           </button>
         ) : (
           <button
-            onClick={tier.backendTier ? () => onSubscribe(tier.id, tier.backendTier) : undefined}
+            onClick={() => onCta(tier)}
             data-testid={`cta-${tier.id}`}
             disabled={isLoading}
             className="w-full py-3 text-[13px] font-bold tracking-wide uppercase rounded-sm transition-all flex items-center justify-center gap-2 mb-6 t-text hover:text-cyan-400 hover:border-cyan-400/40 disabled:opacity-50"
@@ -204,6 +205,7 @@ function ValueProps() {
 }
 
 export default function Pricing() {
+  usePageTitle("Pricing");
   const [annual, setAnnual] = useState(false);
   const [subscribing, setSubscribing] = useState(null);
   const [topupBusy, setTopupBusy] = useState(null);
@@ -232,6 +234,21 @@ export default function Pricing() {
       }
     } catch { toast.error("Network error."); }
     setSubscribing(null);
+  };
+
+  /** Every tier CTA does something: paid tiers go to checkout, RECRUIT to
+   *  signup, COMMAND to the sales contact. No dead buttons. */
+  const handleTierCta = (tier) => {
+    if (tier.backendTier) return handleSubscribe(tier.id, tier.backendTier);
+    if (tier.id === "command") {
+      window.location.href =
+        "mailto:abbasinidhal@gmail.com?subject=Task%20Force%20Command%20tier%20inquiry";
+      return;
+    }
+    // RECRUIT (free tier): signed-in users are already on it — point them at
+    // the builder; visitors go to signup.
+    if (user) return navigate("/armory");
+    return navigate("/login");
   };
 
   const handleTopup = async (pack) => {
@@ -282,7 +299,7 @@ export default function Pricing() {
         {/* Tier grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-20 items-start">
           {TIERS.map((tier) => (
-            <PricingCard key={tier.id} tier={tier} annual={annual} onSubscribe={handleSubscribe} subscribing={subscribing} />
+            <PricingCard key={tier.id} tier={tier} annual={annual} onCta={handleTierCta} subscribing={subscribing} />
           ))}
         </div>
 
