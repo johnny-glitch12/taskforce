@@ -208,4 +208,144 @@ __all__ = [
     "sort_key",
     "aggregate_runs_24h",
     "fetch_exchange_status_map",
+    "aggregate_runs_for_period",
+    "compute_uptime_buckets",
+    "list_recent_activity",
 ]
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Phase-31 Phase-2 helpers — single-agent stats / uptime / recent activity
+# ═════════════════════════════════════════════════════════════════════════
+async def aggregate_runs_for_period(
+    db,
+    agent_id: str,
+    period_iso: str,
+    *,
+    source_collection: str = "app_runs",
+) -> dict:
+    """Aggregate runs/success/errors/credits/avg_response_ms for one agent
+    starting at `period_iso` (UTC ISO string). Used by the /stats endpoint
+    for both the 24h block and each day of stats_7d.
+    """
+    coll = db[source_collection]
+    pipeline = [
+        {"$match": {"app_id": agent_id, "created_at": {"$gte": period_iso}}},
+        {"$group": {
+            "_id": None,
+            "runs": {"$sum": 1},
+            "errors": {"$sum": {"$cond": [{"$eq": ["$success", False]}, 1, 0]}},
+            "credits": {"$sum": {"$ifNull": ["$credits_used", 0]}},
+            "avg_response_ms": {"$avg": {"$ifNull": ["$duration_ms", 0]}},
+        }},
+    ]
+    async for row in coll.aggregate(pipeline):
+        runs = int(row.get("runs") or 0)
+        errors = int(row.get("errors") or 0)
+        success_rate = int(round(100 * (runs - errors) / runs)) if runs > 0 else 0
+        return {
+            "runs": runs,
+            "errors": errors,
+            "credits": int(row.get("credits") or 0),
+            "avg_response_ms": int(round(row.get("avg_response_ms") or 0)),
+            "success_rate": success_rate,
+        }
+    return {"runs": 0, "errors": 0, "credits": 0, "avg_response_ms": 0, "success_rate": 0}
+
+
+async def compute_uptime_buckets(
+    db,
+    agent_id: str,
+    *,
+    bucket_minutes: int = 5,
+    lookback_hours: int = 24,
+) -> dict:
+    """Compute uptime by chopping `lookback_hours` into N-minute buckets.
+
+    Each bucket is classified:
+      - "up"   : ≥1 run in the bucket AND all succeeded
+      - "down" : ≥1 run in the bucket AND at least one failed
+      - "gray" : no runs in the bucket (no signal)
+
+    Uptime % = up / (up + down). Gray buckets don't count either way.
+    """
+    now = _now_dt()
+    start = now - timedelta(hours=lookback_hours)
+    bucket_count = (lookback_hours * 60) // bucket_minutes  # e.g. 288 for 24h/5min
+
+    # Pre-init all buckets as gray
+    buckets = []
+    for i in range(bucket_count):
+        bstart = start + timedelta(minutes=i * bucket_minutes)
+        buckets.append({
+            "i": i,
+            "start": bstart.isoformat(),
+            "state": "gray",
+            "runs": 0,
+            "errors": 0,
+        })
+
+    # Fetch all runs in the window
+    runs_cursor = db.app_runs.find(
+        {"app_id": agent_id, "created_at": {"$gte": start.isoformat()}},
+        {"_id": 0, "success": 1, "created_at": 1},
+    )
+    bucket_seconds = bucket_minutes * 60
+    async for r in runs_cursor:
+        try:
+            ts = datetime.fromisoformat(r["created_at"].replace("Z", "+00:00"))
+        except Exception:
+            continue
+        offset = int((ts - start).total_seconds() // bucket_seconds)
+        if 0 <= offset < bucket_count:
+            buckets[offset]["runs"] += 1
+            if r.get("success") is False:
+                buckets[offset]["errors"] += 1
+
+    up = 0
+    down = 0
+    for b in buckets:
+        if b["runs"] == 0:
+            b["state"] = "gray"
+        elif b["errors"] > 0:
+            b["state"] = "down"
+            down += 1
+        else:
+            b["state"] = "up"
+            up += 1
+
+    pct = int(round(100 * up / (up + down))) if (up + down) > 0 else 100
+    return {
+        "percentage": pct,
+        "bucket_count": bucket_count,
+        "bucket_minutes": bucket_minutes,
+        "buckets": buckets,
+        "up_count": up,
+        "down_count": down,
+        "gray_count": bucket_count - up - down,
+    }
+
+
+async def list_recent_activity(db, agent_id: str, *, limit: int = 10) -> list:
+    """Return up to `limit` recent runs as compact summary lines for the
+    Overview tab. Each line: {id, status, created_at, duration_ms, summary}.
+    """
+    cursor = db.app_runs.find(
+        {"app_id": agent_id},
+        {"_id": 0, "id": 1, "success": 1, "created_at": 1, "duration_ms": 1, "error": 1},
+    ).sort("created_at", -1).limit(limit)
+    rows = []
+    async for r in cursor:
+        if r.get("success"):
+            summary = f"ok in {r.get('duration_ms', 0)}ms"
+        else:
+            err = (r.get("error") or "failed")[:80]
+            summary = f"failed: {err}"
+        rows.append({
+            "id": r.get("id"),
+            "status": "success" if r.get("success") else "error",
+            "created_at": r.get("created_at"),
+            "duration_ms": int(r.get("duration_ms") or 0),
+            "summary": summary,
+        })
+    return rows

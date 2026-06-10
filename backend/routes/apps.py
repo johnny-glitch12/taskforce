@@ -508,6 +508,11 @@ async def run_app(app_id: str, body: AppRunRequest, request: Request,
     success = False
     output: dict = {}
     error: Optional[str] = None
+    # ── Phase-31 Phase-2: capture stdout/stderr so the Hub's Logs tab can
+    # surface print() output and tracebacks. Hard-capped at 32KB per stream
+    # to keep DB rows bounded.
+    captured_stdout = ""
+    captured_stderr = ""
 
     try:
         # Sandboxed exec — only safe builtins, captured run() function.
@@ -538,22 +543,29 @@ async def run_app(app_id: str, body: AppRunRequest, request: Request,
             "True": True, "False": False, "None": None,
         }
         ns: dict = {"__builtins__": SAFE_BUILTINS, "__name__": "__tfagent__"}
-        exec(compile(main_py, "<agent:main.py>", "exec"), ns)
-        run_fn = ns.get("run")
-        if not callable(run_fn):
-            raise RuntimeError("main.py did not define a callable run() function.")
-        # Invoke with whatever subset of kwargs the agent accepts
-        import inspect as _inspect
-        sig = _inspect.signature(run_fn)
-        kwargs: dict = {"input": body.input}
-        if "env" in sig.parameters:
-            kwargs["env"] = {}
-        if "keys" in sig.parameters:
-            kwargs["keys"] = {}
-        result = run_fn(**kwargs)
-        if _inspect.iscoroutine(result):
-            import asyncio as _asyncio
-            result = await result
+
+        import contextlib as _ctx
+        import io as _io
+        _stdout_buf, _stderr_buf = _io.StringIO(), _io.StringIO()
+        with _ctx.redirect_stdout(_stdout_buf), _ctx.redirect_stderr(_stderr_buf):
+            exec(compile(main_py, "<agent:main.py>", "exec"), ns)
+            run_fn = ns.get("run")
+            if not callable(run_fn):
+                raise RuntimeError("main.py did not define a callable run() function.")
+            # Invoke with whatever subset of kwargs the agent accepts
+            import inspect as _inspect
+            sig = _inspect.signature(run_fn)
+            kwargs: dict = {"input": body.input}
+            if "env" in sig.parameters:
+                kwargs["env"] = {}
+            if "keys" in sig.parameters:
+                kwargs["keys"] = {}
+            result = run_fn(**kwargs)
+            if _inspect.iscoroutine(result):
+                import asyncio as _asyncio
+                result = await result
+        captured_stdout = _stdout_buf.getvalue()[:32_000]
+        captured_stderr = _stderr_buf.getvalue()[:32_000]
         if isinstance(result, dict):
             output = result
         else:
@@ -561,6 +573,19 @@ async def run_app(app_id: str, body: AppRunRequest, request: Request,
         success = True
     except Exception as e:
         error = f"{type(e).__name__}: {str(e)[:300]}"
+        # The buffers may already have data captured before the throw.
+        try:
+            captured_stdout = _stdout_buf.getvalue()[:32_000]  # noqa: F821
+            captured_stderr = _stderr_buf.getvalue()[:32_000]  # noqa: F821
+        except Exception:  # noqa: BLE001
+            pass
+        # Append a short traceback into stderr so Logs surface it.
+        try:
+            import traceback as _tb
+            tb_short = _tb.format_exc()[-2000:]
+            captured_stderr = (captured_stderr + ("\n" if captured_stderr else "") + tb_short)[:32_000]
+        except Exception:  # noqa: BLE001
+            pass
     duration_ms = int((time.time() - t0) * 1000)
 
     # Debit (1 cr min for app run) — billed to the OWNER for public apps, caller for private.
@@ -589,6 +614,74 @@ async def run_app(app_id: str, body: AppRunRequest, request: Request,
         "credits_used": debit.get("credits_charged", 0),
         "created_at": _now_iso(),
     })
+
+    # ── Phase 31 Phase 2 — emit log rows into agent_run_logs ─────────────
+    # One synthetic INFO at the top, one row per non-empty stdout/stderr line,
+    # one synthetic INFO/ERROR at the bottom. Wrapped in try/except — log
+    # writes NEVER propagate failures into the run response.
+    try:
+        log_rows: list = []
+        ts_start = _now_iso()
+        log_rows.append({
+            "id": uuid.uuid4().hex,
+            "agent_id": proj["id"],
+            "run_id": run_id,
+            "user_id": owner_id,
+            "level": "info",
+            "message": f"Run {run_id[:8]} started (caller={caller_id or 'anon'})",
+            "timestamp": ts_start,
+            "source": "system",
+            "metadata": {},
+        })
+        for line in (captured_stdout or "").splitlines():
+            if not line.strip():
+                continue
+            log_rows.append({
+                "id": uuid.uuid4().hex,
+                "agent_id": proj["id"],
+                "run_id": run_id,
+                "user_id": owner_id,
+                "level": "info",
+                "message": line[:2000],
+                "timestamp": _now_iso(),
+                "source": "stdout",
+                "metadata": {},
+            })
+        for line in (captured_stderr or "").splitlines():
+            if not line.strip():
+                continue
+            log_rows.append({
+                "id": uuid.uuid4().hex,
+                "agent_id": proj["id"],
+                "run_id": run_id,
+                "user_id": owner_id,
+                "level": "error" if not success else "warn",
+                "message": line[:2000],
+                "timestamp": _now_iso(),
+                "source": "stderr",
+                "metadata": {},
+            })
+        log_rows.append({
+            "id": uuid.uuid4().hex,
+            "agent_id": proj["id"],
+            "run_id": run_id,
+            "user_id": owner_id,
+            "level": "info" if success else "error",
+            "message": (
+                f"Run completed in {duration_ms}ms — success"
+                if success else f"Run failed in {duration_ms}ms — {error or 'unknown error'}"
+            ),
+            "timestamp": _now_iso(),
+            "source": "system",
+            "metadata": {"duration_ms": duration_ms, "credits_used": debit.get("credits_charged", 0)},
+        })
+        if log_rows:
+            await db.agent_run_logs.insert_many(log_rows, ordered=False)
+    except Exception as _log_err:  # noqa: BLE001
+        import logging as _lg
+        _lg.getLogger(__name__).warning(
+            f"[apps.run] log-emit failed for run={run_id[:8]}: {_log_err}"
+        )
 
     # ── Phase 31 — consecutive-error tracking + auto-pause trigger ────────
     # On success: reset consecutive_errors when non-zero. On failure: bump and

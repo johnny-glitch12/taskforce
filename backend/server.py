@@ -831,6 +831,14 @@ async def ensure_indexes():
     await db.app_runs.create_index([("app_id", 1), ("created_at", -1)])
     await db.agent_packages.create_index([("user_id", 1), ("updated_at", -1)])
 
+    # ── Agent Operations Hub (Prompt 31, Phase 2) ──────────────────────────
+    # agent_run_logs — feed for the Logs tab. TTL 30d on `timestamp`.
+    await db.agent_run_logs.create_index([("agent_id", 1), ("timestamp", -1)])
+    await db.agent_run_logs.create_index([("run_id", 1), ("timestamp", 1)])
+    await db.agent_run_logs.create_index(
+        "timestamp", expireAfterSeconds=30 * 24 * 3600,
+    )
+
 # ─── Dashboard & Custom Agent Models ───
 
 AGENT_TIER_LIMITS = {"free": 3, "pro": 999999}

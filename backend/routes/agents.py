@@ -31,8 +31,11 @@ from lib.memory_audit import log_memory_event
 from lib.per_user_rate_limit import user_rate_limit
 from lib.agent_normalize import (
     aggregate_runs_24h,
+    aggregate_runs_for_period,
+    compute_uptime_buckets,
     default_phase1_fields,
     fetch_exchange_status_map,
+    list_recent_activity,
     normalize_agent,
     sort_key,
 )
@@ -650,3 +653,419 @@ async def test_seed_agents(
                 })
 
     return {"inserted": inserted, "count": len(inserted), "with_runs": bool(body.with_runs)}
+
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# PHASE 2 — Run history, logs, stats
+# ═════════════════════════════════════════════════════════════════════════
+
+# ── Helper: opaque cursor encode/decode (created_at + id tie-breaker) ────
+def _encode_cursor(created_at: str, row_id: str) -> str:
+    import base64
+    raw = f"{created_at}|{row_id}".encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii")
+
+
+def _decode_cursor(cursor: Optional[str]) -> Optional[tuple]:
+    if not cursor:
+        return None
+    try:
+        import base64
+        raw = base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8")
+        ts, rid = raw.split("|", 1)
+        return (ts, rid)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+_DATE_RANGE_HOURS = {"24h": 24, "7d": 24 * 7, "30d": 24 * 30, "all": 24 * 365 * 5}
+
+
+def _date_range_cutoff_iso(date_range: str) -> Optional[str]:
+    """Return ISO cutoff for `date_range`. `all` returns None (no filter)."""
+    if date_range == "all":
+        return None
+    hours = _DATE_RANGE_HOURS.get(date_range, 24 * 7)
+    return (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+
+
+def _serialize_run_row(r: dict, *, truncate_io: bool = False) -> dict:
+    out = {
+        "id": r.get("id"),
+        "agent_id": r.get("app_id"),
+        "status": "success" if r.get("success") else "error",
+        "input": r.get("input"),
+        "output": r.get("output"),
+        "error": r.get("error"),
+        "execution_time_ms": int(r.get("duration_ms") or 0),
+        "credits_charged": int(r.get("credits_used") or 0),
+        "model_used": r.get("model"),
+        "created_at": r.get("created_at"),
+    }
+    if truncate_io:
+        # Listing view: cap large blobs for transport efficiency. Detail
+        # endpoint passes truncate_io=False to give the full payload.
+        for k in ("input", "output"):
+            v = out.get(k)
+            if isinstance(v, (dict, list)):
+                import json as _json
+                serialized = _json.dumps(v, default=str)
+                if len(serialized) > 2000:
+                    out[k] = serialized[:2000] + "... (truncated)"
+            elif isinstance(v, str) and len(v) > 2000:
+                out[k] = v[:2000] + "... (truncated)"
+    return out
+
+
+# ─── GET /api/agents/{id}/runs ───────────────────────────────────────────
+@router.get("/agents/{agent_id}/runs")
+async def list_agent_runs(
+    agent_id: str,
+    status: str = "all",
+    date_range: str = "7d",
+    limit: int = 25,
+    cursor: Optional[str] = None,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("agent_read", 30, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    proj = await _load_owned_project(db, agent_id, uid)
+    limit = max(1, min(int(limit or 25), 100))
+
+    query: dict = {"app_id": proj["id"]}
+    cutoff = _date_range_cutoff_iso(date_range)
+    if cutoff:
+        query["created_at"] = {"$gte": cutoff}
+    if status == "success":
+        query["success"] = True
+    elif status == "error":
+        query["success"] = False
+
+    # Cursor: (created_at, id). Newest-first ordering with tie-breaker on id.
+    decoded = _decode_cursor(cursor)
+    if decoded:
+        ts, rid = decoded
+        # Strictly older OR same-ts-but-id-less-than (lexicographic)
+        prev = query.get("created_at") or {}
+        if isinstance(prev, dict):
+            query["$or"] = [
+                {**({"created_at": {**prev, "$lt": ts}})},
+                {**({"created_at": {**prev, "$eq": ts}}), "id": {"$lt": rid}},
+            ]
+        else:
+            query["$or"] = [{"created_at": {"$lt": ts}},
+                            {"created_at": {"$eq": ts}, "id": {"$lt": rid}}]
+
+    rows_cursor = db.app_runs.find(query, {"_id": 0}).sort(
+        [("created_at", -1), ("id", -1)]
+    ).limit(limit + 1)
+    rows = await rows_cursor.to_list(limit + 1)
+
+    has_more = len(rows) > limit
+    if has_more:
+        rows = rows[:limit]
+    next_cursor = None
+    if has_more and rows:
+        last = rows[-1]
+        next_cursor = _encode_cursor(last.get("created_at", ""), last.get("id", ""))
+
+    return {
+        "runs": [_serialize_run_row(r, truncate_io=True) for r in rows],
+        "has_more": has_more,
+        "next_cursor": next_cursor,
+    }
+
+
+# ─── GET /api/agents/{id}/runs/export ────────────────────────────────────
+# IMPORTANT: declare BEFORE the path-param route below so /export wins
+@router.get("/agents/{agent_id}/runs/export")
+async def export_agent_runs_csv(
+    agent_id: str,
+    date_range: str = "30d",
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("agent_read", 30, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    proj = await _load_owned_project(db, agent_id, uid)
+
+    query: dict = {"app_id": proj["id"]}
+    cutoff = _date_range_cutoff_iso(date_range)
+    if cutoff:
+        query["created_at"] = {"$gte": cutoff}
+
+    import csv
+    import io
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["run_id", "status", "created_at", "execution_time_ms",
+                "credits_charged", "input_summary", "output_summary", "error"])
+
+    def _summarize(v) -> str:
+        if v is None:
+            return ""
+        if isinstance(v, (dict, list)):
+            import json as _json
+            try:
+                return _json.dumps(v, default=str)[:80]
+            except Exception:  # noqa: BLE001
+                return str(v)[:80]
+        return str(v)[:80]
+
+    rows_cursor = db.app_runs.find(query, {"_id": 0}).sort("created_at", -1).limit(5000)
+    count = 0
+    async for r in rows_cursor:
+        w.writerow([
+            r.get("id", ""),
+            "success" if r.get("success") else "error",
+            r.get("created_at", ""),
+            int(r.get("duration_ms") or 0),
+            int(r.get("credits_used") or 0),
+            _summarize(r.get("input")),
+            _summarize(r.get("output")),
+            (r.get("error") or "")[:200],
+        ])
+        count += 1
+
+    slug = proj.get("app_slug") or proj["id"][:8]
+    datestamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+    filename = f"{slug}-runs-{datestamp}.csv"
+
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Run-Count": str(count),
+        },
+    )
+
+
+# ─── GET /api/agents/{id}/runs/{run_id} ──────────────────────────────────
+@router.get("/agents/{agent_id}/runs/{run_id}")
+async def get_agent_run(
+    agent_id: str,
+    run_id: str,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("agent_read", 30, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    proj = await _load_owned_project(db, agent_id, uid)
+
+    row = await db.app_runs.find_one(
+        {"id": run_id, "app_id": proj["id"]},
+        {"_id": 0},
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return _serialize_run_row(row, truncate_io=False)
+
+
+# ─── GET /api/agents/{id}/logs ───────────────────────────────────────────
+@router.get("/agents/{agent_id}/logs")
+async def list_agent_logs(
+    agent_id: str,
+    level: str = "all",
+    limit: int = 100,
+    cursor: Optional[str] = None,
+    run_id: Optional[str] = None,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("agent_read", 30, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    proj = await _load_owned_project(db, agent_id, uid)
+    limit = max(1, min(int(limit or 100), 500))
+
+    query: dict = {"agent_id": proj["id"]}
+    if level in ("info", "warn", "error"):
+        query["level"] = level
+    if run_id:
+        query["run_id"] = run_id
+
+    decoded = _decode_cursor(cursor)
+    if decoded:
+        ts, rid = decoded
+        query["$or"] = [
+            {"timestamp": {"$lt": ts}},
+            {"timestamp": {"$eq": ts}, "id": {"$lt": rid}},
+        ]
+
+    rows_cursor = db.agent_run_logs.find(query, {"_id": 0}).sort(
+        [("timestamp", -1), ("id", -1)]
+    ).limit(limit + 1)
+    rows = await rows_cursor.to_list(limit + 1)
+
+    has_more = len(rows) > limit
+    if has_more:
+        rows = rows[:limit]
+    next_cursor = None
+    if has_more and rows:
+        last = rows[-1]
+        next_cursor = _encode_cursor(last.get("timestamp", ""), last.get("id", ""))
+
+    return {
+        "logs": rows,
+        "has_more": has_more,
+        "next_cursor": next_cursor,
+    }
+
+
+# ─── GET /api/agents/{id}/stats ──────────────────────────────────────────
+@router.get("/agents/{agent_id}/stats")
+async def agent_stats(
+    agent_id: str,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("agent_read", 30, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    proj = await _load_owned_project(db, agent_id, uid)
+    pid = proj["id"]
+
+    now = datetime.now(timezone.utc)
+
+    # ── 24h stats block ──
+    stats_24h = await aggregate_runs_for_period(
+        db, pid, (now - timedelta(hours=24)).isoformat(),
+    )
+
+    # ── 7-day daily buckets ──
+    stats_7d = []
+    for back in range(6, -1, -1):
+        day_start = (now - timedelta(days=back)).replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end = day_start + timedelta(days=1)
+        pipeline = [
+            {"$match": {
+                "app_id": pid,
+                "created_at": {"$gte": day_start.isoformat(), "$lt": day_end.isoformat()},
+            }},
+            {"$group": {
+                "_id": None,
+                "runs": {"$sum": 1},
+                "errors": {"$sum": {"$cond": [{"$eq": ["$success", False]}, 1, 0]}},
+                "credits": {"$sum": {"$ifNull": ["$credits_used", 0]}},
+            }},
+        ]
+        runs, errors, credits = 0, 0, 0
+        async for row in db.app_runs.aggregate(pipeline):
+            runs = int(row.get("runs") or 0)
+            errors = int(row.get("errors") or 0)
+            credits = int(row.get("credits") or 0)
+        stats_7d.append({
+            "date": day_start.strftime("%Y-%m-%d"),
+            "runs": runs,
+            "errors": errors,
+            "credits": credits,
+        })
+
+    # ── Uptime (288 buckets × 5min over 24h) ──
+    uptime_24h = await compute_uptime_buckets(
+        db, pid, bucket_minutes=5, lookback_hours=24,
+    )
+
+    # ── Recent activity (last 10) ──
+    recent_activity = await list_recent_activity(db, pid, limit=10)
+
+    return {
+        "agent_id": pid,
+        "stats_24h": stats_24h,
+        "stats_7d": stats_7d,
+        "uptime_24h": uptime_24h,
+        "recent_activity": recent_activity,
+    }
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# DEV/TEST seed for run history — TASKFORCE_ENV-gated
+# ═════════════════════════════════════════════════════════════════════════
+class SeedRunsRequest(BaseModel):
+    agent_id: str
+    run_count: int = Field(default=20, ge=1, le=500)
+    success_ratio: float = Field(default=0.85, ge=0.0, le=1.0)
+
+
+@router.post("/agents/_test_seed_runs")
+async def test_seed_runs(
+    body: SeedRunsRequest,
+    request: Request,
+    user=Depends(get_current_user()),
+):
+    if not _is_dev_env():
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    db = get_db()
+    uid = _user_id(user)
+    proj = await _load_owned_project(db, body.agent_id, uid)
+    pid = proj["id"]
+
+    import random
+    runs_inserted: list = []
+    logs_inserted = 0
+    base = datetime.now(timezone.utc)
+
+    for i in range(body.run_count):
+        # Spread across the last 24h so the uptime chart looks realistic
+        ts = base - timedelta(minutes=random.randint(0, 24 * 60 - 1))
+        ts_iso = ts.isoformat()
+        success = random.random() < body.success_ratio
+        duration = random.randint(20, 1200)
+        rid = uuid.uuid4().hex
+
+        run_doc = {
+            "id": rid,
+            "app_id": pid,
+            "user_id": uid,
+            "caller_id": uid,
+            "input": {"seed_round": i, "value": f"sample-{i}"},
+            "output": {"ok": success, "result": f"output-{i}"},
+            "success": success,
+            "error": None if success else random.choice([
+                "RuntimeError: synthetic seeded failure",
+                "ValueError: input not parseable",
+                "TimeoutError: upstream slow",
+            ]),
+            "duration_ms": duration,
+            "credits_used": 1,
+            "created_at": ts_iso,
+        }
+        await db.app_runs.insert_one(run_doc)
+        runs_inserted.append(rid)
+
+        # Log rows: start + body + end
+        log_rows = [
+            {"id": uuid.uuid4().hex, "agent_id": pid, "run_id": rid, "user_id": uid,
+             "level": "info", "message": f"Run {rid[:8]} started (seeded)",
+             "timestamp": ts_iso, "source": "system", "metadata": {}},
+            {"id": uuid.uuid4().hex, "agent_id": pid, "run_id": rid, "user_id": uid,
+             "level": "info", "message": f"Processing input sample-{i}",
+             "timestamp": ts_iso, "source": "stdout", "metadata": {}},
+        ]
+        if not success:
+            log_rows.append({
+                "id": uuid.uuid4().hex, "agent_id": pid, "run_id": rid, "user_id": uid,
+                "level": "error", "message": run_doc["error"],
+                "timestamp": ts_iso, "source": "stderr", "metadata": {},
+            })
+        log_rows.append({
+            "id": uuid.uuid4().hex, "agent_id": pid, "run_id": rid, "user_id": uid,
+            "level": "info" if success else "error",
+            "message": (f"Run completed in {duration}ms — success"
+                        if success else f"Run failed in {duration}ms"),
+            "timestamp": ts_iso, "source": "system",
+            "metadata": {"duration_ms": duration, "credits_used": 1},
+        })
+        await db.agent_run_logs.insert_many(log_rows, ordered=False)
+        logs_inserted += len(log_rows)
+
+    return {
+        "ok": True,
+        "agent_id": pid,
+        "runs_inserted": len(runs_inserted),
+        "logs_inserted": logs_inserted,
+        "success_ratio": body.success_ratio,
+    }
