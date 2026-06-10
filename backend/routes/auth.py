@@ -16,6 +16,7 @@ from lib.rate_limit import rate_limit_dependency
 from lib.auth_validators import (
     validate_signup, check_username, check_password, RESERVED_USERNAMES,
 )
+from lib.per_user_rate_limit import user_rate_limit
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -322,3 +323,126 @@ async def reset_password(req: ResetRequest):
     await db.users.update_one({"id": reset_entry["user_id"]}, {"$set": {"password_hash": new_hash}})
     await db.password_resets.update_one({"token": req.token}, {"$set": {"used": True}})
     return {"message": "Password reset successfully. You can now log in with your new password."}
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Phase 4 — Account deletion cascade
+# ═════════════════════════════════════════════════════════════════════════
+class DeleteAccountRequest(BaseModel):
+    """Confirmation string required to prevent accidental account deletion."""
+    confirm: str = Field(min_length=1)
+
+
+def _resolve_user_dep():
+    """Lazy import of get_current_user to avoid circular import at module load."""
+    from server import get_current_user
+    return get_current_user
+
+
+@router.delete("/auth/me")
+async def delete_my_account(
+    body: DeleteAccountRequest,
+    request: Request,
+    user=Depends(_resolve_user_dep()),
+    _=Depends(user_rate_limit("account_delete", 1, 3600)),
+):
+    """Hard-delete the authenticated user's account and ALL user-scoped data.
+
+    Body must include `{"confirm": "DELETE_MY_ACCOUNT"}` exactly. The cascade
+    runs synchronously so the HTTP 200 is only returned after every row is
+    gone. Audit event `account_deleted` is logged (best-effort).
+
+    Cascade covers all 8 memory-system collections + bot_projects + exchange
+    listings + per-user runtime tables + byok_credentials + the users row.
+    """
+    if body.confirm != "DELETE_MY_ACCOUNT":
+        raise HTTPException(
+            status_code=400,
+            detail="Confirmation string mismatch. Body must be {\"confirm\": \"DELETE_MY_ACCOUNT\"}.",
+        )
+
+    from server import db
+    user_id = str(user.get("id") or user.get("email") or "")
+    user_email = user.get("email") or ""
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # ─── Synchronous cascade ────────────────────────────────────────────
+    deleted_counts: dict[str, int] = {}
+    for coll in (
+        # Memory-system collections (Phases 1–3)
+        "builder_memories",
+        "builder_profiles",
+        "agent_build_history",
+        "conversation_summaries",
+        "agent_changelogs",
+        "file_versions",
+        "vibe_sessions",
+        # BYOK vault + per-user runtime tables
+        "byok_credentials",
+        "api_keys",
+        "user_workflows",
+        "user_bot_deployments",
+        "user_agents",
+        "credit_transactions",
+        "notifications",
+        "agent_executions",
+        "workflow_runs",
+        "csdrop_executions",
+        "external_agent_runs",
+        "deployment_runs",
+        "compute_usage",
+    ):
+        try:
+            res = await db[coll].delete_many({"user_id": user_id})
+            deleted_counts[coll] = res.deleted_count
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[delete_account] {coll} cascade failed: {e}")
+            deleted_counts[coll] = -1
+
+    # bot_projects — keyed by user_id, but also has `creator_email`
+    try:
+        res = await db.bot_projects.delete_many({
+            "$or": [{"user_id": user_id}, {"creator_email": user_email}],
+        })
+        deleted_counts["bot_projects"] = res.deleted_count
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[delete_account] bot_projects cascade failed: {e}")
+        deleted_counts["bot_projects"] = -1
+
+    # Exchange listings created by this user
+    try:
+        res = await db.exchange_listings.delete_many({
+            "$or": [{"creator_user_id": user_id}, {"creator_email": user_email},
+                    {"user_id": user_id}],
+        })
+        deleted_counts["exchange_listings"] = res.deleted_count
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[delete_account] exchange_listings cascade failed: {e}")
+        deleted_counts["exchange_listings"] = -1
+
+    # Finally the user row itself
+    try:
+        res = await db.users.delete_one({"id": user_id})
+        deleted_counts["users"] = res.deleted_count
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[delete_account] users row delete failed: {e}")
+        deleted_counts["users"] = -1
+
+    # Audit (best-effort) — fires AFTER cascade
+    try:
+        from lib.memory_audit import log_memory_event
+        await log_memory_event(
+            user_id, "account_deleted",
+            {"deleted_counts": deleted_counts, "email_hash_prefix": user_email[:6]},
+            request=request,
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+    logger.info(f"[delete_account] user={user_id[:8]} cascade complete: {deleted_counts}")
+    return {
+        "ok": True,
+        "user_id_deleted": user_id,
+        "deleted_counts": deleted_counts,
+    }

@@ -452,9 +452,46 @@ async def vibe_chat(req: VibeChatRequest, user=Depends(get_current_user()),
     # Silent BYOK override — uses user's key when stored, else platform key.
     key_info = await _resolve_api_key(db, user_id, req.model)
 
+    # ── Phase 4: Full context assembly (memory + summary + changelog) ────
+    # Phase 2 prepended `memory_context` only; Phase 4 also adds the rolling
+    # summary block and the recent edit log. All three are sourced from
+    # lib/llm_context.build_chat_context which decrypts on read. Failures
+    # are non-fatal — we fall back to the bare planning prompt so chat works
+    # even if any subsystem is wedged.
+    augmented_system_prompt = VIBE_PLANNING_PROMPT
+    try:
+        from lib.llm_context import build_chat_context
+        ctx = await build_chat_context(db, user_id, session["id"], req.message)
+        sections = [VIBE_PLANNING_PROMPT, ""]
+        # User memory (already a complete markdown block with its own header)
+        if ctx.get("memory_context"):
+            sections.append(ctx["memory_context"].rstrip())
+            sections.append("")
+        # Rolling summary
+        sections.append("=== CONVERSATION SUMMARY (everything before the recent window) ===")
+        sections.append((ctx.get("summary") or "No summary yet.").rstrip())
+        sections.append("")
+        # Recent edit log — last 10 entries
+        sections.append("=== RECENT EDIT LOG ===")
+        cl_entries = (ctx.get("changelog_entries") or [])[-10:]
+        if not cl_entries:
+            sections.append("(no edits yet)")
+        else:
+            for e in cl_entries:
+                msg_num = e.get("message_num", 0)
+                for c in (e.get("changes") or []):
+                    sections.append(
+                        f"msg #{msg_num}: {c.get('file','')} {c.get('action','')} — {c.get('what','')}"
+                    )
+        sections.append("")
+        augmented_system_prompt = "\n".join(sections)
+    except Exception as _ctx_err:  # noqa: BLE001
+        logger.debug(f"[vibe_chat] build_chat_context failed (non-fatal): {_ctx_err}")
+        augmented_system_prompt = VIBE_PLANNING_PROMPT
+
     try:
         result = await _call_platform_llm(
-            model=req.model, system_prompt=VIBE_PLANNING_PROMPT,
+            model=req.model, system_prompt=augmented_system_prompt,
             history=history, user_message=req.message,
             session_key=f"vibe-{session['id']}",
             api_key=key_info["api_key"],
@@ -890,6 +927,29 @@ async def vibe_generate_legacy(req: VibeGenerateRequest, user=Depends(get_curren
             await _log_change(db, user_id, session["id"], _changelog_msg_num, _changes)
     except Exception as _log_err:  # noqa: BLE001
         logger.debug(f"[vibe_generate] changelog write failed (non-fatal): {_log_err}")
+
+    # ── Phase 4: agent_build_history upsert ──────────────────────────────
+    # Records one entry per agent_id; subsequent generates UPDATE the entry
+    # in place rather than duplicating. Integration detection scans file
+    # contents for known patterns. Fire-and-forget to keep this off the
+    # response critical path.
+    try:
+        import asyncio as _asyncio
+        from lib.agent_build_history import record_build_event, detect_integrations
+        _event = "updated" if _phase3_existing_files_by_path else "created"
+        _integrations = detect_integrations(files)
+        _filenames = [f["path"] for f in files if isinstance(f, dict) and f.get("path")]
+        _asyncio.create_task(record_build_event(
+            db, user_id, project_id,
+            event=_event,
+            name=name,
+            description=description,
+            integrations_used=_integrations,
+            files=_filenames,
+            status="draft",
+        ))
+    except Exception as _bh_err:  # noqa: BLE001
+        logger.debug(f"[vibe_generate] build_history dispatch failed (non-fatal): {_bh_err}")
 
     return {
         "session_id": session["id"], "type": "build",

@@ -37,6 +37,10 @@ ACTIONS = {
     "summary_updated",  # Phase 3 — rolling conversation summary refreshed
     "changelog_appended",  # Phase 3 — AI made a file edit, logged a turn
     "revert_applied",  # Phase 3 — user rolled back to a prior message_num
+    "memory_pruned",  # Phase 4 — automatic cap enforcement
+    "build_recorded",  # Phase 4 — agent_build_history upsert
+    "build_history_read",  # Phase 4 — GET /api/builder/memory/build-history
+    "account_deleted",  # Phase 4 — DELETE /api/auth/me cascade
 }
 
 

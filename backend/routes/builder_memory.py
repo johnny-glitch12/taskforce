@@ -35,6 +35,8 @@ from lib.memory_summarizer import update_rolling_summary, get_summary
 from lib.agent_changelog import log_change, get_changelog, get_highest_message_num
 from lib.file_versions import save_file_version, list_versions, restore_files_to_message
 from lib.llm_context import build_chat_context
+from lib.agent_build_history import get_build_history
+from lib.cleanup_jobs import run_all as run_all_cleanup_jobs
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -788,6 +790,37 @@ async def undo_draft(
     # so we get the same response shape + audit.
     body = RevertRequest(to_message_num=target)
     return await revert_draft(session_id, body, request, user)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Phase 4 — Build history read + cleanup job trigger
+# ═══════════════════════════════════════════════════════════════════════════
+@router.get("/builder/memory/build-history")
+async def read_build_history(
+    request: Request,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("memory_read", 30, 60)),
+):
+    """Return the calling user's `agent_build_history.builds[]` (newest first)."""
+    db = get_db()
+    uid = _user_id(user)
+    builds = await get_build_history(db, uid)
+    await log_memory_event(uid, "build_history_read", {"count": len(builds)}, request=request)
+    return {"builds": builds, "count": len(builds)}
+
+
+@router.post("/builder/memory/_test_run_cleanup")
+async def test_run_cleanup(
+    request: Request,
+    user=Depends(get_current_user()),
+):
+    """Dev/test-only: synchronously trigger all 3 cleanup jobs and return counts.
+    Useful for confirming the jobs work end-to-end without waiting for 03:xx UTC."""
+    if not _is_dev_env():
+        raise HTTPException(status_code=404, detail="Not Found")
+    db = get_db()
+    results = await run_all_cleanup_jobs(db)
+    return results
 
 
 __all__ = ["router"]

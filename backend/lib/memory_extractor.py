@@ -180,6 +180,18 @@ async def extract_and_persist(
             await _merge_profile(db, user_id, profile_updates, now)
             base["profile_updated"] = True
 
+        # 9. Cap enforcement (Phase 4) — soft-delete oldest non-corrections
+        # if we exceed the per-user active cap. Fire-and-forget so a slow
+        # prune never blocks the extraction return path. Safe to dispatch
+        # even when 0 memories were inserted — the pruner is a no-op below
+        # cap.
+        try:
+            import asyncio as _asyncio
+            from lib.memory_pruner import prune_user_memories
+            _asyncio.create_task(prune_user_memories(db, user_id))
+        except Exception as _prune_err:  # noqa: BLE001
+            logger.debug(f"[extractor] prune dispatch failed (non-fatal): {_prune_err}")
+
         await _audit_safe(
             user_id, "completed",
             count=len(base["memories_inserted"]),

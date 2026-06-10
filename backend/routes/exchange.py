@@ -351,6 +351,31 @@ async def update_listing(listing_id: str, req: UpdateListingRequest, user=Depend
     if patch:
         patch["updated_at"] = datetime.now(timezone.utc).isoformat()
         await db.exchange_listings.update_one({"_id": doc["_id"]}, {"$set": patch})
+
+    # ── Phase 4: agent_build_history publish hook ─────────────────────────
+    # When a listing flips to "published" we mark the underlying bot_project's
+    # build-history entry as published. Fire-and-forget.
+    try:
+        if new_status == "published" and new_status != old_status:
+            import asyncio as _asyncio
+            from lib.agent_build_history import record_build_event, detect_integrations
+            project_id = doc.get("project_id") or doc.get("bot_project_id") or doc.get("agent_id")
+            if project_id:
+                proj = await db.bot_projects.find_one({"id": project_id}, {"_id": 0, "files": 1, "name": 1, "description": 1})
+                files_list = (proj or {}).get("files") or []
+                _asyncio.create_task(record_build_event(
+                    db, user_id, project_id,
+                    event="published",
+                    name=(proj or {}).get("name") or doc.get("name") or "",
+                    description=(proj or {}).get("description") or doc.get("description") or "",
+                    integrations_used=detect_integrations(files_list),
+                    files=[f.get("path") for f in files_list if isinstance(f, dict) and f.get("path")],
+                    status="published",
+                ))
+    except Exception as _bh_err:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).debug(f"[exchange:publish] build_history dispatch failed (non-fatal): {_bh_err}")
+
     updated = await db.exchange_listings.find_one({"id": listing_id}, {"_id": 0, "nodes_snapshot": 0, "edges_snapshot": 0})
     return updated
 

@@ -2326,6 +2326,40 @@ async def startup():
         scheduler.add_job(_tick_scheduled_runs, 'interval', minutes=5,
                           id='scheduled_runs_tick', replace_existing=True)
 
+        # ── Phase 4: memory-system housekeeping (daily at 03:xx UTC) ─────
+        async def _memory_hard_delete():
+            try:
+                from lib.cleanup_jobs import hard_delete_stale_memories
+                await hard_delete_stale_memories(db)
+            except Exception as e:
+                logger.warning(f"[memory_hard_delete] failed: {e}")
+        scheduler.add_job(
+            _memory_hard_delete, 'cron', hour=3, minute=0,
+            id='memory_hard_delete', replace_existing=True,
+        )
+
+        async def _conversation_purge():
+            try:
+                from lib.cleanup_jobs import purge_old_conversations
+                await purge_old_conversations(db)
+            except Exception as e:
+                logger.warning(f"[conversation_purge] failed: {e}")
+        scheduler.add_job(
+            _conversation_purge, 'cron', hour=3, minute=10,
+            id='conversation_purge', replace_existing=True,
+        )
+
+        async def _file_versions_orphan_prune():
+            try:
+                from lib.cleanup_jobs import prune_orphan_file_versions
+                await prune_orphan_file_versions(db)
+            except Exception as e:
+                logger.warning(f"[file_versions_orphan_prune] failed: {e}")
+        scheduler.add_job(
+            _file_versions_orphan_prune, 'cron', hour=3, minute=20,
+            id='file_versions_orphan_prune', replace_existing=True,
+        )
+
     if not scheduler.running:
         scheduler.start()
         logger.info("APScheduler started (jobs: %d)" % len(scheduler.get_jobs()))
