@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 
+// Must match the <title> in public/index.html (what crawlers and the first
+// paint see before React mounts).
 const BASE_TITLE = "Task Force — Build, Deploy & Monetize AI Agents";
 
 /**

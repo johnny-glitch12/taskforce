@@ -8,3 +8,15 @@ Disallow: /credits
 Disallow: /credentials
 Disallow: /admin/
 Disallow: /payment/
+Disallow: /armory
+Disallow: /studio
+Disallow: /payouts
+Disallow: /earnings
+Disallow: /keys
+Disallow: /security
+Disallow: /overwatch
+Disallow: /creator
+Disallow: /hosting
+Disallow: /external-agents
+Disallow: /settings/
+Disallow: /apps/

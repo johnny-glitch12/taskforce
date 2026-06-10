@@ -8,6 +8,7 @@ export function useTheme() {
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
+    // Key "nova_theme" must match the pre-paint script in public/index.html.
     const stored = localStorage.getItem("nova_theme");
     if (stored) return stored;
     return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";

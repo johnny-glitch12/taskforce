@@ -20,16 +20,10 @@
         <meta name="twitter:description" content="Build, deploy, and monetize autonomous AI agents. Stop coding. Start deploying." />
         <meta name="twitter:image" content="https://taskforce.run/og.png" />
 
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-        <link rel="apple-touch-icon" href="/favicon.svg" />
-        <link rel="manifest" href="/manifest.json" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
-        <title>Task Force — Build, Deploy & Monetize AI Agents</title>
-        <script>window.addEventListener("error",function(e){if(e.error instanceof DOMException&&e.error.name==="DataCloneError"&&e.message&&e.message.includes("PerformanceServerTiming")){e.stopImmediatePropagation();e.preventDefault()}},true);</script>
         <script>
-            // Set theme before first paint to avoid a dark flash for light-theme users.
+            // Set theme before first paint to avoid a dark flash for light-theme
+            // users. Runs before any stylesheet so it can never be parser-blocked
+            // by font CSS. Key "nova_theme" must match src/lib/theme.js.
             (function () {
                 try {
                     var t = localStorage.getItem("nova_theme");
@@ -38,6 +32,14 @@
                 } catch (e) {}
             })();
         </script>
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="apple-touch-icon" href="/favicon.svg" />
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <title>Task Force — Build, Deploy & Monetize AI Agents</title>
+        <script>window.addEventListener("error",function(e){if(e.error instanceof DOMException&&e.error.name==="DataCloneError"&&e.message&&e.message.includes("PerformanceServerTiming")){e.stopImmediatePropagation();e.preventDefault()}},true);</script>
     </head>
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>

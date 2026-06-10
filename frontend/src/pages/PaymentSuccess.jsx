@@ -81,12 +81,12 @@ export default function PaymentSuccess() {
   return (
     <div className="min-h-[calc(100vh-60px)] flex items-center justify-center px-6">
       <div className="fixed top-[20%] left-1/2 -translate-x-1/2 w-[400px] h-[400px] rounded-sm bg-cyan-400/[0.06] blur-[100px] pointer-events-none" />
-      <div data-testid="payment-result-card" className="relative w-full max-w-md bg-white/[0.03] border border-white/[0.08] rounded-sm p-8 text-center animate-fade-in-up backdrop-blur-sm" style={{ animationFillMode: "forwards" }}>
+      <div data-testid="payment-result-card" className="relative w-full max-w-md rounded-sm p-8 text-center animate-fade-in-up backdrop-blur-sm" style={{ animationFillMode: "forwards", background: "var(--bg-card)", border: "1px solid var(--border)" }}>
         {status === "loading" && (
           <>
             <Loader2 size={40} className="text-cyan-400 animate-spin mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-white mb-2">Processing Payment</h2>
-            <p className="text-[13px] text-zinc-500">Verifying your transaction...</p>
+            <h2 className="text-xl font-semibold t-text mb-2">Processing Payment</h2>
+            <p className="text-[13px] t-text-mute">Verifying your transaction...</p>
           </>
         )}
         {status === "success" && (
@@ -94,25 +94,25 @@ export default function PaymentSuccess() {
             <div className="w-16 h-16 rounded-sm bg-emerald-500/10 flex items-center justify-center mx-auto mb-5">
               <SuccessIcon size={32} className="text-emerald-400" />
             </div>
-            <h2 data-testid="payment-success-title" className="text-xl font-semibold text-white mb-2">
+            <h2 data-testid="payment-success-title" className="text-xl font-semibold t-text mb-2">
               {successTitle}
             </h2>
 
             {type === "hosting" && (
               <>
-                <p className="text-[13px] text-zinc-500 mb-1" data-testid="hosting-success-detail">
+                <p className="text-[13px] t-text-mute mb-1" data-testid="hosting-success-detail">
                   {hostingSub?.tier_meta?.label || "Your hosting plan"} is now active.
                 </p>
                 {hostingSub?.current_period_end && (
-                  <p className="text-[12px] text-zinc-600 mb-6 font-mono">
+                  <p className="text-[12px] t-text-dim mb-6 font-mono">
                     Renews after {hostingSub.current_period_end.slice(0, 10)}
                   </p>
                 )}
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <Link to="/hosting" className="flex-1 py-3 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all text-center">
+                  <Link to="/hosting" className="flex-1 py-3 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-colors text-center">
                     Hosting Dashboard
                   </Link>
-                  <Link to="/creator" className="flex-1 py-3 bg-white/[0.06] text-white text-[13px] font-medium rounded-sm border border-white/[0.08] hover:bg-white/[0.1] transition-all text-center">
+                  <Link to="/creator" className="flex-1 py-3 t-text text-[13px] font-medium rounded-sm hover:bg-[var(--bg-card-hover)] transition-colors text-center" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
                     Creator Dashboard
                   </Link>
                 </div>
@@ -121,23 +121,23 @@ export default function PaymentSuccess() {
 
             {type === "bounty" && (
               <>
-                <p className="text-[13px] text-zinc-500 mb-1" data-testid="bounty-success-detail">
-                  {bounty?.title ? <strong className="text-zinc-300">{bounty.title}</strong> : "Your cash bounty"} is now open for submissions.
+                <p className="text-[13px] t-text-mute mb-1" data-testid="bounty-success-detail">
+                  {bounty?.title ? <strong className="t-text-sub">{bounty.title}</strong> : "Your cash bounty"} is now open for submissions.
                 </p>
-                <p className="text-[12px] text-zinc-600 mb-6 font-mono">
+                <p className="text-[12px] t-text-dim mb-6 font-mono">
                   ${data?.amount != null ? (data.amount / 100).toFixed(2) : Number(bounty?.reward_amount || 0).toFixed(2)} held in Stripe escrow.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3">
                   {bounty?.id ? (
-                    <Link to={`/bounties/${bounty.id}`} data-testid="go-to-bounty-btn" className="flex-1 py-3 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all text-center">
+                    <Link to={`/bounties/${bounty.id}`} data-testid="go-to-bounty-btn" className="flex-1 py-3 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-colors text-center">
                       View bounty
                     </Link>
                   ) : (
-                    <Link to="/bounties" data-testid="back-to-bounties-btn" className="flex-1 py-3 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all text-center">
+                    <Link to="/bounties" data-testid="back-to-bounties-btn" className="flex-1 py-3 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-colors text-center">
                       Bounty Board
                     </Link>
                   )}
-                  <Link to="/bounties" className="flex-1 py-3 bg-white/[0.06] text-white text-[13px] font-medium rounded-sm border border-white/[0.08] hover:bg-white/[0.1] transition-all text-center">
+                  <Link to="/bounties" className="flex-1 py-3 t-text text-[13px] font-medium rounded-sm hover:bg-[var(--bg-card-hover)] transition-colors text-center" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
                     All Bounties
                   </Link>
                 </div>
@@ -146,16 +146,16 @@ export default function PaymentSuccess() {
 
             {(type !== "hosting" && type !== "bounty") && (
               <>
-                <p className="text-[13px] text-zinc-500 mb-1">
-                  {data?.agent_name && <><strong className="text-zinc-300">{data.agent_name}</strong> — </>}
+                <p className="text-[13px] t-text-mute mb-1">
+                  {data?.agent_name && <><strong className="t-text-sub">{data.agent_name}</strong> — </>}
                   {data?.plan === "rent" ? "Monthly rental" : "Full purchase"} confirmed.
                 </p>
-                {data?.amount != null && <p className="text-[13px] text-zinc-600 mb-6">${(data.amount / 100).toFixed(2)} {data.currency?.toUpperCase()}</p>}
+                {data?.amount != null && <p className="text-[13px] t-text-dim mb-6">${(data.amount / 100).toFixed(2)} {data.currency?.toUpperCase()}</p>}
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <Link to="/studio" data-testid="go-to-studio-btn" className="flex-1 py-3 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all text-center">
+                  <Link to="/studio" data-testid="go-to-studio-btn" className="flex-1 py-3 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-colors text-center">
                     Open Studio
                   </Link>
-                  <Link to="/marketplace" data-testid="back-to-marketplace-btn" className="flex-1 py-3 bg-white/[0.06] text-white text-[13px] font-medium rounded-sm border border-white/[0.08] hover:bg-white/[0.1] transition-all text-center">
+                  <Link to="/marketplace" data-testid="back-to-marketplace-btn" className="flex-1 py-3 t-text text-[13px] font-medium rounded-sm hover:bg-[var(--bg-card-hover)] transition-colors text-center" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
                     Marketplace
                   </Link>
                 </div>
@@ -168,13 +168,13 @@ export default function PaymentSuccess() {
             <div className="w-16 h-16 rounded-sm bg-red-500/10 flex items-center justify-center mx-auto mb-5">
               <XCircle size={32} className="text-red-400" />
             </div>
-            <h2 className="text-xl font-semibold text-white mb-2">
+            <h2 className="text-xl font-semibold t-text mb-2">
               {status === "expired" ? "Session Expired" : "Payment Issue"}
             </h2>
-            <p className="text-[13px] text-zinc-500 mb-6">
+            <p className="text-[13px] t-text-mute mb-6">
               {status === "expired" ? "Your payment session has expired. Please try again." : "We couldn't verify your payment. Please try again or contact support."}
             </p>
-            <Link to={type === "bounty" ? "/bounties" : "/marketplace"} className="inline-block py-3 px-8 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-all">
+            <Link to={type === "bounty" ? "/bounties" : "/marketplace"} className="inline-block py-3 px-8 bg-cyan-400 text-black font-bold text-[13px] font-medium rounded-sm hover:bg-cyan-300 transition-colors">
               {type === "bounty" ? "Back to Bounties" : "Back to Marketplace"}
             </Link>
           </>

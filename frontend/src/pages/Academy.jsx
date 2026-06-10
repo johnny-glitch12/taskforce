@@ -92,12 +92,7 @@ function EmailSignup() {
         onChange={(e) => setEmail(e.target.value)}
         placeholder="you@example.com"
         autoComplete="email"
-        className="flex-1 px-3.5 py-3 rounded-sm text-[13px] focus:outline-none transition-colors"
-        style={{
-          background: "var(--input-bg)",
-          border: "1px solid var(--input-border)",
-          color: "var(--text-primary)",
-        }}
+        className="flex-1 t-input px-3.5 py-3 rounded-sm text-[13px] focus:outline-none focus:border-cyan-400/50 transition-colors"
       />
       <button
         type="submit"

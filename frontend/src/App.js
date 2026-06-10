@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, useCallback, lazy, Suspense } from "react";
+import { useState, useEffect, createContext, useContext, useCallback, lazy, Suspense, Component } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
@@ -70,6 +70,44 @@ function ProtectedRoute({ children }) {
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
   return children;
+}
+
+/** Catches lazy-chunk load failures (stale hashes after a redeploy) and any
+ *  render error, instead of white-screening the whole app. Chunk errors get
+ *  one automatic reload per session (picks up the fresh deploy); anything
+ *  else shows a manual reload card. Keyed by pathname in AppShell so it
+ *  resets on navigation. */
+class RouteErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { failed: false };
+  }
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error) {
+    const isChunkError = /Loading chunk|ChunkLoadError|dynamically imported module/i.test(String(error));
+    if (isChunkError && !sessionStorage.getItem("tf_chunk_reload")) {
+      sessionStorage.setItem("tf_chunk_reload", "1");
+      window.location.reload();
+    }
+  }
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 px-6 text-center" data-testid="route-error">
+          <p className="text-[14px] t-text-sub">Something went wrong loading this page.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-5 py-2.5 rounded-sm text-[11px] font-bold font-mono uppercase tracking-[0.18em] bg-cyan-400 text-black hover:bg-cyan-300 transition-colors"
+          >
+            Reload
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 /** Suspense fallback while a lazy route chunk loads — minimal, no layout jump. */
@@ -282,6 +320,7 @@ function AppShell() {
         }}
       />
       <main className="flex-1">
+        <RouteErrorBoundary key={location.pathname}>
         <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -359,6 +398,7 @@ function AppShell() {
           <Route path="*" element={<NotFound />} />
         </Routes>
         </Suspense>
+        </RouteErrorBoundary>
       </main>
       {hideFooter ? null : <Footer />}
     </div>

@@ -265,12 +265,12 @@ export default function Home() {
               type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
               placeholder="your@email.com"
               data-testid="waitlist-email-input"
-              className="flex-1 t-input focus:outline-none transition-all px-4 py-3 text-[14px] rounded-sm font-mono"
+              className="flex-1 t-input focus:outline-none transition-colors px-4 py-3 text-[14px] rounded-sm font-mono"
               style={{ border: '1px solid var(--border)' }}
             />
             <button
               type="submit" data-testid="waitlist-submit-btn" disabled={submitting}
-              className="group px-6 py-3 bg-cyan-400 text-black text-[13px] font-bold tracking-wide uppercase rounded-sm hover:bg-cyan-300 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+              className="group px-6 py-3 bg-cyan-400 text-black text-[13px] font-bold tracking-wide uppercase rounded-sm hover:bg-cyan-300 transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
             >
               {submitting ? "Enlisting…" : "Enlist Now"} <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
             </button>
