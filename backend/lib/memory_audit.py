@@ -55,6 +55,12 @@ ACTIONS = {
     "env_var_updated",
     "env_var_deleted",
     "input_template_updated",
+    # ── Prompt 31, Phase 4 — Mini-app + scheduling + notifications ────
+    "mini_app_settings_updated",
+    "agent_schedule_updated",
+    "notification_sent",
+    "notification_skipped",
+    "notification_failed",
 }
 
 

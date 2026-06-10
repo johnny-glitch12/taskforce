@@ -42,6 +42,7 @@ import AppViewer from "@/pages/AppViewer";
 import BuilderMemory from "@/pages/BuilderMemory";
 import MyAgents from "@/pages/MyAgents";
 import AgentControlPanel from "@/pages/AgentControlPanel";
+import MiniApp from "@/pages/MiniApp";
 import OnboardingModal from "@/components/OnboardingModal";
 import MemoryFirstTimeNotice from "@/components/MemoryFirstTimeNotice";
 import { CreditProvider } from "@/lib/credits";
@@ -324,6 +325,8 @@ function AppShell() {
           <Route path="/creator" element={<ProtectedRoute><CreatorDashboard /></ProtectedRoute>} />
           <Route path="/credentials" element={<ProtectedRoute><CredentialsVault /></ProtectedRoute>} />
           <Route path="/admin/economics" element={<OwnerGate feature="Platform Economics"><EconomicsDashboard /></OwnerGate>} />
+          {/* Prompt 31 Phase 4 — Public mini-app runner (NOT inside ProtectedRoute) */}
+          <Route path="/app/:agentSlug" element={<MiniApp />} />
           <Route path="/my-apps" element={<ProtectedRoute><MyApps /></ProtectedRoute>} />
           <Route path="/apps/:slug" element={<ProtectedRoute><AppViewer /></ProtectedRoute>} />
           {/* Prompt 31 Phase 2 — Agent Operations Hub */}

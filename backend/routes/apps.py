@@ -447,6 +447,16 @@ async def run_app(app_id: str, body: AppRunRequest, request: Request,
     if not proj:
         raise HTTPException(status_code=404, detail="App not found.")
 
+    # ── Phase 31 Phase 4 — mini-app visibility enforcement ───────────────
+    # Private agents can only be run by their owner. Public/unset = open to
+    # any authenticated user (subject to billing-target resolution below).
+    mas = proj.get("mini_app_settings") or {}
+    if mas.get("visibility") == "private" and caller_id != proj.get("user_id"):
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "agent_private", "message": "This agent is private."},
+        )
+
     # ── Phase 31 — pause/archive enforcement ─────────────────────────────
     # Block runs on paused or archived agents BEFORE any credit pre-flight or
     # row insertion. 409 surfaces the operational reason so the FE can offer a
@@ -744,6 +754,38 @@ async def run_app(app_id: str, body: AppRunRequest, request: Request,
             f"[apps.run] log-emit failed for run={run_id[:8]}: {_log_err}"
         )
 
+    # ── Phase 31 Phase 4 — fire-and-forget notifications ─────────────────
+    # Always wrapped in try/except so a notification path failure NEVER
+    # breaks the run response. The notify_* helpers themselves are also
+    # internally try/except for double safety.
+    try:
+        from lib import agent_notifications as _notif
+        if not success:
+            import asyncio as _asyncio
+            _asyncio.create_task(_notif.notify_on_error(
+                db, proj["id"], run_id, error or "unknown error"
+            ))
+        else:
+            # Milestone: count total successful runs and notify if at a multiple
+            # of the configured milestone_every. Only fires for the OWNER.
+            settings = proj.get("agent_settings") or {}
+            nots = (settings.get("notifications") or {})
+            step = int(nots.get("milestone_every") or 0)
+            if step > 0:
+                total = await db.app_runs.count_documents(
+                    {"app_id": proj["id"], "success": True}
+                )
+                if total > 0 and total % step == 0:
+                    import asyncio as _asyncio
+                    _asyncio.create_task(_notif.notify_milestone(
+                        db, proj["id"], total
+                    ))
+    except Exception as _notif_err:  # noqa: BLE001
+        import logging as _lg
+        _lg.getLogger(__name__).warning(
+            f"[apps.run] notification dispatch failed for run={run_id[:8]}: {_notif_err}"
+        )
+
     # ── Phase 31 — consecutive-error tracking + auto-pause trigger ────────
     # On success: reset consecutive_errors when non-zero. On failure: bump and
     # auto-pause if threshold reached AND the agent is currently active AND
@@ -769,6 +811,15 @@ async def run_app(app_id: str, body: AppRunRequest, request: Request,
                     "paused_at": _now_iso(),
                     "auto_pause_reason": "auto_error",
                 })
+                # Phase 4: fire-and-forget pause notification
+                try:
+                    from lib import agent_notifications as _notif
+                    import asyncio as _asyncio
+                    _asyncio.create_task(_notif.notify_on_pause(
+                        db, proj["id"], "auto_error"
+                    ))
+                except Exception:  # noqa: BLE001
+                    pass
             await db.bot_projects.update_one(
                 {"id": proj["id"]}, {"$set": update_set},
             )

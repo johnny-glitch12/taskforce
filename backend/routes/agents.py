@@ -1544,3 +1544,278 @@ async def delete_agent_env_var(
     }, request=request)
     return {"ok": True, "deleted_id": env_id}
 
+
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# PHASE 4 — Mini-app public route + mini-app settings + schedule PATCH
+# ═════════════════════════════════════════════════════════════════════════
+
+SCHEDULE_PRESETS = {
+    "hourly":  60,
+    "6h":      60 * 6,
+    "daily":   60 * 24,
+    "weekly":  60 * 24 * 7,
+}
+
+
+# ─── Public mini-app metadata (no auth wall) ─────────────────────────────
+@router.get("/apps/public/{slug}")
+async def get_public_mini_app(slug: str, request: Request):
+    db = get_db()
+    proj = await db.bot_projects.find_one(
+        {"$or": [{"app_slug": slug}, {"id": slug}]},
+        {
+            "_id": 0,
+            "id": 1, "name": 1, "description": 1, "category": 1, "tags": 1,
+            "input_template": 1, "mini_app_settings": 1, "has_ui": 1,
+            "creator_email": 1, "creator_name": 1, "app_slug": 1,
+            "price_credits": 1, "agent_state": 1, "user_id": 1,
+        },
+    )
+    if not proj:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    settings = proj.get("mini_app_settings") or {}
+    visibility = settings.get("visibility") or "public"
+
+    if visibility == "private":
+        auth_header = request.headers.get("Authorization", "")
+        owner_match = False
+        if auth_header.startswith("Bearer "):
+            try:
+                import jwt as _jwt
+                token = auth_header.split(" ", 1)[1]
+                secret = os.environ.get("JWT_SECRET_KEY", "dev-secret")
+                payload = _jwt.decode(token, secret, algorithms=["HS256"])
+                uid = payload.get("sub") or payload.get("user_id")
+                owner_match = bool(uid == proj.get("user_id"))
+            except Exception:  # noqa: BLE001
+                owner_match = False
+        if not owner_match:
+            raise HTTPException(status_code=404, detail="Not found")
+
+    creator_handle = None
+    if proj.get("creator_email") and "@" in proj["creator_email"]:
+        creator_handle = proj["creator_email"].split("@", 1)[0]
+
+    return {
+        "slug": proj.get("app_slug") or proj.get("id"),
+        "name": proj.get("name") or "Untitled Agent",
+        "description": proj.get("description") or "",
+        "category": proj.get("category"),
+        "tags": proj.get("tags") or [],
+        "input_template": proj.get("input_template"),
+        "mini_app_settings": {
+            "visibility": visibility,
+            "cover_url": settings.get("cover_url"),
+            "input_mode": settings.get("input_mode") or "json",
+            "show_branding": settings.get("show_branding", True),
+            "allow_sharing": settings.get("allow_sharing", True),
+        },
+        "creator": {
+            "name": proj.get("creator_name"),
+            "handle": creator_handle,
+        },
+        "credits_per_run": int(proj.get("price_credits") or 1),
+        "has_ui": bool(proj.get("has_ui")),
+        "agent_state": proj.get("agent_state") or "draft",
+    }
+
+
+# ─── PATCH mini-app settings ─────────────────────────────────────────────
+class MiniAppSettingsBody(BaseModel):
+    visibility: Optional[str] = Field(default=None, pattern="^(public|private)$")
+    cover_url: Optional[str] = Field(default=None, max_length=512)
+    input_mode: Optional[str] = Field(default=None, pattern="^(json|form)$")
+    show_branding: Optional[bool] = None
+    allow_sharing: Optional[bool] = None
+
+
+@router.patch("/agents/{agent_id}/mini-app")
+async def patch_mini_app_settings(
+    agent_id: str,
+    body: MiniAppSettingsBody,
+    request: Request,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("agent_write", 10, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    proj = await _load_owned_project(db, agent_id, uid)
+
+    current = proj.get("mini_app_settings") or {}
+    updates: dict = {**current}
+    payload = body.model_dump(exclude_unset=True)
+    for k, v in payload.items():
+        if v is not None:
+            updates[k] = v
+
+    await db.bot_projects.update_one(
+        {"id": proj["id"]},
+        {"$set": {"mini_app_settings": updates, "updated_at": _now_iso()}},
+    )
+    await log_memory_event(uid, "mini_app_settings_updated", {
+        "agent_id": proj["id"], "fields": sorted(list(payload.keys())),
+    }, request=request)
+    return {"ok": True, "mini_app_settings": updates}
+
+
+# ─── PATCH per-agent schedule ────────────────────────────────────────────
+class AgentScheduleBody(BaseModel):
+    enabled: bool
+    preset: Optional[str] = Field(default=None, pattern="^(hourly|6h|daily|weekly|off)$")
+
+
+@router.patch("/agents/{agent_id}/schedule")
+async def patch_agent_schedule(
+    agent_id: str,
+    body: AgentScheduleBody,
+    request: Request,
+    user=Depends(get_current_user()),
+    _=Depends(user_rate_limit("agent_write", 10, 60)),
+):
+    db = get_db()
+    uid = _user_id(user)
+    proj = await _load_owned_project(db, agent_id, uid)
+
+    now_iso = _now_iso()
+    existing = proj.get("schedule") or {}
+
+    if not body.enabled or body.preset == "off":
+        new_schedule = {
+            **existing,
+            "enabled": False,
+            "updated_at": now_iso,
+        }
+    else:
+        if body.preset not in SCHEDULE_PRESETS:
+            raise HTTPException(status_code=422, detail="preset is required when enabled=true")
+        interval = SCHEDULE_PRESETS[body.preset]
+        next_run = (datetime.now(timezone.utc) + timedelta(minutes=interval)).isoformat()
+        new_schedule = {
+            "enabled": True,
+            "preset": body.preset,
+            "interval_minutes": interval,
+            "next_run_at": next_run,
+            "last_run_at": existing.get("last_run_at"),
+            "last_run_id": existing.get("last_run_id"),
+            "last_run_success": existing.get("last_run_success"),
+            "consecutive_failures": existing.get("consecutive_failures", 0),
+            "created_at": existing.get("created_at") or now_iso,
+            "updated_at": now_iso,
+        }
+
+    await db.bot_projects.update_one(
+        {"id": proj["id"]},
+        {"$set": {"schedule": new_schedule, "updated_at": now_iso}},
+    )
+    await log_memory_event(uid, "agent_schedule_updated", {
+        "agent_id": proj["id"], "enabled": new_schedule["enabled"],
+        "preset": new_schedule.get("preset"),
+    }, request=request)
+    return {"ok": True, "schedule": new_schedule}
+
+
+# ─── Internal: scheduled tick for bot_projects (called by APScheduler) ────
+async def tick_scheduled_bot_projects(db) -> int:
+    """Phase-4 second-pass scheduler — scans `bot_projects.schedule`.
+
+    Honors agent_state (paused/archived → skip), agent_settings rate caps,
+    and a 3-strike circuit breaker. Records a synthetic app_runs row for
+    each scheduled tick so the Hub's Run History reflects the activity.
+    Returns the count of runs dispatched.
+    """
+    import logging as _lg
+    _log = _lg.getLogger("schedules.bot_projects")
+
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    dispatched = 0
+
+    candidates = await db.bot_projects.find(
+        {"schedule.enabled": True, "schedule.next_run_at": {"$lte": now_iso}},
+        {"_id": 0},
+    ).to_list(length=200)
+
+    for proj in candidates:
+        pid = proj.get("id")
+        sched = proj.get("schedule") or {}
+        state = proj.get("agent_state") or "draft"
+
+        if state in ("paused", "archived"):
+            _log.info(f"[sched:bot_projects] {pid[:8]} skipped — state={state}")
+            continue
+
+        settings = proj.get("agent_settings") or {}
+        max_hour = int(settings.get("max_runs_per_hour") or 0)
+        max_day = int(settings.get("max_runs_per_day") or 0)
+        if max_hour > 0:
+            hr_cutoff = (now - timedelta(hours=1)).isoformat()
+            cnt = await db.app_runs.count_documents(
+                {"app_id": pid, "created_at": {"$gte": hr_cutoff}}
+            )
+            if cnt >= max_hour:
+                _log.info(f"[sched:bot_projects] {pid[:8]} skipped — hour cap {cnt}/{max_hour}")
+                continue
+        if max_day > 0:
+            day_cutoff = (now - timedelta(hours=24)).isoformat()
+            cnt = await db.app_runs.count_documents(
+                {"app_id": pid, "created_at": {"$gte": day_cutoff}}
+            )
+            if cnt >= max_day:
+                _log.info(f"[sched:bot_projects] {pid[:8]} skipped — day cap {cnt}/{max_day}")
+                continue
+
+        success = False
+        run_id = uuid.uuid4().hex
+        try:
+            input_payload = proj.get("input_template") or {}
+            await db.app_runs.insert_one({
+                "id": run_id,
+                "app_id": pid,
+                "user_id": proj.get("user_id"),
+                "caller_id": "scheduler",
+                "input": input_payload,
+                "output": {"_scheduled": True},
+                "success": True,
+                "error": None,
+                "duration_ms": 0,
+                "credits_used": 0,
+                "created_at": now_iso,
+            })
+            success = True
+            dispatched += 1
+        except Exception as e:  # noqa: BLE001
+            _log.warning(f"[sched:bot_projects] {pid[:8]} dispatch failed: {e}")
+
+        interval = int(sched.get("interval_minutes") or 60)
+        cur_fails = int(sched.get("consecutive_failures") or 0)
+        new_fails = 0 if success else cur_fails + 1
+        update = {
+            "schedule.next_run_at": (now + timedelta(minutes=interval)).isoformat(),
+            "schedule.last_run_at": now_iso,
+            "schedule.last_run_id": run_id,
+            "schedule.last_run_success": success,
+            "schedule.consecutive_failures": new_fails,
+            "schedule.updated_at": now_iso,
+        }
+        if new_fails >= 3:
+            update["schedule.enabled"] = False
+            update["schedule.last_disabled_reason"] = "circuit_breaker"
+            _log.warning(f"[sched:bot_projects] {pid[:8]} circuit breaker tripped")
+        await db.bot_projects.update_one({"id": pid}, {"$set": update})
+
+    return dispatched
+
+
+# ─── Dev: trigger the bot_projects scheduler tick manually ───────────────
+@router.post("/agents/_test_tick_schedule")
+async def test_tick_schedule(
+    user=Depends(get_current_user()),
+):
+    if not _is_dev_env():
+        raise HTTPException(status_code=404, detail="Not Found")
+    db = get_db()
+    count = await tick_scheduled_bot_projects(db)
+    return {"ok": True, "dispatched": count}

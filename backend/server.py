@@ -2376,6 +2376,33 @@ async def startup():
             id='file_versions_orphan_prune', replace_existing=True,
         )
 
+        # ── Phase 31 Phase 4 — bot_projects scheduled tick (every 5 min)
+        async def _bot_projects_tick():
+            try:
+                from routes.agents import tick_scheduled_bot_projects
+                count = await tick_scheduled_bot_projects(db)
+                if count:
+                    logger.info(f"[sched:bot_projects] dispatched {count} run(s)")
+            except Exception as e:
+                logger.warning(f"[sched:bot_projects] tick failed: {e}")
+        scheduler.add_job(
+            _bot_projects_tick, 'interval', minutes=5,
+            id='bot_projects_schedule_tick', replace_existing=True,
+        )
+
+        # ── Phase 31 Phase 4 — daily summary at 09:00 UTC
+        async def _daily_summary():
+            try:
+                from lib.agent_notifications import send_daily_summary
+                count = await send_daily_summary(db)
+                logger.info(f"[notify:daily] {count} summary email(s) dispatched")
+            except Exception as e:
+                logger.warning(f"[notify:daily] job failed: {e}")
+        scheduler.add_job(
+            _daily_summary, 'cron', hour=9, minute=0,
+            id='agent_daily_summary', replace_existing=True,
+        )
+
     if not scheduler.running:
         scheduler.start()
         logger.info("APScheduler started (jobs: %d)" % len(scheduler.get_jobs()))

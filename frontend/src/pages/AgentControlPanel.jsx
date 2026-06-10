@@ -33,7 +33,7 @@ const TABS = [
   { id: "logs", label: "Logs", live: true, testid: "tab-logs" },
   { id: "data", label: "Data & Inputs", live: true, testid: "tab-data" },
   { id: "settings", label: "Settings", live: true, testid: "tab-settings" },
-  { id: "mini-app", label: "Mini-App", live: false, testid: "tab-mini-app" },
+  { id: "mini-app", label: "Mini-App", live: true, testid: "tab-mini-app" },
 ];
 
 function fmtTime(iso) {
@@ -1204,17 +1204,8 @@ function SettingsTab({ agentId, token, agent, onAgentUpdated, navigate }) {
         </div>
       </div>
 
-      {/* E. Scheduling placeholder */}
-      <div data-testid="settings-scheduling-placeholder" className={cardCls} style={cardStyle}>
-        <h3 className="t-text font-semibold text-[13px] mb-2">Scheduling</h3>
-        <div className="flex items-center gap-2 text-[12px] font-mono t-text-sub">
-          <span>Run automatically:</span>
-          <select disabled value="off" className={inputCls + " w-32 opacity-50 cursor-not-allowed"} style={inputStyle}>
-            <option value="off">Off</option>
-          </select>
-        </div>
-        <div className="text-[10px] t-text-mute mt-2">Scheduling extends in Phase 4.</div>
-      </div>
+      {/* E. Scheduling — Phase 4 */}
+      <SchedulingSection agentId={agentId} token={token} agent={agent} onAgentUpdated={onAgentUpdated} />
 
       {/* F. Danger zone */}
       <div data-testid="danger-zone" className={cardCls} style={{ ...cardStyle, borderColor: "rgba(244, 63, 94, 0.3)" }}>
@@ -1437,7 +1428,7 @@ export default function AgentControlPanel() {
             navigate={navigate}
           />
         )}
-        {tab === "mini-app" && <PlaceholderTab phase="Phase 4" label="Mini-App" />}
+        {tab === "mini-app" && <MiniAppTab agentId={id} token={token} agent={agent} onAgentUpdated={(a) => setAgent(a)} />}
       </div>
     </div>
   );
