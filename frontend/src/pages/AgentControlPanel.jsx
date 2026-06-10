@@ -1776,13 +1776,13 @@ export default function AgentControlPanel() {
         </div>
 
         {/* Meta row */}
-        <div className="flex items-center gap-3 text-[11px] uppercase tracking-wider font-mono t-text-mute mb-6">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] uppercase tracking-wider font-mono t-text-mute mb-6">
           {agent.category && <span>{agent.category}</span>}
-          <span>·</span>
+          <span className="hidden sm:inline">·</span>
           <span>{agent.exchange_status || "unlisted"}</span>
-          <span>·</span>
+          <span className="hidden sm:inline">·</span>
           <span>{agent.credits_per_run} cr/run</span>
-          <span>·</span>
+          <span className="hidden sm:inline">·</span>
           <span>{agent.agent_state}</span>
         </div>
 
@@ -1806,8 +1806,8 @@ export default function AgentControlPanel() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-1 border-b mb-4" style={{ borderColor: "var(--border)" }}>
+        {/* Tabs — horizontally scrollable on mobile so 6 tabs don't blow out the layout. */}
+        <div className="flex items-center gap-1 border-b mb-4 overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0 scrollbar-thin" style={{ borderColor: "var(--border)" }}>
           {TABS.map((t) => (
             <button
               key={t.id}

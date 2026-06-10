@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/App";
 import {
@@ -6,117 +7,45 @@ import {
   CheckCircle2, XCircle, ChevronDown, ChevronUp, Zap, Shield,
   Code, Globe, Terminal, RotateCw, Loader2, ArrowUpRight,
   Package, Webhook, Settings, AlertTriangle, GitBranch, FileText, Eye,
+  Bot, ArrowRight,
 } from "lucide-react";
 
 import { parseComputeLimit, ComputeLimitModal } from "@/components/ComputeLimitModal";
 
 const API = process.env.REACT_APP_BACKEND_URL || "";
 
-/* ─── Published Agents Tab (merged Creator Hub) ─── */
-function PublishedAgentsTab({ token }) {
-  const [analytics, setAnalytics] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState(null);
-  const [details, setDetails] = useState({});
-  const headers = { Authorization: `Bearer ${token}` };
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API}/api/creator/analytics`, { headers });
-      if (res.ok) setAnalytics(await res.json());
-    } catch {}
-    setLoading(false);
-  }, [token]);
-
-  useEffect(() => { if (token) fetchData(); }, [token, fetchData]);
-
-  const loadDetail = async (agentId) => {
-    if (expandedId === agentId) { setExpandedId(null); return; }
-    if (details[agentId]) { setExpandedId(agentId); return; }
-    try {
-      const res = await fetch(`${API}/api/published-agents/${agentId}`, { headers });
-      if (res.ok) { const data = await res.json(); setDetails(prev => ({ ...prev, [agentId]: data })); setExpandedId(agentId); }
-    } catch {}
-  };
-
-  const deleteAgent = async (agentId) => {
-    try {
-      const res = await fetch(`${API}/api/published-agents/${agentId}`, { method: "DELETE", headers });
-      if (res.ok) { toast.success("Agent removed."); fetchData(); }
-    } catch { toast.error("Failed to delete."); }
-  };
-
-  if (loading) return <div className="py-16 text-center"><Loader2 size={20} className="text-cyan-400 animate-spin mx-auto" /></div>;
-
-  const stats = analytics || { total_agents: 0, published: 0, drafts: 0, total_executions: 0, avg_trust_score: 0, total_versions: 0, agents: [] };
-
+/* ─── Published Agents Tab — migrated to /my-agents in Phase 5 (Prompt 31) ─── */
+function PublishedAgentsTab() {
   return (
-    <div className="space-y-4">
-      {/* Mini stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="rounded-sm p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-          <p className="text-[10px] font-mono tracking-widest uppercase t-text-mute mb-1">Published</p>
-          <p className="text-xl font-bold t-text font-mono">{stats.published}</p>
+    <div data-testid="published-agents-migration-card" className="py-10">
+      <div
+        className="max-w-xl mx-auto rounded-sm p-8 text-center"
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      >
+        <div
+          className="inline-flex items-center justify-center w-12 h-12 rounded-sm mb-4"
+          style={{ background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.25)" }}
+        >
+          <Bot size={20} className="text-cyan-400" />
         </div>
-        <div className="rounded-sm p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-          <p className="text-[10px] font-mono tracking-widest uppercase t-text-mute mb-1">Executions</p>
-          <p className="text-xl font-bold t-text font-mono">{stats.total_executions}</p>
+        <div className="text-[10px] uppercase tracking-[0.2em] font-mono text-cyan-400 mb-2">
+          AGENT OPERATIONS HUB
         </div>
-        <div className="rounded-sm p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-          <p className="text-[10px] font-mono tracking-widest uppercase t-text-mute mb-1">Avg Trust</p>
-          <p className="text-xl font-bold t-text font-mono">{stats.avg_trust_score}</p>
-        </div>
-        <div className="rounded-sm p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-          <p className="text-[10px] font-mono tracking-widest uppercase t-text-mute mb-1">Versions</p>
-          <p className="text-xl font-bold t-text font-mono">{stats.total_versions}</p>
-        </div>
+        <h2 className="text-xl sm:text-2xl font-bold t-text mb-2">
+          Your agents have moved
+        </h2>
+        <p className="text-[13px] t-text-sub leading-relaxed mb-6 max-w-md mx-auto">
+          Publishing, pause/resume, run history, logs, data files, env vars, scheduling,
+          and the public mini-app live in the new <span className="t-text">Agent Operations Hub</span>.
+        </p>
+        <Link
+          to="/my-agents"
+          data-testid="published-agents-migration-cta"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-sm bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/15 text-[11px] uppercase tracking-[0.15em] font-mono transition-colors duration-200"
+        >
+          Open My Agents <ArrowRight size={12} />
+        </Link>
       </div>
-
-      {/* Agent list */}
-      {stats.agents.length === 0 ? (
-        <div className="text-center py-16 rounded-sm" style={{ border: '1px dashed var(--border)' }}>
-          <Globe size={32} className="t-text-dim mx-auto mb-3" />
-          <p className="text-[14px] t-text-sub mb-1">No published agents yet</p>
-          <p className="text-[12px] t-text-dim">Build an agent in The Armory and hit "Publish to Marketplace".</p>
-        </div>
-      ) : (
-        <div className="rounded-sm overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-          {stats.agents.map((agent, i) => {
-            const detail = details[agent.agent_id];
-            const isExpanded = expandedId === agent.agent_id;
-            return (
-              <div key={agent.agent_id} style={i < stats.agents.length - 1 ? { borderBottom: '1px solid var(--border)' } : {}}>
-                <div className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-white/[0.02] transition-all" onClick={() => loadDetail(agent.agent_id)}>
-                  <Globe size={14} className="text-cyan-400 shrink-0" />
-                  <span className="text-[13px] t-text font-medium truncate flex-1">{agent.name}</span>
-                  <span className="text-[10px] font-mono t-text-mute flex items-center gap-1"><GitBranch size={10} /> v{agent.version}</span>
-                  <span className="text-[10px] font-mono t-text-mute flex items-center gap-1"><Zap size={10} /> {agent.execution_count}</span>
-                  <span className="text-[10px] font-mono t-text-mute flex items-center gap-1"><Shield size={10} /> {agent.trust_score}</span>
-                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-sm ${agent.status === "published" ? "text-emerald-400 bg-emerald-500/10" : "text-amber-400 bg-amber-500/10"}`}>{agent.status}</span>
-                  <Eye size={12} className="t-text-dim shrink-0" />
-                </div>
-                {isExpanded && detail && (
-                  <div className="px-4 pb-3 space-y-2">
-                    <div className="rounded-sm p-3 text-[11px] font-mono t-text-mute" style={{ background: 'var(--bg-secondary)' }}>
-                      {(detail.version_history || []).map((v, vi) => (
-                        <div key={vi} className="flex items-center gap-3 py-1">
-                          <span className="t-text font-semibold">v{v.version}</span>
-                          <span className="t-text-dim">{v.node_count} nodes, {v.edge_count} edges</span>
-                          <span className="ml-auto t-text-dim">{new Date(v.published_at).toLocaleString()}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <button onClick={(e) => { e.stopPropagation(); deleteAgent(agent.agent_id); }} className="text-[10px] font-mono text-red-400 hover:bg-red-500/10 px-2 py-1 rounded-sm flex items-center gap-1" style={{ border: '1px solid rgba(239,68,68,0.2)' }}>
-                      <Trash2 size={10} /> Delete
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
@@ -700,9 +629,9 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Published Tab (Creator Hub) */}
+        {/* Published Tab (migrated to /my-agents in Phase 5) */}
         {activeTab === "published" && (
-          <PublishedAgentsTab token={token} />
+          <PublishedAgentsTab />
         )}
       </div>
 

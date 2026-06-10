@@ -1,10 +1,21 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/App";
 import { Lock, UserPlus, ArrowLeft, Eye, EyeOff, CheckCircle2, XCircle } from "lucide-react";
 import PasswordStrengthMeter, { scorePassword } from "@/components/PasswordStrengthMeter";
 import UsernameField from "@/components/UsernameField";
+
+// Whitelist for `?return=` redirect targets. We only honor SAME-ORIGIN paths
+// starting with "/" and not "//" (which is protocol-relative and could leak).
+// Auth routes themselves are excluded so we don't bounce users back to login.
+const AUTH_PATH_PREFIXES = ["/login", "/auth/"];
+function safeReturnPath(raw) {
+  if (!raw || typeof raw !== "string") return null;
+  if (!raw.startsWith("/") || raw.startsWith("//")) return null;
+  if (AUTH_PATH_PREFIXES.some((p) => raw.startsWith(p))) return null;
+  return raw;
+}
 
 export default function Login() {
   const [mode, setMode] = useState("login");
@@ -20,7 +31,23 @@ export default function Login() {
   const [resetToken, setResetToken] = useState(null);
   const { login, register, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const API = process.env.REACT_APP_BACKEND_URL || "";
+
+  // Prompt 31 Phase 5 — honor ?return=<path> AND react-router `state.from`.
+  const returnPath = (() => {
+    try {
+      const q = new URLSearchParams(location.search).get("return");
+      const fromState = location.state && location.state.from;
+      return safeReturnPath(q) || safeReturnPath(fromState) || null;
+    } catch { return null; }
+  })();
+
+  const postAuthRedirect = useCallback((u) => {
+    if (returnPath) { navigate(returnPath, { replace: true }); return; }
+    if (u && u.client_id === "csdrop") { navigate("/dashboard/csdrop", { replace: true }); return; }
+    navigate("/armory", { replace: true });
+  }, [returnPath, navigate]);
 
   const handleUsernameStatus = useCallback((s) => setUsernameStatus(s), []);
 
@@ -30,11 +57,8 @@ export default function Login() {
   const canSubmitSignup = !!email && !!username && usernameStatus.available && pwd.ok && passwordsMatch;
 
   useEffect(() => {
-    if (user) {
-      if (user.client_id === "csdrop") navigate("/dashboard/csdrop", { replace: true });
-      else navigate("/armory", { replace: true });
-    }
-  }, [user, navigate]);
+    if (user) postAuthRedirect(user);
+  }, [user, postAuthRedirect]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -42,8 +66,7 @@ export default function Login() {
     try {
       const u = await login(email, password);
       toast.success(`Welcome back${u.name ? ", " + u.name : ""}.`);
-      if (u.client_id === "csdrop") navigate("/dashboard/csdrop");
-      else navigate("/armory");
+      postAuthRedirect(u);
     } catch (err) {
       toast.error(err.message || "Login failed.");
     }
@@ -64,7 +87,7 @@ export default function Login() {
     try {
       const u = await register(email, password, { username, name });
       toast.success(`Welcome, ${u.name}! Account created.`);
-      navigate("/armory");
+      postAuthRedirect(u);
     } catch (err) {
       toast.error(err.message || "Registration failed.");
     }

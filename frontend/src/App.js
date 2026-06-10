@@ -43,6 +43,7 @@ import BuilderMemory from "@/pages/BuilderMemory";
 import MyAgents from "@/pages/MyAgents";
 import AgentControlPanel from "@/pages/AgentControlPanel";
 import MiniApp from "@/pages/MiniApp";
+import NotFound from "@/pages/NotFound";
 import OnboardingModal from "@/components/OnboardingModal";
 import MemoryFirstTimeNotice from "@/components/MemoryFirstTimeNotice";
 import { CreditProvider } from "@/lib/credits";
@@ -333,6 +334,8 @@ function AppShell() {
           <Route path="/my-agents" element={<ProtectedRoute><MyAgents /></ProtectedRoute>} />
           <Route path="/my-agents/:id" element={<ProtectedRoute><AgentControlPanel /></ProtectedRoute>} />
           <Route path="/settings/memory" element={<ProtectedRoute><BuilderMemory /></ProtectedRoute>} />
+          {/* Prompt 31 Phase 5 — 404 catch-all. MUST stay last. */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
       {hideFooter ? null : <Footer />}

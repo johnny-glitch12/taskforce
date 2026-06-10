@@ -15,14 +15,18 @@ let _agentCountCache = { active: null, total: null, ts: 0 };
 
 function useAgentCount() {
   const [count, setCount] = useState(() => _agentCountCache.active);
+  const location = useLocation();
+  // Phase 5: refetch whenever the user navigates to ANY /my-agents* path,
+  // so mutations made on those pages (pause/resume/delete) are reflected
+  // immediately in the navbar badge without manual refresh.
+  const isMyAgentsPath = location.pathname === "/my-agents"
+    || location.pathname.startsWith("/my-agents/");
   useEffect(() => {
     const token = localStorage.getItem("taskforce_token");
     if (!token) return;
-    // Skip the network call entirely if we have a fresh cache (< 60s old).
-    // The lazy useState initializer above already seeded the value.
-    if (_agentCountCache.active !== null && Date.now() - _agentCountCache.ts < 60_000) {
-      return;
-    }
+    const stale = Date.now() - _agentCountCache.ts >= 60_000;
+    // Skip if cache is fresh AND we're not on a my-agents page
+    if (_agentCountCache.active !== null && !stale && !isMyAgentsPath) return;
     let aborted = false;
     fetch(`${API}/api/agents/stats/overview`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -35,7 +39,7 @@ function useAgentCount() {
       })
       .catch(() => {});
     return () => { aborted = true; };
-  }, []);
+  }, [location.pathname, isMyAgentsPath]);
   return count;
 }
 
