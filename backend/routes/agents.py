@@ -1586,8 +1586,7 @@ async def get_public_mini_app(slug: str, request: Request):
             try:
                 import jwt as _jwt
                 token = auth_header.split(" ", 1)[1]
-                secret = os.environ.get("JWT_SECRET_KEY", "dev-secret")
-                payload = _jwt.decode(token, secret, algorithms=["HS256"])
+                payload = _jwt.decode(token, os.environ["JWT_SECRET"], algorithms=["HS256"])
                 uid = payload.get("sub") or payload.get("user_id")
                 owner_match = bool(uid == proj.get("user_id"))
             except Exception:  # noqa: BLE001

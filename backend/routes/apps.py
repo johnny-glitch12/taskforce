@@ -447,11 +447,15 @@ async def run_app(app_id: str, body: AppRunRequest, request: Request,
     if not proj:
         raise HTTPException(status_code=404, detail="App not found.")
 
+    is_public = bool(proj.get("is_public"))
+    owner_id = proj.get("user_id")
+    caller_id = str(user.get("id", user.get("email"))) if user else None
+
     # ── Phase 31 Phase 4 — mini-app visibility enforcement ───────────────
     # Private agents can only be run by their owner. Public/unset = open to
     # any authenticated user (subject to billing-target resolution below).
     mas = proj.get("mini_app_settings") or {}
-    if mas.get("visibility") == "private" and caller_id != proj.get("user_id"):
+    if mas.get("visibility") == "private" and caller_id != owner_id:
         raise HTTPException(
             status_code=403,
             detail={"error": "agent_private", "message": "This agent is private."},
@@ -471,10 +475,6 @@ async def run_app(app_id: str, body: AppRunRequest, request: Request,
                 "reason": proj.get("auto_pause_reason") or "manual",
             },
         )
-
-    is_public = bool(proj.get("is_public"))
-    owner_id = proj.get("user_id")
-    caller_id = str(user.get("id", user.get("email"))) if user else None
 
     if not is_public:
         # Private: must be authenticated AND owner

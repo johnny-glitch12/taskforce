@@ -38,7 +38,7 @@ def _hub_link(agent_id: str) -> str:
 def _wrap(title: str, lines, agent_id: str) -> str:
     """Minimal inline-CSS dark-theme wrapper. Matches the existing
     email_service brand. No external resources."""
-    body = "".join(f'<p style="margin:6px 0;color:#a1a1aa;font-size:13px;">{l}</p>' for l in lines)
+    body = "".join(f'<p style="margin:6px 0;color:#a1a1aa;font-size:13px;">{ln}</p>' for ln in lines)
     return f"""<!DOCTYPE html>
 <html><body style="margin:0;padding:24px;background:#0a0a0c;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#e4e4e7;">
   <div style="max-width:560px;margin:0 auto;background:#18181b;border:1px solid #27272a;padding:24px;">
@@ -150,7 +150,7 @@ async def notify_on_pause(db, agent_id: str, reason: str) -> None:
     html = _wrap(
         f"Agent auto-paused — {agent.get('name', 'Agent')}",
         [
-            f"Your agent was automatically paused.",
+            "Your agent was automatically paused.",
             f"<strong>Reason:</strong> {reason}",
             "Hit Resume from the Operations Hub when you're ready.",
         ],

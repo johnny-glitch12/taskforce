@@ -1255,6 +1255,418 @@ function SettingsTab({ agentId, token, agent, onAgentUpdated, navigate }) {
   );
 }
 
+/* ─── Phase 4: SchedulingSection (Settings tab section E) ──────────── */
+const PRESET_OPTIONS = [
+  { value: "off",    label: "Off" },
+  { value: "hourly", label: "Hourly" },
+  { value: "6h",     label: "Every 6 hours" },
+  { value: "daily",  label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+];
+
+function SchedulingSection({ agentId, token, agent, onAgentUpdated }) {
+  const existing = agent?.schedule || {};
+  const initialPreset = existing.enabled ? (existing.preset || "hourly") : "off";
+  const [preset, setPreset] = useState(initialPreset);
+  const [saving, setSaving] = useState(false);
+  const [localSchedule, setLocalSchedule] = useState(existing);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const enabled = preset !== "off";
+      const body = enabled ? { enabled: true, preset } : { enabled: false, preset: "off" };
+      const res = await fetch(`${API}/api/agents/${agentId}/schedule`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt);
+      }
+      const j = await res.json();
+      setLocalSchedule(j.schedule || {});
+      // Refresh parent's view of the agent so the next-run timestamp is consistent
+      try {
+        const a = await fetch(`${API}/api/agents/${agentId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then((r) => r.json());
+        onAgentUpdated?.(a);
+      } catch (_e) { /* best-effort */ }
+      toast.success(enabled ? `Schedule saved · ${preset}` : "Scheduling turned off");
+    } catch (e) {
+      toast.error(`Save failed: ${e.message || e}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cardCls = "rounded-sm p-5";
+  const cardStyle = { background: "var(--bg-card)", border: "1px solid var(--border)" };
+  const saveBtnCls = "px-3 py-1 rounded-sm text-[10px] uppercase tracking-wider font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/15 disabled:opacity-40";
+
+  const isActive = !!localSchedule.enabled;
+  const nextRun = localSchedule.next_run_at || null;
+  const lastRun = localSchedule.last_run_at || null;
+  const consecutiveFailures = Number(localSchedule.consecutive_failures || 0);
+
+  return (
+    <div data-testid="settings-scheduling-form" className={cardCls} style={cardStyle}>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="t-text font-semibold text-[13px] flex items-center gap-2">
+          <Activity size={13} className="text-cyan-400" /> Scheduling
+        </h3>
+        <span
+          data-testid="schedule-status-indicator"
+          className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-sm ${
+            isActive
+              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+              : "bg-zinc-500/10 t-text-mute border border-zinc-500/30"
+          }`}
+        >
+          {isActive ? "Scheduled" : "Off"}
+        </span>
+      </div>
+
+      <p className="text-[11px] t-text-sub mb-3">
+        Pick a cadence and the operations hub will run this agent on a schedule.
+        Paused or archived agents are skipped automatically.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="block text-[10px] uppercase tracking-[0.12em] t-text-mute font-mono mb-1">
+            Run frequency
+          </label>
+          <select
+            data-testid="schedule-preset-select"
+            value={preset}
+            onChange={(e) => setPreset(e.target.value)}
+            className="w-full px-3 py-2 rounded-sm text-[12px] font-mono"
+            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text)" }}
+          >
+            {PRESET_OPTIONS.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="text-[11px] font-mono t-text-sub flex flex-col justify-end">
+          <div data-testid="schedule-next-run-display" className="mb-1">
+            <span className="t-text-mute uppercase text-[10px] tracking-[0.12em] mr-2">Next run</span>
+            <span className="t-text">{isActive ? fmtTime(nextRun) : "—"}</span>
+          </div>
+          <div>
+            <span className="t-text-mute uppercase text-[10px] tracking-[0.12em] mr-2">Last run</span>
+            <span className="t-text">{fmtTime(lastRun)}</span>
+          </div>
+          {consecutiveFailures >= 1 && (
+            <div className="mt-1 text-amber-400">
+              <AlertTriangle size={11} className="inline mr-1" />
+              {consecutiveFailures} consecutive failure{consecutiveFailures === 1 ? "" : "s"}
+              {consecutiveFailures >= 3 && " · circuit breaker tripped"}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="text-right">
+        <button
+          data-testid="save-schedule-btn"
+          onClick={save}
+          disabled={saving}
+          className={saveBtnCls}
+        >
+          {saving ? <Loader2 size={10} className="inline animate-spin" /> : (
+            <><Save size={10} className="inline mr-1" /> Save Schedule</>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Phase 4: MiniAppTab ──────────────────────────────────────────── */
+function MiniAppTab({ agentId, token, agent, onAgentUpdated }) {
+  const slug = agent?.app_slug || agent?.id || agentId;
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const publicUrl = `${origin}/app/${slug}`;
+  const embedSnippet = `<iframe src="${publicUrl}?embed=1" width="480" height="640" frameborder="0" sandbox="allow-scripts allow-same-origin"></iframe>`;
+
+  const settings = agent?.mini_app_settings || {};
+  const [visibility, setVisibility] = useState(settings.visibility || "public");
+  const [coverUrl, setCoverUrl] = useState(settings.cover_url || "");
+  const [inputMode, setInputMode] = useState(settings.input_mode || "json");
+  const [showBranding, setShowBranding] = useState(settings.show_branding !== false);
+  const [allowSharing, setAllowSharing] = useState(settings.allow_sharing !== false);
+  const [saving, setSaving] = useState(false);
+
+  const copy = async (text, label) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error("Copy failed — copy manually");
+    }
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/api/agents/${agentId}/mini-app`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          visibility,
+          cover_url: coverUrl || null,
+          input_mode: inputMode,
+          show_branding: !!showBranding,
+          allow_sharing: !!allowSharing,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      try {
+        const a = await fetch(`${API}/api/agents/${agentId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then((r) => r.json());
+        onAgentUpdated?.(a);
+      } catch (_e) { /* best-effort */ }
+      toast.success("Mini-app settings saved");
+    } catch (e) {
+      toast.error(`Save failed: ${e.message || e}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cardCls = "rounded-sm p-5";
+  const cardStyle = { background: "var(--bg-card)", border: "1px solid var(--border)" };
+  const inputCls = "w-full px-3 py-2 rounded-sm text-[12px] font-mono";
+  const inputStyle = { background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text)" };
+  const saveBtnCls = "px-3 py-1 rounded-sm text-[10px] uppercase tracking-wider font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/15 disabled:opacity-40";
+
+  const isPublic = visibility === "public";
+
+  return (
+    <div data-testid="tab-mini-app-content" className="space-y-4">
+      {/* A. Share */}
+      <div className={cardCls} style={cardStyle}>
+        <h3 className="t-text font-semibold text-[13px] mb-3 flex items-center gap-2">
+          <ExternalLink size={13} className="text-cyan-400" /> Share & embed
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[10px] uppercase tracking-[0.12em] t-text-mute font-mono mb-1">
+              Public URL
+            </label>
+            <div className="flex gap-2">
+              <input
+                data-testid="mini-app-share-url"
+                readOnly
+                value={publicUrl}
+                className={inputCls}
+                style={inputStyle}
+                onClick={(e) => e.target.select()}
+              />
+              <button
+                data-testid="mini-app-copy-link-btn"
+                onClick={() => copy(publicUrl, "URL")}
+                className="px-3 py-2 rounded-sm text-[10px] uppercase tracking-wider font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/15"
+                title="Copy public URL"
+              >
+                <CopyIcon size={11} />
+              </button>
+              <a
+                href={publicUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="mini-app-open-link-btn"
+                className="px-3 py-2 rounded-sm text-[10px] uppercase tracking-wider font-mono t-text-sub border"
+                style={{ borderColor: "var(--border)" }}
+                title="Open in new tab"
+              >
+                <ExternalLink size={11} />
+              </a>
+            </div>
+            {!isPublic && (
+              <p className="text-[10px] text-amber-400 mt-1">
+                <AlertTriangle size={10} className="inline mr-1" />
+                This agent is private — only you can open this URL.
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-[0.12em] t-text-mute font-mono mb-1">
+              Embed snippet
+            </label>
+            <div className="flex gap-2">
+              <textarea
+                data-testid="mini-app-embed-code"
+                readOnly
+                rows={2}
+                value={embedSnippet}
+                className={inputCls}
+                style={{ ...inputStyle, resize: "none" }}
+                onClick={(e) => e.target.select()}
+              />
+              <button
+                data-testid="mini-app-copy-embed-btn"
+                onClick={() => copy(embedSnippet, "Embed snippet")}
+                className="px-3 py-2 rounded-sm text-[10px] uppercase tracking-wider font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/15"
+                title="Copy embed code"
+              >
+                <CopyIcon size={11} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* B. Preview */}
+      <div className={cardCls} style={cardStyle}>
+        <h3 className="t-text font-semibold text-[13px] mb-3 flex items-center gap-2">
+          <Eye size={13} className="text-cyan-400" /> Live preview
+        </h3>
+        <div className="rounded-sm overflow-hidden" style={{ border: "1px solid var(--border)", background: "var(--bg-elevated)" }}>
+          <iframe
+            data-testid="mini-app-preview-iframe"
+            title="Mini-app preview"
+            src={publicUrl}
+            className="w-full"
+            style={{ height: 480, border: 0, background: "var(--bg-elevated)" }}
+            sandbox="allow-scripts allow-same-origin allow-forms"
+          />
+        </div>
+        <p className="text-[10px] t-text-mute mt-2">
+          Preview loads the same page anonymous visitors see at <code>{publicUrl}</code>.
+        </p>
+      </div>
+
+      {/* C. Customization */}
+      <div className={cardCls} style={cardStyle}>
+        <h3 className="t-text font-semibold text-[13px] mb-3 flex items-center gap-2">
+          <Edit3 size={13} className="text-cyan-400" /> Customization
+        </h3>
+
+        <div className="mb-4">
+          <label className="block text-[10px] uppercase tracking-[0.12em] t-text-mute font-mono mb-2">
+            Visibility
+          </label>
+          <div className="flex gap-4 text-[12px] font-mono">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="visibility"
+                value="public"
+                checked={visibility === "public"}
+                onChange={() => setVisibility("public")}
+                data-testid="mini-app-visibility-public"
+                className="accent-cyan-400"
+              />
+              <span>Public — anyone with the link can run it</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="visibility"
+                value="private"
+                checked={visibility === "private"}
+                onChange={() => setVisibility("private")}
+                data-testid="mini-app-visibility-private"
+                className="accent-cyan-400"
+              />
+              <span>Private — only you can run it</span>
+            </label>
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-[10px] uppercase tracking-[0.12em] t-text-mute font-mono mb-2">
+            Input mode
+          </label>
+          <div className="flex gap-4 text-[12px] font-mono">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="input_mode"
+                value="form"
+                checked={inputMode === "form"}
+                onChange={() => setInputMode("form")}
+                data-testid="mini-app-input-mode-form"
+                className="accent-cyan-400"
+              />
+              <span>Form — auto-generated fields from input_template</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="input_mode"
+                value="json"
+                checked={inputMode === "json"}
+                onChange={() => setInputMode("json")}
+                data-testid="mini-app-input-mode-json"
+                className="accent-cyan-400"
+              />
+              <span>JSON — raw editor for advanced users</span>
+            </label>
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-[10px] uppercase tracking-[0.12em] t-text-mute font-mono mb-1">
+            Cover image URL <span className="t-text-mute normal-case">(optional)</span>
+          </label>
+          <input
+            data-testid="mini-app-cover-url"
+            value={coverUrl}
+            onChange={(e) => setCoverUrl(e.target.value)}
+            placeholder="https://…"
+            className={inputCls}
+            style={inputStyle}
+          />
+        </div>
+
+        <div className="flex gap-6 text-[12px] font-mono t-text-sub">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showBranding}
+              onChange={(e) => setShowBranding(e.target.checked)}
+              data-testid="mini-app-show-branding"
+              className="accent-cyan-400"
+            />
+            Show Task Force branded header
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={allowSharing}
+              onChange={(e) => setAllowSharing(e.target.checked)}
+              data-testid="mini-app-allow-sharing"
+              className="accent-cyan-400"
+            />
+            Allow social share buttons
+          </label>
+        </div>
+
+        <div className="text-right mt-4">
+          <button
+            data-testid="save-mini-app-settings-btn"
+            onClick={save}
+            disabled={saving}
+            className={saveBtnCls}
+          >
+            {saving ? <Loader2 size={10} className="inline animate-spin" /> : (
+              <><Save size={10} className="inline mr-1" /> Save Mini-App Settings</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main ──────────────────────────────────────────────────────────── */
 export default function AgentControlPanel() {
   const { id } = useParams();
