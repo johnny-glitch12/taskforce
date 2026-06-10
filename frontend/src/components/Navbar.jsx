@@ -1,10 +1,43 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/App";
 import { useTheme } from "@/lib/theme";
-import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, LogOut, Coins, Rocket, Sparkles, Package, Server, Banknote, TrendingUp, Key, Layers, Brain } from "lucide-react";
+import { Menu, X, Sun, Moon, ChevronDown, LayoutDashboard, BarChart3, Shield, LogOut, Coins, Rocket, Sparkles, Package, Server, Banknote, TrendingUp, Key, Layers, Brain, Bot } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import NotificationBell from "@/components/NotificationBell";
 import CreditCounter from "@/components/CreditCounter";
+
+const API = process.env.REACT_APP_BACKEND_URL || "";
+
+// ── Prompt 31 Phase 2 — module-level cached agent count ─────────────────
+// Cached for the browser session so the Navbar doesn't refetch on every
+// render. Refreshed on focus/visibility events or explicit refresh.
+let _agentCountCache = { active: null, total: null, ts: 0 };
+
+function useAgentCount() {
+  const [count, setCount] = useState(() => _agentCountCache.active);
+  useEffect(() => {
+    const token = localStorage.getItem("taskforce_token");
+    if (!token) return;
+    // Skip the network call entirely if we have a fresh cache (< 60s old).
+    // The lazy useState initializer above already seeded the value.
+    if (_agentCountCache.active !== null && Date.now() - _agentCountCache.ts < 60_000) {
+      return;
+    }
+    let aborted = false;
+    fetch(`${API}/api/agents/stats/overview`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (aborted || !d) return;
+        _agentCountCache = { active: d.active_now, total: d.total_agents, ts: Date.now() };
+        setCount(d.active_now);
+      })
+      .catch(() => {});
+    return () => { aborted = true; };
+  }, []);
+  return count;
+}
 
 const CENTER_LINKS_PUBLIC = [
   { to: "/armory", label: "The Armory", accent: true, beta: true },
@@ -38,6 +71,7 @@ function UserMenu({ user, logout, navigate }) {
 
   const menuItems = [
     { to: "/dashboard", label: "Command Center", icon: LayoutDashboard },
+    { to: "/my-agents", label: "My Agents", icon: Bot, accent: true },
     { to: "/credits", label: "Credits", icon: Coins },
     { to: "/my-deployments", label: "My Deployments", icon: Rocket },
     { to: "/my-apps", label: "My Apps", icon: Layers, accent: true },
@@ -125,8 +159,10 @@ export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const activeAgentCount = useAgentCount();
 
   const isArmory = location.pathname === "/armory";
+  const isMyAgents = location.pathname === "/my-agents" || location.pathname.startsWith("/my-agents/");
 
   const MOBILE_DASHBOARD_LINKS = [
     { to: "/dashboard", label: "Command Center" },
@@ -197,6 +233,35 @@ export default function Navbar() {
               </Link>
             );
           })}
+          {/* Prompt 31 Phase 2 — My Agents with active-count badge */}
+          {user && (
+            <Link
+              to="/my-agents"
+              data-testid="nav-link-my-agents"
+              data-active={isMyAgents || undefined}
+              className={`relative px-2 lg:px-3 xl:px-4 py-1.5 text-[10px] lg:text-[11px] tracking-[0.08em] lg:tracking-[0.1em] uppercase font-medium font-mono transition-colors duration-200 flex items-center gap-1 lg:gap-1.5 whitespace-nowrap ${
+                isMyAgents ? "text-cyan-400" : "text-zinc-500 hover:text-cyan-400"
+              }`}
+            >
+              <Bot size={11} className={isMyAgents ? "text-cyan-400" : "text-cyan-500/60"} />
+              <span>My Agents</span>
+              {typeof activeAgentCount === "number" && activeAgentCount > 0 && (
+                <span
+                  data-testid="nav-my-agents-badge"
+                  className="px-1 py-0.5 text-[8px] tracking-[0.08em] font-bold rounded-sm text-cyan-300"
+                  style={{ background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.35)" }}
+                >
+                  {activeAgentCount}
+                </span>
+              )}
+              {isMyAgents && (
+                <span
+                  className="absolute left-2 right-2 lg:left-3 lg:right-3 -bottom-0.5 h-px bg-cyan-400"
+                  style={{ boxShadow: "0 0 6px rgba(34,211,238,0.5)" }}
+                />
+              )}
+            </Link>
+          )}
         </div>
 
         {/* ── Right Side (Desktop) ── */}
@@ -271,6 +336,25 @@ export default function Navbar() {
               {link.label}
             </Link>
           ))}
+          {/* Prompt 31 Phase 2 — My Agents in mobile nav */}
+          {user && (
+            <Link
+              to="/my-agents"
+              data-testid="nav-link-my-agents-mobile"
+              onClick={() => setMobileOpen(false)}
+              className={`py-2.5 px-3 text-[12px] tracking-[0.1em] uppercase font-mono font-medium rounded-sm transition-all flex items-center justify-between ${
+                isMyAgents ? "text-cyan-400 bg-cyan-400/5" : "text-zinc-500"
+              }`}
+            >
+              <span className="flex items-center gap-2"><Bot size={12} /> My Agents</span>
+              {typeof activeAgentCount === "number" && activeAgentCount > 0 && (
+                <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-sm text-cyan-300"
+                      style={{ background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.35)" }}>
+                  {activeAgentCount}
+                </span>
+              )}
+            </Link>
+          )}
 
           {/* Dashboard links for logged-in mobile users */}
           {user && (

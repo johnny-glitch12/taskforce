@@ -40,6 +40,8 @@ import EconomicsDashboard from "@/pages/EconomicsDashboard";
 import MyApps from "@/pages/MyApps";
 import AppViewer from "@/pages/AppViewer";
 import BuilderMemory from "@/pages/BuilderMemory";
+import MyAgents from "@/pages/MyAgents";
+import AgentControlPanel from "@/pages/AgentControlPanel";
 import OnboardingModal from "@/components/OnboardingModal";
 import MemoryFirstTimeNotice from "@/components/MemoryFirstTimeNotice";
 import { CreditProvider } from "@/lib/credits";
@@ -324,6 +326,9 @@ function AppShell() {
           <Route path="/admin/economics" element={<OwnerGate feature="Platform Economics"><EconomicsDashboard /></OwnerGate>} />
           <Route path="/my-apps" element={<ProtectedRoute><MyApps /></ProtectedRoute>} />
           <Route path="/apps/:slug" element={<ProtectedRoute><AppViewer /></ProtectedRoute>} />
+          {/* Prompt 31 Phase 2 — Agent Operations Hub */}
+          <Route path="/my-agents" element={<ProtectedRoute><MyAgents /></ProtectedRoute>} />
+          <Route path="/my-agents/:id" element={<ProtectedRoute><AgentControlPanel /></ProtectedRoute>} />
           <Route path="/settings/memory" element={<ProtectedRoute><BuilderMemory /></ProtectedRoute>} />
         </Routes>
       </main>
