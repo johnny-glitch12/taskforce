@@ -9,7 +9,8 @@ const ECOSYSTEM = [
 
 const COMPANY = [
   { href: "mailto:abbasinidhal@gmail.com", label: "Contact Us" },
-  { href: "#", label: "Founders", badge: "COMING SOON" },
+  // No href — renders as plain text until the page exists (never a dead link).
+  { label: "Founders", badge: "COMING SOON" },
 ];
 
 const LEGAL = [
@@ -29,6 +30,15 @@ function FooterLink({ to, href, label, badge }) {
     );
   }
 
+  if (!href || href === "#") {
+    return (
+      <span data-testid={`footer-link-${label.toLowerCase().replace(/\s/g, "-")}`} className="text-[12px] t-text-mute flex items-center gap-2 cursor-default">
+        {label}
+        {badge && <Badge text={badge} />}
+      </span>
+    );
+  }
+
   return (
     <a href={href} data-testid={`footer-link-${label.toLowerCase().replace(/\s/g, "-")}`} className={cls}>
       {label}
@@ -39,7 +49,7 @@ function FooterLink({ to, href, label, badge }) {
 
 function Badge({ text }) {
   return (
-    <span className="text-[10px] t-bg-elev t-border border t-text-sub px-1.5 py-0.5 rounded-sm font-mono leading-none" style={{ color: '#22d3ee' }}>
+    <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-mono leading-none" style={{ background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', color: 'var(--accent)' }}>
       {text}
     </span>
   );
@@ -62,8 +72,8 @@ export default function Footer() {
               <span className="text-[13px] font-bold tracking-[0.1em] uppercase font-mono t-text">
                 Task<span className="text-cyan-400">Force</span>
               </span>
-              <span className="ml-1 px-1.5 py-0.5 text-[8px] font-bold tracking-[0.15em] uppercase font-mono rounded-sm text-cyan-300"
-                style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.35)' }}>
+              <span className="ml-1 px-1.5 py-0.5 text-[8px] font-bold tracking-[0.15em] uppercase font-mono rounded-sm"
+                style={{ background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', color: 'var(--accent)' }}>
                 Beta
               </span>
             </div>
@@ -73,7 +83,7 @@ export default function Footer() {
             <div>
               <p className="text-[10px] tracking-[0.2em] uppercase font-mono t-text-sub mb-2 font-semibold">The Briefing</p>
               <NewsletterWidget />
-              <p className="text-[10px] t-text-mute mt-1.5 leading-relaxed">Weekly drops, leaderboard winners, integration news.</p>
+              <p className="text-[10px] t-text-mute mt-1.5 leading-relaxed">Weekly drops, new agents, integration news.</p>
             </div>
           </div>
 

@@ -26,6 +26,20 @@
   --toast-text: #e4e4e7;
   --shadow-glow: 0 0 30px rgba(34,211,238,0.1);
   --orb-opacity: 0.6;
+
+  /* Aliases — legacy variable names used across pages resolve to the real
+     tokens above. var() references are resolved at use time, so these stay
+     correct in both themes without per-theme redefinition. */
+  --bg: var(--bg-primary);
+  --bg-app: var(--bg-primary);
+  --bg-sub: var(--bg-secondary);
+  --bg-panel: var(--bg-elevated);
+  --bg-input: var(--input-bg);
+  --text: var(--text-primary);
+  --text-sub: var(--text-secondary);
+  --text-mute: var(--text-muted);
+  --cyan: var(--accent);
+  --glow: var(--shadow-glow);
 }
 
 [data-theme="light"] {

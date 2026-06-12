@@ -6,6 +6,7 @@
  * /api/waitlist endpoint with source="academy" so we can segment leads.
  */
 import { useState } from "react";
+import usePageTitle from "@/hooks/usePageTitle";
 import {
   GraduationCap, Lock, Rocket, Coins, Plug, Loader2, Check, ArrowRight,
 } from "lucide-react";
@@ -91,12 +92,7 @@ function EmailSignup() {
         onChange={(e) => setEmail(e.target.value)}
         placeholder="you@example.com"
         autoComplete="email"
-        className="flex-1 px-3.5 py-3 rounded-sm text-[13px] focus:outline-none transition-colors"
-        style={{
-          background: "rgba(255,255,255,0.02)",
-          border: "1px solid rgba(34,211,238,0.18)",
-          color: "var(--text)",
-        }}
+        className="flex-1 t-input px-3.5 py-3 rounded-sm text-[13px] focus:outline-none focus:border-cyan-400/50 transition-colors"
       />
       <button
         type="submit"
@@ -112,6 +108,7 @@ function EmailSignup() {
 }
 
 export default function Academy() {
+  usePageTitle("The Academy");
   return (
     <div data-testid="academy-page" className="min-h-[calc(100vh-60px)] px-6 lg:px-8 py-12 md:py-20 relative overflow-hidden">
       {/* Background orb */}
@@ -134,7 +131,7 @@ export default function Academy() {
           <span
             data-testid="academy-badge"
             className="text-[10px] tracking-[0.25em] uppercase font-mono"
-            style={{ color: "rgba(34,211,238,0.85)" }}
+            style={{ color: "var(--accent)" }}
           >
             COMING SOON
           </span>
@@ -162,25 +159,24 @@ export default function Academy() {
               data-testid={`academy-course-${c.n}`}
               className="relative rounded-sm p-5 transition-transform duration-300 hover:-translate-y-1"
               style={{
-                background: "rgba(255,255,255,0.02)",
-                border: "1px solid rgba(34,211,238,0.10)",
-                opacity: 0.85,
+                background: "var(--bg-card)",
+                border: "1px solid var(--accent-border)",
               }}
             >
               <span
-                className="absolute top-3 right-3 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[8px] font-mono font-bold tracking-[0.15em] uppercase text-cyan-300"
-                style={{ background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.3)" }}
+                className="absolute top-3 right-3 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[8px] font-mono font-bold tracking-[0.15em] uppercase"
+                style={{ background: "var(--accent-bg)", border: "1px solid var(--accent-border)", color: "var(--accent)" }}
               >
                 <Lock size={8} /> Locked
               </span>
-              <div className="text-[28px] font-bold font-mono leading-none mb-3" style={{ color: "rgba(34,211,238,0.18)" }}>
+              <div className="text-[28px] font-bold font-mono leading-none mb-3" style={{ color: "var(--accent)", opacity: 0.45 }}>
                 {c.n}
               </div>
               <div className="flex items-center gap-2 mb-2">
                 <c.Icon size={13} className="text-cyan-400" />
                 <h3 className="text-[14px] font-semibold t-text">{c.title}</h3>
               </div>
-              <p className="text-[12px] leading-relaxed" style={{ color: "rgba(255,255,255,0.45)" }}>
+              <p className="text-[12px] leading-relaxed t-text-sub">
                 {c.blurb}
               </p>
             </div>
@@ -189,7 +185,7 @@ export default function Academy() {
 
         {/* Email signup */}
         <div className="mb-3">
-          <p className="text-[11px] uppercase tracking-[0.2em] font-mono mb-4" style={{ color: "rgba(255,255,255,0.4)" }}>
+          <p className="text-[11px] uppercase tracking-[0.2em] font-mono mb-4 t-text-mute">
             Want early access? Drop your email.
           </p>
           <EmailSignup />

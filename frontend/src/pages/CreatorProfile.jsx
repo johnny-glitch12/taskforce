@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { BadgeCheck, Shield, Star, ArrowLeft, ExternalLink, Clock, MessageSquare } from "lucide-react";
+import usePageTitle from "@/hooks/usePageTitle";
 
 const API = process.env.REACT_APP_BACKEND_URL || "";
 
@@ -9,6 +10,7 @@ export default function CreatorProfile() {
   const [creator, setCreator] = useState(null);
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
+  usePageTitle(creator?.name);
 
   useEffect(() => {
     fetch(`${API}/api/creators/${id}`)
@@ -22,10 +24,10 @@ export default function CreatorProfile() {
   }, [id]);
 
   if (loading) {
-    return <div className="min-h-[calc(100vh-60px)] flex items-center justify-center"><p className="text-zinc-500">Loading...</p></div>;
+    return <div className="min-h-[calc(100vh-60px)] flex items-center justify-center"><p className="t-text-mute">Loading...</p></div>;
   }
   if (!creator) {
-    return <div className="min-h-[calc(100vh-60px)] flex items-center justify-center"><p className="text-zinc-500">Creator not found.</p></div>;
+    return <div className="min-h-[calc(100vh-60px)] flex items-center justify-center"><p className="t-text-mute">Creator not found.</p></div>;
   }
 
   const totalDeploys = agents.reduce((sum, a) => sum + (a.deployCount || 0), 0);
@@ -40,59 +42,59 @@ export default function CreatorProfile() {
         <Link
           to="/marketplace"
           data-testid="back-to-marketplace"
-          className="inline-flex items-center gap-1.5 text-[13px] text-zinc-500 hover:text-white transition-colors mb-8"
+          className="inline-flex items-center gap-1.5 text-[13px] t-text-mute hover:text-cyan-400 transition-colors mb-8"
         >
           <ArrowLeft size={14} /> Back to Marketplace
         </Link>
 
         {/* Profile Header */}
-        <div className="bg-white/[0.03] border border-white/[0.07] rounded-sm p-6 md:p-8 mb-8">
+        <div className="rounded-sm p-6 md:p-8 mb-8" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
           <div className="flex flex-col sm:flex-row items-start gap-5">
             <div className="w-16 h-16 rounded-sm flex items-center justify-center text-white text-2xl font-bold flex-shrink-0" style={{ background: creator.color }}>
               {creator.initial}
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
-                <h1 className="text-2xl font-bold text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                <h1 className="text-2xl font-bold t-text">
                   {creator.name}
                 </h1>
                 {creator.verified && <BadgeCheck size={18} className="text-cyan-400" />}
               </div>
-              <p className="text-[14px] text-zinc-500 mb-3">{creator.username}</p>
-              <p className="text-[14px] text-zinc-400 leading-relaxed mb-4">{creator.bio}</p>
+              <p className="text-[14px] t-text-mute mb-3">{creator.username}</p>
+              <p className="text-[14px] t-text-sub leading-relaxed mb-4">{creator.bio}</p>
               <div className="flex flex-wrap items-center gap-3">
-                <span className="text-[11px] bg-cyan-400/15 text-cyan-300 px-3 py-1 rounded-sm font-medium">Supernova</span>
-                <span className="flex items-center gap-1 text-[12px] text-zinc-400"><Shield size={12} className="text-emerald-500" /> Trust Score: {creator.trustScore}</span>
-                <span className="flex items-center gap-1 text-[12px] text-zinc-400"><Star size={12} className="fill-amber-400 text-amber-400" /> {avgRating} avg rating</span>
+                <span className="text-[11px] px-3 py-1 rounded-sm font-medium" style={{ background: "var(--accent-bg)", color: "var(--accent)" }}>Supernova</span>
+                <span className="flex items-center gap-1 text-[12px] t-text-sub"><Shield size={12} className="text-emerald-500" /> Trust Score: {creator.trustScore}</span>
+                <span className="flex items-center gap-1 text-[12px] t-text-sub"><Star size={12} className="fill-amber-400 text-amber-400" /> {avgRating} avg rating</span>
               </div>
             </div>
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/[0.05]">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6" style={{ borderTop: "1px solid var(--border)" }}>
             <div>
-              <p className="text-[22px] font-bold text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>{totalDeploys.toLocaleString()}</p>
-              <p className="text-[12px] text-zinc-500">Total Deploys</p>
+              <p className="text-[22px] font-bold t-text">{totalDeploys.toLocaleString()}</p>
+              <p className="text-[12px] t-text-mute">Total Deploys</p>
             </div>
             <div>
-              <p className="text-[22px] font-bold text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>{creator.completionRate}</p>
-              <p className="text-[12px] text-zinc-500">Completion Rate</p>
+              <p className="text-[22px] font-bold t-text">{creator.completionRate}</p>
+              <p className="text-[12px] t-text-mute">Completion Rate</p>
             </div>
             <div>
-              <p className="text-[22px] font-bold text-white flex items-center gap-1" style={{ fontFamily: "'Outfit', sans-serif" }}>
-                <Clock size={16} className="text-zinc-500" /> {creator.responseTime}
+              <p className="text-[22px] font-bold t-text flex items-center gap-1">
+                <Clock size={16} className="t-text-mute" /> {creator.responseTime}
               </p>
-              <p className="text-[12px] text-zinc-500">Response Time</p>
+              <p className="text-[12px] t-text-mute">Response Time</p>
             </div>
             <div>
-              <p className="text-[22px] font-bold text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>{agents.length}</p>
-              <p className="text-[12px] text-zinc-500">Active Agents</p>
+              <p className="text-[22px] font-bold t-text">{agents.length}</p>
+              <p className="text-[12px] t-text-mute">Active Agents</p>
             </div>
           </div>
         </div>
 
         {/* Agent Portfolio */}
-        <h2 className="text-lg font-semibold text-white mb-5" style={{ fontFamily: "'Outfit', sans-serif" }}>
+        <h2 className="text-lg font-semibold t-text mb-5">
           Agent Portfolio
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -101,21 +103,22 @@ export default function CreatorProfile() {
               to={`/agent/${agent.id}`}
               key={agent.id}
               data-testid={`portfolio-agent-${agent.id}`}
-              className="bg-white/[0.03] border border-white/[0.07] rounded-sm p-5 transition-all duration-300 hover:border-cyan-400/25 hover:shadow-[0_0_25px_rgba(139,92,246,0.06)]"
+              className="rounded-sm p-5 transition-[border-color,box-shadow] duration-200 hover:border-cyan-400/25 hover:shadow-[0_0_25px_rgba(34,211,238,0.06)]"
+              style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
             >
-              <h3 className="text-[15px] font-medium text-white mb-2" style={{ fontFamily: "'Outfit', sans-serif" }}>
+              <h3 className="text-[15px] font-medium t-text mb-2">
                 {agent.shortTitle || agent.title}
               </h3>
               <div className="flex items-center gap-3 mb-3">
                 <span className="flex items-center gap-1 text-[12px]">
                   <Star size={11} className="fill-amber-400 text-amber-400" />
-                  <span className="text-white">{agent.rating}</span>
-                  <span className="text-zinc-600">({agent.reviews})</span>
+                  <span className="t-text">{agent.rating}</span>
+                  <span className="t-text-dim">({agent.reviews})</span>
                 </span>
-                <span className="text-[12px] text-zinc-600">{agent.deployCount} deploys</span>
+                <span className="text-[12px] t-text-dim">{agent.deployCount} deploys</span>
               </div>
-              <div className="flex items-center justify-between pt-3 border-t border-white/[0.05]">
-                <span className="text-[14px] font-semibold text-white">${agent.price}<span className="text-[11px] text-zinc-500 font-normal">/mo</span></span>
+              <div className="flex items-center justify-between pt-3" style={{ borderTop: "1px solid var(--border)" }}>
+                <span className="text-[14px] font-semibold t-text">${agent.price}<span className="text-[11px] t-text-mute font-normal">/mo</span></span>
                 <span className="text-[12px] text-cyan-400 flex items-center gap-1">View <ExternalLink size={10} /></span>
               </div>
             </Link>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import usePageTitle from "@/hooks/usePageTitle";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/App";
 import { useCredits } from "@/lib/credits";
@@ -31,14 +32,13 @@ function SearchHero({ searchQuery, setSearchQuery }) {
           className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"
           style={{ boxShadow: "0 0 8px rgba(34,211,238,0.7)" }}
         />
-        <span className="text-[10px] tracking-[0.25em] uppercase font-mono" style={{ color: "rgba(255,255,255,0.55)" }}>
-          The Exchange · Live Marketplace
+        <span className="text-[10px] tracking-[0.25em] uppercase font-mono t-text-mute">
+          The Exchange · Agent Marketplace
         </span>
       </div>
       <h1
         data-testid="marketplace-title"
         className="text-3xl sm:text-4xl lg:text-[3.25rem] font-bold tracking-[-0.02em] t-text mb-3"
-        style={{ fontFamily: "'Outfit', sans-serif" }}
       >
         Production-ready <span className="text-gradient-cyan">AI agents</span>
       </h1>
@@ -97,7 +97,7 @@ function CreatorSpotlight() {
   return (
     <section className="mb-14" data-testid="creator-spotlight">
       <div className="flex items-center justify-between mb-5">
-        <h2 className="text-lg font-semibold t-text" style={{ fontFamily: "'Outfit', sans-serif" }}>
+        <h2 className="text-lg font-semibold t-text">
           Top Operators
         </h2>
         <span className="text-[12px] t-text-dim">Top-rated creators</span>
@@ -235,17 +235,20 @@ function AgentCard({ agent, index }) {
       {/* Content */}
       <div className="px-4 pb-4">
         <Link to={`/listing/${agent.id}`} data-testid={`agent-title-link-${agent.id}`}>
-          <h3 className="text-[14px] font-medium t-text leading-snug mb-2.5 line-clamp-2 hover:text-cyan-300 transition-colors cursor-pointer" style={{ fontFamily: "'Outfit', sans-serif" }}>
+          <h3 className="text-[14px] font-medium t-text leading-snug mb-2.5 line-clamp-2 hover:text-cyan-300 transition-colors cursor-pointer">
             {agent.title}
           </h3>
         </Link>
 
         <div className="flex items-center gap-3 mb-3">
-          <span className="flex items-center gap-1 text-[12px]">
-            <Star size={12} className="fill-amber-400 text-amber-400" />
-            <span className="t-text font-medium">{agent.rating}</span>
-            <span className="t-text-dim">({agent.reviews})</span>
-          </span>
+          {/* Only show a rating when the backend provides one — no fabricated stars */}
+          {agent.rating != null && (
+            <span className="flex items-center gap-1 text-[12px]">
+              <Star size={12} className="fill-amber-400 text-amber-400" />
+              <span className="t-text font-medium">{agent.rating}</span>
+              {agent.reviews > 0 && <span className="t-text-dim">({agent.reviews})</span>}
+            </span>
+          )}
           <span className="flex items-center gap-1 text-[12px] t-text-sub">
             <Shield size={11} className="text-emerald-500" /> {agent.trustScore}
           </span>
@@ -278,6 +281,7 @@ function AgentCard({ agent, index }) {
 }
 
 export default function Marketplace() {
+  usePageTitle("The Exchange");
   const { token } = useAuth();
   const { refreshCredits } = useCredits();
   const [searchQuery, setSearchQuery] = useState("");
@@ -342,10 +346,11 @@ export default function Marketplace() {
           buyPrice: l.buy_price,
           priceCredits: l.price_credits || 0,
           isOfficial: !!l.is_official,
-          image: l.video_url ? `${API}${l.video_url}` : (l.photo_urls?.[0] ? `${API}${l.photo_urls[0]}` : null),
+          // Card images must be images — a video URL inside <img> renders broken.
+          image: l.photo_urls?.[0] ? `${API}${l.photo_urls[0]}` : null,
           videoUrl: l.video_url ? `${API}${l.video_url}` : null,
           photoUrls: (l.photo_urls || []).map((u) => `${API}${u}`),
-          rating: l.rating || 4.5,
+          rating: l.rating || null,
           reviews: 0,
           trustScore: l.trust_score,
           deployCount: l.deploy_count || 0,
@@ -391,27 +396,31 @@ export default function Marketplace() {
         <CategoryPills activeCategory={activeCategory} setActiveCategory={setActiveCategory} />
         <CreatorSpotlight />
 
-        {/* Trending */}
-        <section className="mb-14" data-testid="trending-section">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-lg font-semibold t-text flex items-center gap-2" style={{ fontFamily: "'Outfit', sans-serif" }}>
-              <TrendingUp size={18} className="text-cyan-400" /> Most Deployed This Week
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {trending.map((agent, i) => (
-              <AgentCard key={agent.id} agent={agent} index={i} />
-            ))}
-          </div>
-        </section>
+        {/* Trending — only once there's actual deploy activity */}
+        {trending.length > 0 && (
+          <section className="mb-14" data-testid="trending-section">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-semibold t-text flex items-center gap-2">
+                <TrendingUp size={18} className="text-cyan-400" /> Most Deployed This Week
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {trending.map((agent, i) => (
+                <AgentCard key={agent.id} agent={agent} index={i} />
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Full grid */}
         <section data-testid="all-agents-section">
           <div className="flex items-center justify-between mb-5">
-            <h2 className="text-lg font-semibold t-text" style={{ fontFamily: "'Outfit', sans-serif" }}>
+            <h2 className="text-lg font-semibold t-text">
               {activeCategory === "all" ? "All Agents" : categories.find(c => c.id === activeCategory)?.label}
             </h2>
-            <span className="text-[13px] t-text-dim">{agents.length} agents</span>
+            {agents.length > 0 && (
+              <span className="text-[13px] t-text-dim">{agents.length} agents</span>
+            )}
           </div>
           {loading ? (
             <div className="text-center py-20 t-text-dim text-[14px]">Loading agents...</div>
@@ -421,9 +430,40 @@ export default function Marketplace() {
                 <AgentCard key={agent.id} agent={agent} index={i} />
               ))}
             </div>
+          ) : searchQuery.trim() !== "" || activeCategory !== "all" ? (
+            <div className="text-center py-20 t-text-dim text-[14px]" data-testid="exchange-empty-filtered">
+              No agents match. Try a different search or category.
+            </div>
           ) : (
-            <div className="text-center py-20 t-text-dim text-[14px]">
-              No agents found. Try a different search or category.
+            <div className="text-center py-16 px-6" data-testid="exchange-empty-launch">
+              <div
+                className="inline-flex items-center justify-center w-12 h-12 rounded-sm mb-5"
+                style={{ background: "var(--accent-bg)", border: "1px solid var(--accent-border)" }}
+              >
+                <Trophy size={20} style={{ color: "var(--accent)" }} />
+              </div>
+              <h3 className="text-lg font-semibold t-text mb-2">The first drops are coming</h3>
+              <p className="text-[14px] t-text-sub max-w-md mx-auto mb-8 leading-relaxed">
+                The Exchange opens with its founding creator drops. Build an agent now
+                and yours can be on the board from day one.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <Link
+                  to="/armory"
+                  data-testid="exchange-empty-build-cta"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-sm text-[11px] font-bold font-mono uppercase tracking-[0.18em] bg-cyan-400 text-black hover:bg-cyan-300 transition-colors"
+                >
+                  <Sparkles size={12} /> Build in The Armory
+                </Link>
+                <Link
+                  to="/bounties"
+                  data-testid="exchange-empty-bounty-cta"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-sm text-[11px] font-bold font-mono uppercase tracking-[0.18em] transition-colors hover:bg-[var(--accent-bg)]"
+                  style={{ border: "1px solid var(--accent-border)", color: "var(--accent)" }}
+                >
+                  Browse Bounties <ChevronRight size={12} />
+                </Link>
+              </div>
             </div>
           )}
         </section>

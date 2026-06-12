@@ -20,7 +20,7 @@ function StatBox({ label, value, color, icon: Icon }) {
         <span className="text-[11px] t-text-sub tracking-wide">{label}</span>
         <Icon size={14} style={{ color }} />
       </div>
-      <p className="text-2xl font-semibold t-text" style={{ fontFamily: "'Outfit', sans-serif" }}>{value}</p>
+      <p className="text-2xl font-semibold t-text">{value}</p>
     </div>
   );
 }
@@ -105,7 +105,7 @@ export default function SecurityDashboard() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold t-text tracking-tight flex items-center gap-3" style={{ fontFamily: "'Outfit', sans-serif" }}>
+            <h1 className="text-2xl sm:text-3xl font-bold t-text tracking-tight flex items-center gap-3">
               <Shield size={24} className="text-cyan-400" /> Security Audit Log
             </h1>
             <p className="text-[13px] t-text-sub mt-1">Monitor firewall verdicts and blocked prompt injection attempts</p>

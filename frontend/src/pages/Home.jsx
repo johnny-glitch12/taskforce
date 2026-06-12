@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
+import usePageTitle from "@/hooks/usePageTitle";
 import { toast } from "sonner";
-import { ArrowRight, Users, Play, Zap, Shield, Terminal, Globe, Code2, GitBranch, Lock } from "lucide-react";
+import { ArrowRight, Users, Zap, Shield, Terminal, Globe, Code2, GitBranch, Lock } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { motion, useInView, useScroll, useTransform } from "framer-motion";
 
 const API = process.env.REACT_APP_BACKEND_URL || "";
@@ -153,7 +155,7 @@ function GridBackground() {
 /* ─── Feature cards ─── */
 const FEATURES = [
   { icon: Terminal, title: "Command Prompt", desc: "Describe your agent in plain English. AI builds the logic.", color: "#22d3ee" },
-  { icon: GitBranch, title: "The Armory", desc: "Visual React Flow node builder for complex multi-step agents.", color: "#10b981" },
+  { icon: GitBranch, title: "The Armory", desc: "Drag-and-drop node builder for complex multi-step agents.", color: "#10b981" },
   { icon: Globe, title: "The Exchange", desc: "Publish, rent, or acquire agent IP on the marketplace.", color: "#06b6d4" },
   { icon: Shield, title: "Security Firewall", desc: "Triple-layer protection: Semantic audit, rate limits, SSRF blocking.", color: "#f59e0b" },
   { icon: Code2, title: "Version Control", desc: "Every publish tracked. Roll back, compare, iterate.", color: "#8b5cf6" },
@@ -167,6 +169,8 @@ const FEATURES = [
 const STATS = [];
 
 export default function Home() {
+  usePageTitle();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [waitlistCount, setWaitlistCount] = useState(0);
@@ -215,8 +219,8 @@ export default function Home() {
               Autonomous Agent Infrastructure
               <span
                 data-testid="hero-beta-badge"
-                className="px-1.5 py-0.5 text-[8px] font-bold tracking-[0.15em] rounded-sm text-cyan-200"
-                style={{ background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.4)' }}
+                className="px-1.5 py-0.5 text-[8px] font-bold tracking-[0.15em] rounded-sm"
+                style={{ background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', color: 'var(--accent)' }}
               >
                 Early Access · Beta
               </span>
@@ -258,17 +262,17 @@ export default function Home() {
             className="max-w-md mx-auto flex flex-col sm:flex-row items-stretch gap-2"
           >
             <input
-              type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+              type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
               placeholder="your@email.com"
               data-testid="waitlist-email-input"
-              className="flex-1 t-input focus:outline-none transition-all px-4 py-3 text-[14px] rounded-sm font-mono"
+              className="flex-1 t-input focus:outline-none transition-colors px-4 py-3 text-[14px] rounded-sm font-mono"
               style={{ border: '1px solid var(--border)' }}
             />
             <button
-              type="submit" data-testid="waitlist-submit-btn"
-              className="group px-6 py-3 bg-cyan-400 text-black text-[13px] font-bold tracking-wide uppercase rounded-sm hover:bg-cyan-300 transition-all flex items-center justify-center gap-2"
+              type="submit" data-testid="waitlist-submit-btn" disabled={submitting}
+              className="group px-6 py-3 bg-cyan-400 text-black text-[13px] font-bold tracking-wide uppercase rounded-sm hover:bg-cyan-300 transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
             >
-              Enlist Now <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+              {submitting ? "Enlisting…" : "Enlist Now"} <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
             </button>
           </motion.form>
 
@@ -284,29 +288,15 @@ export default function Home() {
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
                 <Users size={12} className="text-cyan-400" />
                 <span className="t-text font-mono font-semibold">{waitlistCount.toLocaleString()}</span>
-                <span className="t-text-mute">operatives enlisted</span>
+                <span className="t-text-mute">operators enlisted</span>
               </div>
             </motion.div>
           )}
 
-          {/* Hero Video — 30-Second High-Tempo Loop */}
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.65 }}
-            className="mt-10 mx-auto max-w-3xl rounded-sm overflow-hidden"
-            style={{ border: '1px solid var(--border)', boxShadow: '0 0 40px rgba(34,211,238,0.08)' }}
-            data-testid="hero-video"
-          >
-            <video
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="w-full aspect-video object-cover"
-              src="https://customer-assets.emergentagent.com/job_dark-mode-nova/artifacts/rzrr061t_c3dde6e0-599a-4612-9294-65ac300e7471_720p_mp4_30_16-9%20%281%29.mp4"
-            />
-          </motion.div>
+          {/* Hero video slot — removed the watermarked stock loop that repeated
+              the H1 (it was hot-linked from a third-party CDN). When a real
+              product capture exists (Armory build → deploy, ~15s, silent),
+              restore a <video> here with a poster image and self-hosted src. */}
         </div>
       </motion.section>
 
@@ -405,10 +395,11 @@ export default function Home() {
             Ready to <span className="text-gradient-cyan">Deploy</span>?
           </h2>
           <p className="text-[15px] t-text-sub mb-7 max-w-md mx-auto">
-            Join early builders shipping autonomous agents on Task Force AI.
+            Join the first operators shipping autonomous agents on Task Force.
           </p>
           <motion.a
-            href="#waitlist"
+            href="/login"
+            onClick={(e) => { e.preventDefault(); navigate("/login"); }}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             className="inline-flex items-center gap-2 px-8 py-3.5 bg-cyan-400 text-black text-[14px] font-bold tracking-wide uppercase rounded-sm hover:bg-cyan-300 transition-colors"
