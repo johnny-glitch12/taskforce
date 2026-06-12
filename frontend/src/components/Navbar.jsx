@@ -193,7 +193,7 @@ export default function Navbar() {
 
         {/* ── Center Links (Desktop) ── flex-1 distributes remaining width evenly,
             no absolute positioning so the right-side controls never overlap. */}
-        <div className="hidden md:flex flex-1 items-center justify-center gap-0.5 lg:gap-1 xl:gap-2 min-w-0">
+        <div className="hidden lg:flex flex-1 items-center justify-center gap-0.5 lg:gap-1 xl:gap-2 min-w-0 overflow-x-auto scrollbar-hide">
           {(user?.role === "admin" ? CENTER_LINKS_ADMIN : CENTER_LINKS_PUBLIC).map((link) => {
             const isActive = location.pathname === link.to;
             return (
@@ -269,7 +269,7 @@ export default function Navbar() {
         </div>
 
         {/* ── Right Side (Desktop) ── */}
-        <div className="hidden md:flex items-center gap-2 lg:gap-3 shrink-0">
+        <div className="hidden lg:flex items-center gap-2 lg:gap-3 shrink-0">
           <button
             data-testid="theme-toggle-btn"
             onClick={toggle}
@@ -307,7 +307,7 @@ export default function Navbar() {
         </div>
 
         {/* ── Mobile Right ── */}
-        <div className="md:hidden flex items-center gap-2">
+        <div className="lg:hidden flex items-center gap-2">
           <button
             data-testid="theme-toggle-mobile"
             onClick={toggle}
@@ -329,7 +329,7 @@ export default function Navbar() {
       {mobileOpen && (
         <div
           data-testid="mobile-menu"
-          className="md:hidden px-6 py-5 flex flex-col gap-0.5 animate-fade-in"
+          className="lg:hidden px-6 py-5 flex flex-col gap-0.5 animate-fade-in"
           style={{ backgroundColor: "var(--bg-nav)", borderTop: "1px solid var(--border)" }}
         >
           {(user?.role === "admin" ? CENTER_LINKS_ADMIN : CENTER_LINKS_PUBLIC).map((link) => (

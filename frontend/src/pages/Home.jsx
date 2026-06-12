@@ -293,10 +293,25 @@ export default function Home() {
             </motion.div>
           )}
 
-          {/* Hero video slot — removed the watermarked stock loop that repeated
-              the H1 (it was hot-linked from a third-party CDN). When a real
-              product capture exists (Armory build → deploy, ~15s, silent),
-              restore a <video> here with a poster image and self-hosted src. */}
+          {/* Hero Video — 30-Second High-Tempo Loop (self-hosted in /public,
+              no third-party CDN dependency) */}
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.65 }}
+            className="mt-10 mx-auto max-w-3xl rounded-sm overflow-hidden"
+            style={{ border: '1px solid var(--border)', boxShadow: '0 0 40px rgba(34,211,238,0.08)' }}
+            data-testid="hero-video"
+          >
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full aspect-video object-cover"
+              src="/hero-loop.mp4"
+            />
+          </motion.div>
         </div>
       </motion.section>
 

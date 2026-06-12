@@ -2,7 +2,6 @@ import { useState, useEffect, createContext, useContext, useCallback, lazy, Susp
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
-import { MotionConfig } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { ThemeProvider } from "@/lib/theme";
 import Navbar from "@/components/Navbar";
@@ -221,13 +220,9 @@ function App() {
     <AuthContext.Provider value={{ user, token, isAdmin, isOwner, loading, login, register, logout }}>
       <ThemeProvider>
         <CreditProvider>
-          {/* Respect prefers-reduced-motion: framer drops transform animations,
-              keeps opacity, so scroll-revealed content stays reachable. */}
-          <MotionConfig reducedMotion="user">
-            <BrowserRouter>
-              <AppShell />
-            </BrowserRouter>
-          </MotionConfig>
+          <BrowserRouter>
+            <AppShell />
+          </BrowserRouter>
         </CreditProvider>
       </ThemeProvider>
     </AuthContext.Provider>
