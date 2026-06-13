@@ -7,6 +7,7 @@
  */
 import { useEffect, useRef } from "react";
 import { Sparkles, Send, Loader2, Code2, Paperclip, MessageSquare } from "lucide-react";
+import { useAuth } from "@/App";
 import ChatMessage from "./ChatMessage";
 import EmptyState from "./EmptyState";
 
@@ -16,6 +17,7 @@ export default function ChatPanel({
   onViewFiles, onOpenInWorkflows, onResume, hasProject,
   collapsed,
 }) {
+  const { developerMode } = useAuth() || {};
   const endRef = useRef(null);
   const taRef = useRef(null);
 
@@ -64,7 +66,7 @@ export default function ChatPanel({
           {busy && <Loader2 size={9} className="animate-spin" />}
           {status}
         </span>
-        {hasProject && onOpenInWorkflows && (
+        {developerMode && hasProject && onOpenInWorkflows && (
           <button
             data-testid="armory-open-workflows-header"
             onClick={onOpenInWorkflows}

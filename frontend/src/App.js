@@ -49,6 +49,7 @@ const EconomicsDashboard = lazy(() => import("@/pages/EconomicsDashboard"));
 const MyApps = lazy(() => import("@/pages/MyApps"));
 const AppViewer = lazy(() => import("@/pages/AppViewer"));
 const BuilderMemory = lazy(() => import("@/pages/BuilderMemory"));
+const Settings = lazy(() => import("@/pages/Settings"));
 const MyAgents = lazy(() => import("@/pages/MyAgents"));
 const AgentControlPanel = lazy(() => import("@/pages/AgentControlPanel"));
 const MiniApp = lazy(() => import("@/pages/MiniApp"));
@@ -213,11 +214,33 @@ function App() {
     setUser(null);
   };
 
+  // Developer mode: persisted on the user doc. Flipping it updates local user
+  // state immediately so every code-gating component re-renders without reload.
+  const setDeveloperMode = useCallback(async (enabled) => {
+    setUser((u) => (u ? { ...u, developer_mode: enabled } : u)); // optimistic
+    try {
+      const res = await fetch(`${API}/api/settings/developer-mode`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      if (!res.ok) throw new Error("save failed");
+      const data = await res.json();
+      setUser((u) => (u ? { ...u, developer_mode: !!data.developer_mode } : u));
+      return true;
+    } catch {
+      setUser((u) => (u ? { ...u, developer_mode: !enabled } : u)); // revert
+      return false;
+    }
+  }, [token]);
+
   const isAdmin = user?.role === "admin";
   const isOwner = isAdmin && !!user?.is_owner;
+  // Admins always see code surfaces; regular users only when they opt in.
+  const developerMode = isAdmin || !!user?.developer_mode;
 
   return (
-    <AuthContext.Provider value={{ user, token, isAdmin, isOwner, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, isAdmin, isOwner, developerMode, setDeveloperMode, loading, login, register, logout }}>
       <ThemeProvider>
         <CreditProvider>
           <BrowserRouter>
@@ -388,6 +411,7 @@ function AppShell() {
           {/* Prompt 31 Phase 2 — Agent Operations Hub */}
           <Route path="/my-agents" element={<ProtectedRoute><MyAgents /></ProtectedRoute>} />
           <Route path="/my-agents/:id" element={<ProtectedRoute><AgentControlPanel /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/settings/memory" element={<ProtectedRoute><BuilderMemory /></ProtectedRoute>} />
           {/* Prompt 31 Phase 5 — 404 catch-all. MUST stay last. */}
           <Route path="*" element={<NotFound />} />

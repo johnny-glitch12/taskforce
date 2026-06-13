@@ -34,6 +34,10 @@ class PayoutPrefRequest(BaseModel):
     preference: str = Field(pattern=r"^(credits|cash)$")
 
 
+class DeveloperModeRequest(BaseModel):
+    enabled: bool
+
+
 @router.get("/settings")
 async def get_settings(user=Depends(get_current_user())):
     """Return the user's account settings + ecosystem constants so the
@@ -43,10 +47,12 @@ async def get_settings(user=Depends(get_current_user())):
     u = await db.users.find_one(
         {"id": user_id},
         {"_id": 0, "payout_preference": 1, "cashback_earned_total": 1,
-         "credits_earned_total": 1, "bonus_credits_earned_total": 1},
+         "credits_earned_total": 1, "bonus_credits_earned_total": 1,
+         "developer_mode": 1},
     ) or {}
     return {
         "payout_preference": (u.get("payout_preference") or "credits"),
+        "developer_mode": bool(u.get("developer_mode", False)),
         "stats": {
             "credits_earned_total":     int(u.get("credits_earned_total") or 0),
             "bonus_credits_earned":     int(u.get("bonus_credits_earned_total") or 0),
@@ -72,6 +78,20 @@ async def set_payout_preference(req: PayoutPrefRequest, user=Depends(get_current
         {"$set": {"payout_preference": req.preference}},
     )
     return {"payout_preference": req.preference}
+
+
+@router.put("/settings/developer-mode")
+async def set_developer_mode(req: DeveloperModeRequest, user=Depends(get_current_user())):
+    """Toggle developer mode. When OFF (default), the UI hides all raw-code and
+    node-graph surfaces so the product stays no-code. When ON, power users get
+    the generated source, flow graph, and Workflows editor back."""
+    db = get_db()
+    user_id = str(user.get("id", user.get("email")))
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"developer_mode": bool(req.enabled)}},
+    )
+    return {"developer_mode": bool(req.enabled)}
 
 
 @router.get("/earnings")

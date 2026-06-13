@@ -10,13 +10,16 @@ import {
   FileCode2, GitBranch, Settings, Bot, Shield, X, ChevronRight,
 } from "lucide-react";
 import Editor from "@monaco-editor/react";
+import { useAuth } from "@/App";
 import AgentActionBar from "./AgentActionBar";
 
-const TABS = [
+// Files + Flow are raw-code / node-graph surfaces — only shown in developer mode.
+// Overview is always available and is the default for no-code users.
+const DEV_TABS = [
   { id: "files", label: "Files", Icon: FileCode2 },
   { id: "flow", label: "Flow", Icon: GitBranch },
-  { id: "config", label: "Config", Icon: Settings },
 ];
+const OVERVIEW_TAB = { id: "config", label: "Overview", Icon: Settings };
 
 function fileLang(path) {
   if (path.endsWith(".py")) return "python";
@@ -33,8 +36,12 @@ export default function AgentPreview({
   onTestRun, onDeploy, onPublish, onExport,
   testRunResult, busyAction,
 }) {
-  const [tab, setTab] = useState("files");
+  const { developerMode } = useAuth() || {};
+  const tabs = developerMode ? [...DEV_TABS, OVERVIEW_TAB] : [OVERVIEW_TAB];
+  const [tab, setTab] = useState(developerMode ? "files" : "config");
   const [activeFileIdx, setActiveFileIdx] = useState(0);
+  // If dev mode is flipped off while a code tab is active, fall back to Overview.
+  const effectiveTab = (!developerMode && tab !== "config") ? "config" : tab;
 
   const trustScore = project?.trust_score;
   const status = project ? (project.deployed ? "Deployed" : "Ready") : "Draft";
@@ -99,32 +106,35 @@ export default function AgentPreview({
         </div>
       </header>
 
-      {/* Tabs */}
-      <nav className="flex shrink-0" style={{ borderBottom: "1px solid var(--armory-border)" }}>
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            data-testid={`armory-tab-${t.id}`}
-            onClick={() => setTab(t.id)}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[10px] font-mono uppercase tracking-[0.15em] transition-all"
-            style={{
-              color: tab === t.id ? "var(--armory-accent)" : "var(--armory-text-mute)",
-              background: tab === t.id ? "var(--armory-active-bg)" : "transparent",
-              borderBottom: `2px solid ${tab === t.id ? "var(--armory-accent)" : "transparent"}`,
-            }}
-          >
-            <t.Icon size={11} /> {t.label}
-          </button>
-        ))}
-      </nav>
+      {/* Tabs — single Overview tab in no-code mode; show the nav only when
+          there's more than one (developer mode adds Files + Flow). */}
+      {tabs.length > 1 && (
+        <nav className="flex shrink-0" style={{ borderBottom: "1px solid var(--armory-border)" }}>
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              data-testid={`armory-tab-${t.id}`}
+              onClick={() => setTab(t.id)}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[10px] font-mono uppercase tracking-[0.15em] transition-all"
+              style={{
+                color: effectiveTab === t.id ? "var(--armory-accent)" : "var(--armory-text-mute)",
+                background: effectiveTab === t.id ? "var(--armory-active-bg)" : "transparent",
+                borderBottom: `2px solid ${effectiveTab === t.id ? "var(--armory-accent)" : "transparent"}`,
+              }}
+            >
+              <t.Icon size={11} /> {t.label}
+            </button>
+          ))}
+        </nav>
+      )}
 
       {/* Tab body */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        {tab === "files" && (
+        {effectiveTab === "files" && developerMode && (
           <FilesTab files={files} activeIdx={activeFileIdx} setActiveIdx={setActiveFileIdx} />
         )}
-        {tab === "flow" && <FlowTab nodes={nodes} edges={edges} />}
-        {tab === "config" && <ConfigTab project={project} />}
+        {effectiveTab === "flow" && developerMode && <FlowTab nodes={nodes} edges={edges} />}
+        {effectiveTab === "config" && <ConfigTab project={project} developerMode={developerMode} />}
       </div>
 
       {/* Action bar */}
@@ -314,12 +324,12 @@ function nodeColor(type) {
   return "#10b981"; // default: action/green
 }
 
-function ConfigTab({ project }) {
+function ConfigTab({ project, developerMode }) {
   if (!project) {
     return (
       <div className="h-full flex items-center justify-center p-8 text-center">
         <p className="text-[11px] font-mono" style={{ color: "var(--armory-text-dim)" }}>
-          No agent yet — generate code first.
+          No agent yet — describe what you want and hit Generate.
         </p>
       </div>
     );
@@ -327,11 +337,12 @@ function ConfigTab({ project }) {
   return (
     <div data-testid="armory-config-tab" className="h-full overflow-y-auto p-4 space-y-3">
       <ConfigRow label="Name" value={project.name} />
-      <ConfigRow label="Language" value={project.language || "python"} />
-      <ConfigRow label="Source" value={project.source || "vibe"} />
       <ConfigRow label="Version" value={`v${project.version ?? 1}`} />
-      <ConfigRow label="Files" value={`${(project.files || []).length} files`} />
-      <ConfigRow label="Nodes" value={`${(project.nodes || []).length} nodes`} />
+      {/* Implementation details only in developer mode */}
+      {developerMode && <ConfigRow label="Language" value={project.language || "python"} />}
+      {developerMode && <ConfigRow label="Source" value={project.source || "vibe"} />}
+      {developerMode && <ConfigRow label="Files" value={`${(project.files || []).length} files`} />}
+      {developerMode && <ConfigRow label="Nodes" value={`${(project.nodes || []).length} nodes`} />}
       <div>
         <div className="text-[9px] font-mono uppercase tracking-[0.18em] mb-1" style={{ color: "var(--armory-text-dim)" }}>
           Description
@@ -340,7 +351,7 @@ function ConfigTab({ project }) {
           {project.description || <span className="opacity-50">No description yet.</span>}
         </div>
       </div>
-      {project.commit_history?.length > 0 && (
+      {developerMode && project.commit_history?.length > 0 && (
         <div>
           <div className="text-[9px] font-mono uppercase tracking-[0.18em] mb-1.5" style={{ color: "var(--armory-text-dim)" }}>
             Commits ({project.commit_history.length})

@@ -212,6 +212,7 @@ async def login(req: LoginRequest, request: Request, _=Depends(rate_limit_depend
             id=user["id"], email=user["email"], name=user["name"], role=user["role"],
             client_id=user.get("client_id"), tier=user.get("tier", "free"),
             is_owner=bool(user.get("is_owner", False)),
+            developer_mode=bool(user.get("developer_mode", False)),
             created_at=user["created_at"],
         ),
     )
@@ -250,6 +251,7 @@ async def get_me(user=Depends(get_current_user())):
         id=user["id"], email=user["email"], name=user["name"], role=user["role"],
         client_id=user.get("client_id"), tier=user.get("tier", "free"),
         is_owner=bool(user.get("is_owner", False)),
+        developer_mode=bool(user.get("developer_mode", False)),
         created_at=user["created_at"],
     )
 

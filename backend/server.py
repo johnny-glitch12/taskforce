@@ -118,6 +118,7 @@ class UserResponse(BaseModel):
     client_id: Optional[str] = None
     tier: str = "free"
     is_owner: bool = False
+    developer_mode: bool = False
     created_at: str
 
 class TokenResponse(BaseModel):

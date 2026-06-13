@@ -6,8 +6,9 @@
  * Per-action credit costs are intentionally NOT displayed. The app uses a
  * dual-pool credit balance shown in the navbar + Credits page only.
  */
-import { Bot, User, AlertCircle, CheckCircle2, Loader2, Circle, AlertTriangle, ArrowUpRight } from "lucide-react";
+import { Bot, User, AlertCircle, CheckCircle2, Loader2, Circle, AlertTriangle, ArrowUpRight, Code2 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/App";
 import CodeGenerationCard from "./CodeGenerationCard";
 
 const STAGE_LABELS = {
@@ -118,6 +119,7 @@ function BuildProgressCard({ msg, onResume }) {
 }
 
 export default function ChatMessage({ msg, onViewFiles, onOpenInWorkflows, onResume }) {
+  const { developerMode } = useAuth() || {};
   const isUser = msg.role === "user";
   const isError = msg.type === "error";
   const isBuild = msg.type === "build" || msg.kind === "build";
@@ -227,7 +229,7 @@ export default function ChatMessage({ msg, onViewFiles, onOpenInWorkflows, onRes
       <Avatar role="assistant" />
       <div className="flex-1 max-w-[680px]">
         <div className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: "var(--armory-text)" }}>
-          {renderWithCodeBlocks(msg.content || "")}
+          {renderWithCodeBlocks(msg.content || "", developerMode)}
         </div>
       </div>
     </div>
@@ -255,7 +257,9 @@ function Avatar({ role }) {
 }
 
 // Render text with ```triple-backtick``` code fences as code blocks.
-function renderWithCodeBlocks(text) {
+// In no-code mode (developerMode false) raw code is collapsed into a muted pill
+// so the chat never dumps source on a user who chose not to see it.
+function renderWithCodeBlocks(text, developerMode) {
   const parts = text.split(/```([\s\S]*?)```/g);
   return parts.map((part, i) => {
     if (i % 2 === 1) {
@@ -263,6 +267,18 @@ function renderWithCodeBlocks(text) {
       const firstNewline = part.indexOf("\n");
       const lang = firstNewline > 0 ? part.slice(0, firstNewline).trim() : "";
       const code = firstNewline > 0 ? part.slice(firstNewline + 1) : part;
+      if (!developerMode) {
+        return (
+          <div
+            key={i}
+            className="my-2 px-3 py-2 rounded-sm inline-flex items-center gap-2 text-[11px] font-mono"
+            style={{ background: "var(--armory-card)", border: "1px solid var(--armory-border)", color: "var(--armory-text-mute)" }}
+          >
+            <Code2 size={11} style={{ color: "var(--armory-accent)" }} />
+            Code hidden — turn on Developer Mode in Settings to view
+          </div>
+        );
+      }
       return (
         <pre
           key={i}
